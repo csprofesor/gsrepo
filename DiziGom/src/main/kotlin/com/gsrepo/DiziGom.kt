@@ -60,23 +60,13 @@ class DiziGom : MainAPI() {
         "Yeni Diziler" to "",
         "Aile" to "Aile",
         "Aksiyon" to "Aksiyon",
-        "Animasyon" to "Animasyon",
-        "Belgesel" to "Belgesel",
         "Bilim Kurgu" to "Bilim Kurgu",
-        "Biyografi" to "Biyografi",
         "Dram" to "Dram",
         "Fantastik" to "Fantastik",
-        "Gençlik" to "Gençlik",
-        "Gerilim" to "Gerilim",
         "Gizem" to "Gizem",
         "Komedi" to "Komedi",
-        "Korku" to "Korku",
         "Macera" to "Macera",
-        "Polisiye" to "Polisiye",
-        "Romantik" to "Romantik",
-        "Savaş" to "Savaş",
-        "Suç" to "Suç",
-        "Tarih" to "Tarih"
+        "Suç" to "Suç"
     )
 
     override val mainPage = mainPageOf(
