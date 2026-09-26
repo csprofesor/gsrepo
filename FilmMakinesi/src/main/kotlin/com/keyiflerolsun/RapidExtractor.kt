@@ -97,7 +97,7 @@ open class RapidExtractor : ExtractorApi() {
         if (ajaxMatch != null) {
             val ajaxUrl = ajaxMatch.groupValues[1]
             val ajaxHash = ajaxMatch.groupValues[2]
-            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else domain.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
+            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else mainUrl.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
                 val ajaxRes = app.post(
@@ -105,7 +105,7 @@ open class RapidExtractor : ExtractorApi() {
                     data = mapOf("hash" to ajaxHash),
                     headers = mapOf(
                         "Referer" to url,
-                        "Origin" to domain,
+                        "Origin" to mainUrl,
                         "X-Requested-With" to "XMLHttpRequest",
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
@@ -130,11 +130,6 @@ open class RapidExtractor : ExtractorApi() {
             Log.d(name, "Stream test status: ${testResp.code}")
         } catch (e: Exception) {
             Log.w(name, "Stream test hatası: ${e.message}")
-        }
-
-        
-         else {
-            Log.w(name, "AJAX hash bulunamadı!")
         }
 
         parseSubtitles(rawHtml, subtitleCallback)
@@ -196,7 +191,7 @@ open class RapidExtractor : ExtractorApi() {
             if (dictQuoteStart == -1 || dictQuoteEnd == -1) return null
             val dictStr = afterBase.substring(dictQuoteStart, dictQuoteEnd)
 
-            Log.d(name, "Packer: base=$base, count=$count, dict=${dictStr.length}, packed=${packed.length}")
+            // Log removed
 
             val dictionary = dictStr.split('|')
             val lookup = mutableMapOf<String, String>()
