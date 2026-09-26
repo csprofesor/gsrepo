@@ -95,26 +95,50 @@ class DiziGom : MainAPI() {
             .firstOrNull()
     }
 
+    private fun Element.findCard(): Element {
+        if (hasClass("episode-box") || hasClass("single-item")) return this
+        return generateSequence(this as Element?) { it.parent() }
+            .take(12)
+            .firstOrNull { it.hasClass("episode-box") || it.hasClass("single-item") }
+            ?: this
+    }
+
     private fun Element.toMainPageResult(): SearchResponse? {
+        val card = findCard()
+
         val title = sequenceOf(
-            selectFirst("div.categorytitle a")?.text(),
-            selectFirst("div.cat-title a")?.text(),
-            selectFirst("div.episode-name a")?.text(),
-            selectFirst(".serie-name a")?.text(),
-            selectFirst(".serie-name")?.text()
-        ).mapNotNull { it?.substringBefore(" izle")?.trim()?.takeIf { value -> value.isNotBlank() } }.firstOrNull() ?: return null
+            card.selectFirst("div.categorytitle a")?.text(),
+            card.selectFirst("div.cat-title a")?.text(),
+            card.selectFirst("div.episode-name a")?.text(),
+            card.selectFirst("div.serie-name a")?.text(),
+            card.selectFirst(".serie-name")?.text(),
+            card.selectFirst("a[title]")?.attr("title"),
+            card.selectFirst("img[alt]")?.attr("alt"),
+            if (tagName() == "a") text() else null,
+            card.text()
+        ).mapNotNull {
+            it?.substringBefore(" izle")?.trim()?.takeIf { value -> value.isNotBlank() }
+        }.firstOrNull() ?: return null
 
         val href = sequenceOf(
-            selectFirst("div.cat-img a")?.attr("href"),
-            selectFirst("div.categorytitle a")?.attr("href"),
-            selectFirst("div.cat-title a")?.attr("href"),
-            selectFirst("a[href*='/diziler/']")?.attr("href"),
-            selectFirst("a[href*='/dizi/']")?.attr("href")
+            card.selectFirst("div.cat-img a")?.attr("href"),
+            card.selectFirst("div.categorytitle a")?.attr("href"),
+            card.selectFirst("div.cat-title a")?.attr("href"),
+            card.selectFirst("a[href*='/diziler/']")?.attr("href"),
+            card.selectFirst("a[href*='/dizi/']")?.attr("href"),
+            if (tagName() == "a") attr("href") else null,
+            card.selectFirst("a[href]")?.attr("href"),
+            attr("href")
         ).mapNotNull { cleanUrl(it) }.firstOrNull() ?: return null
 
-        val posterUrl = selectFirst("div.cat-img img")?.let { img ->
-            cleanUrl(img.attr("data-src").takeIf { !it.isNullOrBlank() } ?: img.attr("src"))
-        } ?: posterUrl()
+        val posterUrl = card.selectFirst("div.cat-img img")?.let { img ->
+            cleanUrl(
+                img.attr("data-src").takeIf { it.isNotBlank() }
+                    ?: img.attr("data-lazy-src").takeIf { it.isNotBlank() }
+                    ?: img.attr("data-original").takeIf { it.isNotBlank() }
+                    ?: img.attr("src")
+            )
+        } ?: card.posterUrl()
 
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = posterUrl
@@ -126,7 +150,10 @@ class DiziGom : MainAPI() {
         val document = runCatching { app.get(pageUrl, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
             ?: return newHomePageResponse(request.name, emptyList(), hasNext = false)
 
-        val results = document.select("div.single-item, div.episode-box")
+        val results = document.select(
+            "div.single-item, div.episode-box, " +
+            "a[href*='/diziler/'], a[href*='/dizi/']"
+        )
             .mapNotNull { it.toMainPageResult() }
             .distinctBy { it.url }
 
@@ -140,7 +167,10 @@ class DiziGom : MainAPI() {
             referer = "$mainUrl/",
             interceptor = interceptor
         ).document
-        return document.select("div.single-item, div.episode-box")
+        return document.select(
+            "div.single-item, div.episode-box, " +
+            "a[href*='/diziler/'], a[href*='/dizi/']"
+        )
             .mapNotNull { it.toMainPageResult() }
             .distinctBy { it.url }
     }
