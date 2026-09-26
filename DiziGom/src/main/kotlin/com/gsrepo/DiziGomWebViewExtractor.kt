@@ -87,7 +87,12 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                 setInterval(() => {
                                     try {
                                         const v = document.querySelector('video');
-                                        if (v && v.paused) { v.muted = true; v.play(); }
+                                        if (v) {
+                                            if (v.src) window.AndroidBridge.onStreamFound(v.src, v.src);
+                                            v.querySelectorAll('source').forEach(s => { if (s.src) window.AndroidBridge.onStreamFound(s.src, s.src); });
+                                            v.muted = true;
+                                            if (v.paused) v.play().catch(() => {});
+                                        }
                                         const btn = document.querySelector('[role="button"], .play-button, button');
                                         if (btn) btn.click();
                                     } catch(e) {}
