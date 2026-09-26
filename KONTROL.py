@@ -77,22 +77,6 @@ class MainUrlUpdater:
                 return yeni_versiyon
         return None
 
-    def _rectv_ver(self):
-        istek = self.oturum.post(
-            url="https://firebaseremoteconfig.googleapis.com/v1/projects/791583031279/namespaces/firebase:fetch",
-            headers={
-                "X-Goog-Api-Key": "AIzaSyBbhpzG8Ecohu9yArfCO5tF13BQLhjLahc",
-                "X-Android-Package": "com.rectv.shot",
-                "User-Agent": "Dalvik/2.1.0 (Linux; U; Android 12)",
-            },
-            json={
-                "appBuild": "81",
-                "appInstanceId": "evON8ZdeSr-0wUYxf0qs68",
-                "appId": "1:791583031279:android:1",
-            }
-        )
-        return istek.json().get("entries", {}).get("api_url", "").replace("/api/", "")
-
     def _arama_adayi_url(self, sonuc_url):
         """DuckDuckGo sonucundaki gerçek URL'yi çıkar."""
         try:
