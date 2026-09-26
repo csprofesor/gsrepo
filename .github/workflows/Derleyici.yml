@@ -72,31 +72,19 @@ jobs:
               if not isinstance(data, list):
                   data = []
               built = {p.stem: p for p in root.glob('*.cs3')}
-              data = [item for item in data if isinstance(item, dict)]
+              data = [item for item in data if isinstance(item, dict) and item.get('internalName') in built]
               for item in data:
                   name = item.get('internalName')
-                  if name in built:
-                      target = built[name]
-                      digest = hashlib.sha256(target.read_bytes()).hexdigest()
-                      item['fileSize'] = target.stat().st_size
-                      item['fileHash'] = f'sha256-{digest}'
-                      item['url'] = f'https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}?v={digest}'
+                  target = built[name]
+                  digest = hashlib.sha256(target.read_bytes()).hexdigest()
+                  item['fileSize'] = target.stat().st_size
+                  item['fileHash'] = f'sha256-{digest}'
+                  item['url'] = f'https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}?v={digest}'
               manifest.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
           PY
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          dosyalar=()
-          while IFS= read -r dosya; do
-            dosyalar+=("$dosya")
-          done < <(find . -maxdepth 1 -name "*.cs3" -type f -print | sort)
-          if [ -f plugins.json ]; then
-            dosyalar+=("plugins.json")
-          fi
-          if [ "${#dosyalar[@]}" -eq 0 ]; then
-            echo "Yüklenecek dosya yok, atlanıyor."
-            exit 0
-          fi
-          git add -- "${dosyalar[@]}"
+          git add -A
           if git diff --cached --quiet; then
             echo "Yüklenecek değişiklik yok, atlanıyor."
           else
