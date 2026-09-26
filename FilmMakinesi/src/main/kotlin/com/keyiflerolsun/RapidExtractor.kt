@@ -135,12 +135,12 @@ open class RapidExtractor : ExtractorApi() {
                 url = videoUrl,
                 type = if (videoUrl.contains(".txt") || videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
-                this.referer = referer ?: mainUrl
+                this.referer = "$mainUrl/"
                 this.quality = Qualities.Unknown.value
                 this.headers = mapOf(
                     "Accept" to "*/*",
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Norton/124.0.0.0",
-                    "Referer" to (referer ?: mainUrl),
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Referer" to "$mainUrl/",
                     "Origin" to mainUrl,
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                 ).filter { it.key.isNotBlank() }
