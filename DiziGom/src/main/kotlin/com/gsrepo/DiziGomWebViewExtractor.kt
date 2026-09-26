@@ -143,7 +143,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                             return WebResourceResponse("text/plain", "UTF-8", null)
                         }
 
-                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true) || reqUrl.contains("hls", true) || reqUrl.contains("stream", true)) {
+                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains(".mp4", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true)) {
                             Log.d("DiziGomWebView", "INTERCEPTED_REQ=$reqUrl")
                             if (!foundStream.getAndSet(true)) {
                                 GlobalScope.launch(Dispatchers.IO) {
@@ -170,7 +170,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
         }
 
         var elapsed = 0L
-        while (!foundStream.get() && elapsed < 8000L) {
+        while (!foundStream.get() && elapsed < 20000L) {
             delay(200L)
             elapsed += 200L
         }
