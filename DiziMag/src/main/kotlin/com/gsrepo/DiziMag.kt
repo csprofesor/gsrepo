@@ -82,57 +82,86 @@ class DiziMag : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page == 1) {
-            request.data
-        } else {
-            "${request.data}/${page}"
-        }
-        val mainReq = app.get(url)
+        val url = if (page == 1) request.data else "${request.data}/$page"
+        val document = app.get(url).document
 
-        //val document = mainReq.document.body()
-        val document = Jsoup.parse(mainReq.body.string())
-        val home = document.select("div.poster-long").mapNotNull { it.diziler() }
+        val home = document
+            .select("a[href*='/dizi/'], a[href*='/film/']")
+            .mapNotNull { it.toDiziMagSearchResult() }
+            .distinctBy { it.url }
 
         return newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
     }
 
-    private fun Element.diziler(): SearchResponse? {
-        val title =
-            this.selectFirst("div.poster-long-subject h2")?.text() ?: return null
-        val href =
-            fixUrlNull(this.selectFirst("div.poster-long-subject a")?.attr("href"))
-                ?: return null
-        val posterUrl =
-            fixUrlNull(this.selectFirst("div.poster-long-image img")?.attr("data-src"))
-        val score = this.selectFirst("span.rating")?.text()?.trim()
+    private fun Element.toDiziMagSearchResult(): SearchResponse? {
+        val rawHref = if (tagName() == "a") attr("href") else selectFirst("a")?.attr("href")
+        if (rawHref.isNullOrBlank()) return null
+
+        val href = fixUrlNull(rawHref) ?: return null
+        if (!(href.contains("/dizi/") || href.contains("/film/"))) return null
+        if (href.contains("/dizi/tur/") || href.contains("/film/tur/")) return null
+
+        var card: Element = this
+        var title: String? = null
+        var posterUrl: String? = null
+        var depth = 0
+
+        while (depth++ < 6) {
+            if (title.isNullOrBlank()) {
+                title = card.selectFirst("h2, h3, h4, h5, .title, .name, .poster-title, .poster-name")
+                    ?.text()
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+            }
+
+            val image = card.selectFirst("img")
+            if (image != null && posterUrl.isNullOrBlank()) {
+                posterUrl = listOf(
+                    image.attr("data-src"),
+                    image.attr("data-lazy-src"),
+                    image.attr("data-original"),
+                    image.attr("src")
+                ).firstOrNull { it.isNotBlank() }?.let { fixUrlNull(it) }
+
+                if (posterUrl.isNullOrBlank()) {
+                    posterUrl = image.attr("srcset")
+                        .split(",")
+                        .firstOrNull()
+                        ?.trim()
+                        ?.split(" ")
+                        ?.firstOrNull()
+                        ?.let { fixUrlNull(it) }
+                }
+            }
+
+            if (title.isNullOrBlank()) {
+                title = card.selectFirst("a[href]")?.text()?.trim()?.takeIf { it.isNotBlank() }
+            }
+
+            if (title.isNullOrBlank()) {
+                title = attr("title").trim().takeIf { it.isNotBlank() }
+                    ?: attr("aria-label").trim().takeIf { it.isNotBlank() }
+            }
+
+            if (!title.isNullOrBlank() && !posterUrl.isNullOrBlank()) break
+            card = card.parent() ?: break
+        }
+
+        if (title.isNullOrBlank()) return null
 
         return if (href.contains("/dizi/")) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = posterUrl
-                this.score = Score.from10(score)
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = posterUrl
-                this.score = Score.from10(score)
             }
         }
     }
 
     private fun Element.toPostSearchResult(): SearchResponse? {
-        val title = this.selectFirst("span")?.text()?.trim() ?: return null
-        val href = fixUrlNull(this.selectFirst("a")?.attr("href")) ?: return null
-        val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("data-src"))
-
-        if (href.contains("/dizi/")) {
-            return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                this.posterUrl = posterUrl
-            }
-        } else {
-            return newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = posterUrl
-            }
-        }
+        return toDiziMagSearchResult()
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
