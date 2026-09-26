@@ -66,7 +66,7 @@ class DiziGom : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
-        *genreRoutes.map { (genre, slug) -> "$mainUrl/tur/$slug/" to genre }.toTypedArray()
+        *genreRoutes.map { (genre, slug) -> "$mainUrl/dizi-izle/?tur=${genre.replace(" ", "+")}" to genre }.toTypedArray()
     )
 
     private fun cleanUrl(value: String?): String? = value
@@ -87,7 +87,8 @@ class DiziGom : MainAPI() {
         val candidates = sequenceOf(
             attr("data-poster"), attr("data-bg"), attr("data-background"), attr("data-image"),
             img?.attr("data-src"), img?.attr("data-lazy-src"), img?.attr("data-original"),
-            img?.attr("data-image"), img?.attr("src"), backgroundUrl()
+            img?.attr("data-image"), img?.attr("src"), backgroundUrl(),
+            select("[style]").asSequence().mapNotNull { it.backgroundUrl() }.firstOrNull()
         )
         return candidates
             .mapNotNull { it?.takeIf { s -> s.isNotBlank() }?.substringBefore(",")?.trim()?.substringBefore(" ") }
