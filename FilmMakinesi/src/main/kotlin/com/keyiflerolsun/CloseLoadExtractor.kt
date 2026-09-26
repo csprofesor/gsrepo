@@ -108,11 +108,12 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         Log.d(name, "Stream test ediliyor: $videoUrl")
         try {
-            val testResp = app.get(videoUrl, referer = mainUrl, headers = mapOf(
+            val testResp = app.get(videoUrl, referer = "$mainUrl/", headers = mapOf(
                 "Accept" to "*/*",
                 "Origin" to mainUrl,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ))
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+            ).filter { it.key.isNotBlank() })
             Log.d(name, "Stream test status: ${testResp.code}")
         } catch (e: Exception) {
             Log.w(name, "Stream test hatası: ${e.message}")
@@ -150,12 +151,12 @@ open class CloseLoadExtractor : ExtractorApi() {
                 url = videoUrl,
                 type = if (videoUrl.contains(".txt") || videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
-                this.referer = mainUrl
+                this.referer = "$mainUrl/"
                 this.quality = Qualities.Unknown.value
                 this.headers = mapOf(
                     "Accept" to "*/*",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer" to mainUrl,
+                    "Referer" to "$mainUrl/",
                     "Origin" to mainUrl,
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                 ).filter { it.key.isNotBlank() }
