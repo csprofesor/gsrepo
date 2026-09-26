@@ -82,13 +82,18 @@ class DiziMag : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val mainReq = app.get("${request.data}/${page}")
+        val url = if (page == 1) {
+            request.data
+        } else {
+            "${request.data}/${page}"
+        }
+        val mainReq = app.get(url)
 
         //val document = mainReq.document.body()
         val document = Jsoup.parse(mainReq.body.string())
         val home = document.select("div.poster-long").mapNotNull { it.diziler() }
 
-        return newHomePageResponse(request.name, home)
+        return newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
     }
 
     private fun Element.diziler(): SearchResponse? {
