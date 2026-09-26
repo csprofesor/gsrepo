@@ -242,13 +242,10 @@ class HDFilmCehennemi : MainAPI() {
                         referer = data
                     ).text
                     
-                    var iframe = Regex("""data-src=\\"([^"]+)""").find(apiGet)?.groupValues?.get(1)?.replace("\\", "")
-                        ?: Regex("""data-src="([^"]+)"""").find(apiGet)?.groupValues?.get(1)
-                    
-                    if (iframe == null) {
-                        val iframeDoc = Jsoup.parse(apiGet)
-                        iframe = fixUrlNull(iframeDoc.selectFirst("iframe")?.attr("data-src") ?: iframeDoc.selectFirst("iframe")?.attr("src"))
-                    }
+                    val hdfc = AppUtils.tryParseJson<HDFC>(apiGet)
+                    val iframeHtml = hdfc?.html.takeIf { !it.isNullOrEmpty() } ?: apiGet
+                    val iframeDoc = Jsoup.parse(iframeHtml)
+                    val iframe = fixUrlNull(iframeDoc.selectFirst("iframe")?.attr("data-src") ?: iframeDoc.selectFirst("iframe")?.attr("src"))
 
                     if (iframe != null) {
                         processIframe(iframe, source, data, subtitleCallback, callback)
