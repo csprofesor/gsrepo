@@ -151,18 +151,25 @@ class FilmMakinesi : MainAPI() {
         val sources = mutableSetOf<String>()
 
         // Tüm video partları, dublaj/altyazı seçenekleri ve alternatif sunucu butonlarını topla
-        document.select(".video-parts a, .video-options a, div#action-parts a, nav.player a, .player-options a").forEach { el ->
-            val url = el.attr("data-video_url").ifBlank { el.attr("href") }
+        document.select(".video-parts a, .video-options a, div#action-parts a, nav.player a, .player-options a, .alternatives a, .server-list a, .p-options a, .alternatifler a, .player-tabs a, div.player-options a, ul.player-tabs li a, .bolumler a, .player-select a, .server-select a").forEach { el ->
+            val url = el.attr("data-video_url").ifBlank { el.attr("data-link") }.ifBlank { el.attr("data-url") }.ifBlank { el.attr("data-embed") }.ifBlank { el.attr("href") }
             if (url.isNotBlank() && !url.startsWith("#") && !url.contains("youtube.com") && !url.contains("youtu.be")) {
                 sources.add(fixUrl(url))
             }
         }
 
         // Sayfadaki tüm iframe'leri topla (data-src, src)
-        document.select("iframe[data-src], iframe[src], .after-player iframe, div.player-div iframe").forEach { iframe ->
+        document.select("iframe[data-src], iframe[src], .after-player iframe, div.player-div iframe, .player-content iframe, .embed-responsive iframe").forEach { iframe ->
             val src = iframe.attr("data-src").ifBlank { iframe.attr("src") }
             if (src.isNotBlank() && !src.contains("youtube.com") && !src.contains("youtu.be")) {
                 sources.add(fixUrl(src))
+            }
+        }
+
+        document.select("[data-video_url], [data-link], [data-url], [data-embed]").forEach { el ->
+            val url = el.attr("data-video_url").ifBlank { el.attr("data-link") }.ifBlank { el.attr("data-url") }.ifBlank { el.attr("data-embed") }
+            if (url.isNotBlank() && !url.startsWith("#") && !url.contains("youtube.com") && !url.contains("youtu.be")) {
+                sources.add(fixUrl(url))
             }
         }
 

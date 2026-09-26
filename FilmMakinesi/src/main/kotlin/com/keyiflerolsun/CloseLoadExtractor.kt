@@ -18,56 +18,54 @@ open class CloseLoadExtractor : ExtractorApi() {
     ) {
         Log.d(name, "getUrl çağrıldı, url: $url")
 
-        val response = app.get(url, referer = referer ?: "")
+        val response = app.get(url, referer = referer ?: mainUrl)
         val rawHtml = response.text
         val cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         var videoUrl: String? = null
-        val hasPacker = rawHtml.contains("eval(function(p,a,c,k,e,d){")
-        Log.d(name, "Packed JS marker var mı: $hasPacker")
-        val dcMatches = Regex("""(dc_\w+)""").findAll(rawHtml).map { it.value }.distinct().toList()
-        Log.d(name, "dc_ fonksiyon adları: $dcMatches")
-        val sMatches = Regex("""var\s+(s_\w+)""").findAll(rawHtml).map { it.groupValues[1] }.distinct().toList()
-        Log.d(name, "s_ değişkenleri: $sMatches")
-        Regex("""\[\s*"[^"]*"\s*,\s*"[^"]*"""").findAll(rawHtml).take(5).forEachIndexed { i, m ->
-            Log.d(name, "Parts benzeri dizi #$i @${m.range.first}: ${m.value.take(80)}")
-        }
-        val evalIdx = rawHtml.indexOf("eval(")
-        if (evalIdx != -1) {
-            Log.d(name, "eval( konumu: $evalIdx, çevresi: ${rawHtml.substring(evalIdx, (evalIdx + 200).coerceAtMost(rawHtml.length))}")
+        val unpackedJs = unpackPackerJs(rawHtml)
+        val searchHtml = unpackedJs ?: rawHtml
+
+        val varPattern = Regex("""(?:var|let|const)\s+(\w+)\s*=\s*(\w+)\s*\(\s*\[(.*?)\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
+        var varMatch = varPattern.find(searchHtml)
+        if (varMatch == null && unpackedJs != null) {
+            varMatch = varPattern.find(rawHtml)
         }
 
-        val varPattern = Regex("""var\s+(\w+)\s*=\s*(\w+)\s*\(\s*\[(.*?)\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
-        val varMatch = varPattern.find(rawHtml)
-
+        var parts = listOf<String>()
         if (varMatch != null) {
             val varName = varMatch.groupValues[1]
             val funcName = varMatch.groupValues[2]
             val partsStr = varMatch.groupValues[3]
-            val parts = Regex(""""([^"]*)"""").findAll(partsStr).map {
+            parts = Regex(""""([^"]*)"""").findAll(partsStr).map {
                 it.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
             }.toList()
 
             Log.d(name, "Dinamik bulundu: var=$varName, func=$funcName, parts=${parts.size}")
-            val funcBody = extractFuncBody(rawHtml, funcName)
+            val funcBody = extractFuncBody(searchHtml, funcName) ?: extractFuncBody(rawHtml, funcName)
             if (funcBody != null) {
                 Log.d(name, "Fonksiyon body bulundu, uzunluk: ${funcBody.length}")
-                Log.d(name, "FUNC_BODY: $funcBody")
                 videoUrl = parseAndExecuteJs(funcBody, parts)
                 Log.d(name, "Dinamik çözülen URL: $videoUrl")
-            } else {
-                Log.w(name, "Fonksiyon body bulunamadı, bilinen decryptor'ları deniyorum")
-                videoUrl = tryAllDecryptors(parts)
             }
-        } else {
-            Log.w(name, "var s_XXX = dc_YYY([...]) pattern bulunamadı")
+        }
+
+        if (videoUrl.isNullOrBlank() && parts.isNotEmpty()) {
+            Log.w(name, "Fonksiyon body çözülemedi, decryptor'ları deniyorum")
+            videoUrl = tryAllDecryptors(parts)
         }
 
         if (videoUrl.isNullOrBlank()) {
             val jsonLdMatch = Regex(""""contentUrl"\s*:\s*"([^"]+)"""").find(rawHtml)
             videoUrl = jsonLdMatch?.groupValues?.get(1)
             Log.d(name, "Fallback JSON-LD contentUrl: $videoUrl")
+        }
+
+        if (videoUrl.isNullOrBlank()) {
+            val directMatch = Regex("""(https?://[^"'\s]+\.m3u8[^"'\s]*)""").find(rawHtml)
+            videoUrl = directMatch?.groupValues?.get(1)?.replace("\\/", "/")
+            Log.d(name, "Fallback direkt m3u8: $videoUrl")
         }
 
         if (videoUrl.isNullOrBlank()) {
@@ -78,8 +76,21 @@ open class CloseLoadExtractor : ExtractorApi() {
                 if (padding != 0) {
                     atob += "=".repeat(4 - padding)
                 }
-                videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
-                Log.d(name, "Fallback atob m3u8: $videoUrl")
+                try {
+                    videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
+                    Log.d(name, "Fallback atob m3u8: $videoUrl")
+                } catch (e: Exception) {
+                    Log.w(name, "Atob decode hatası: ${e.message}")
+                }
+            }
+        }
+
+        if (videoUrl.isNullOrBlank()) {
+            val thumbnailMatch = Regex("""/img/([a-zA-Z0-9]+)\.jpg""").find(rawHtml)
+            if (thumbnailMatch != null) {
+                val thumbnail = thumbnailMatch.groupValues[1]
+                videoUrl = "https://balancehls6.closeload.com/hls/${thumbnail}.mp4/master.txt"
+                Log.d(name, "Fallback BalanceHLS URL: $videoUrl")
             }
         }
 
@@ -88,13 +99,11 @@ open class CloseLoadExtractor : ExtractorApi() {
             return
         }
 
-        
-        val unpackedJs = unpackPackerJs(rawHtml)
-        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+ah/)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: "")
+        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+ah/)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
         if (ajaxMatch != null) {
             val ajaxUrl = ajaxMatch.groupValues[1]
             val ajaxHash = ajaxMatch.groupValues[2]
-            val fullAjaxUrl = "$mainUrl$ajaxUrl"
+            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else "$mainUrl$ajaxUrl"
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
                 app.post(
@@ -104,43 +113,17 @@ open class CloseLoadExtractor : ExtractorApi() {
                         "Referer" to url,
                         "Origin" to mainUrl,
                         "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Norton/124.0.0.0",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                     ).filter { it.key.isNotBlank() }
                 )
             } catch (e: Exception) {
                 Log.w(name, "AJAX POST hatası: ${e.message}")
             }
-        } else {
-            Log.w(name, "AJAX hash bulunamadı!")
         }
 
-        val tracksMatch = Regex("""tracks:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(rawHtml)
-        val tracksStr = tracksMatch?.groupValues?.get(1)
+        parseSubtitles(rawHtml, subtitleCallback)
 
-        tracksStr?.let { str ->
-            val matches = Regex(""""file"\s*:\s*"([^"]+)".*?"label"\s*:\s*"([^"]+)"""", RegexOption.DOT_MATCHES_ALL)
-                .findAll(str).toList()
-            Log.d(name, "Bulunan altyazı sayısı: ${matches.size}")
-
-            matches.forEachIndexed { index, match ->
-                val subUrl = match.groupValues[1].replace("\\/", "/")
-                val subLabel = match.groupValues[2]
-                val lang = when {
-                    subLabel.contains("Turkish", ignoreCase = true) -> "Türkçe"
-                    subLabel.contains("Forced", ignoreCase = true) -> "Forced"
-                    subLabel.contains("English", ignoreCase = true) -> "İngilizce"
-                    else -> return@forEachIndexed
-                }
-                Log.d(name, "Altyazı #$index - lang: '$lang', label: '$subLabel'")
-                subtitleCallback.invoke(SubtitleFile(lang, subUrl))
-            }
-        }
-
-        
-
-        
-        
         callback.invoke(
             newExtractorLink(
                 source = name,
@@ -152,7 +135,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                 this.quality = Qualities.Unknown.value
                 this.headers = mapOf(
                     "Accept" to "*/*",
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Norton/124.0.0.0",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                     "Referer" to (referer ?: mainUrl),
                     "Origin" to mainUrl,
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
@@ -160,11 +143,8 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         )
         Log.d(name, "ExtractorLink eklendi: $videoUrl")
-
-
-        Log.d(name, "ExtractorLink eklendi: $videoUrl")
     }
-    
+
     private fun unpackPackerJs(rawHtml: String): String? {
         return try {
             val startMarker = "eval(function(p,a,c,k,e,d){"
@@ -233,24 +213,25 @@ open class CloseLoadExtractor : ExtractorApi() {
         return sb.toString()
     }
 
-    private fun extractFuncBody(rawHtml: String, funcName: String): String? {
-        val startIdx = rawHtml.indexOf("function $funcName")
+    private fun extractFuncBody(jsCode: String, funcName: String): String? {
+        val startIdx = jsCode.indexOf("function $funcName")
         if (startIdx == -1) return null
 
-        val braceIdx = rawHtml.indexOf('{', startIdx)
+        val braceIdx = jsCode.indexOf('{', startIdx)
         if (braceIdx == -1) return null
 
         var braceCount = 1
         var i = braceIdx + 1
-        while (braceCount > 0 && i < rawHtml.length) {
-            when (rawHtml[i]) {
+        while (braceCount > 0 && i < jsCode.length) {
+            when (jsCode[i]) {
                 '{' -> braceCount++
                 '}' -> braceCount--
             }
             i++
         }
-        return if (braceCount == 0) rawHtml.substring(braceIdx + 1, i - 1) else null
+        return if (braceCount == 0) jsCode.substring(braceIdx + 1, i - 1) else null
     }
+
     private fun parseAndExecuteJs(funcBody: String, parts: List<String>): String? {
         return try {
             val seedMatch = Regex(
@@ -330,10 +311,6 @@ open class CloseLoadExtractor : ExtractorApi() {
         return Base64.decode(str, Base64.DEFAULT).toString(Charsets.ISO_8859_1)
     }
 
-    private fun btoa(s: String): String {
-        return Base64.encodeToString(s.toByteArray(Charsets.ISO_8859_1), Base64.DEFAULT).trim()
-    }
-
     private fun caesarShift(text: String, shift: Int): String {
         return text.map { c ->
             when {
@@ -356,6 +333,7 @@ open class CloseLoadExtractor : ExtractorApi() {
         }
         return unmix.toString()
     }
+
     private fun tryAllDecryptors(parts: List<String>): String? {
         val decryptors = listOf(::decryptV1, ::decryptV2, ::decryptV3, ::decryptV4)
         for ((index, decryptor) in decryptors.withIndex()) {
@@ -398,6 +376,39 @@ open class CloseLoadExtractor : ExtractorApi() {
         var value = valueParts.joinToString("")
         var decoded = atob(value); decoded = decoded.reversed(); decoded = atob(decoded)
         return xorUnmix(decoded, 130, 10)
+    }
+
+    private suspend fun parseSubtitles(
+        rawHtml: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        val tracksMatch = Regex("""tracks:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(rawHtml)
+        tracksMatch?.groupValues?.get(1)?.let { tracksStr ->
+            val subMatches = Regex(
+                """"file"\s*:\s*"([^"]+)".*?"label"\s*:\s*"([^"]+)"""",
+                RegexOption.DOT_MATCHES_ALL
+            ).findAll(tracksStr).toList()
+
+            Log.d(name, "Bulunan altyazı sayısı: ${subMatches.size}")
+
+            subMatches.forEachIndexed { index, match ->
+                var subUrl = match.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
+                val subLabel = match.groupValues[2]
+                if (!subUrl.startsWith("http")) {
+                    subUrl = mainUrl.trimEnd('/') + (if (subUrl.startsWith("/")) "" else "/") + subUrl
+                }
+
+                val lang = when {
+                    subLabel.contains("Turkish", ignoreCase = true) -> "Türkçe"
+                    subLabel.contains("Forced", ignoreCase = true) -> "Forced"
+                    subLabel.contains("English", ignoreCase = true) -> "İngilizce"
+                    else -> "Türkçe"
+                }
+
+                Log.d(name, "Altyazı #$index - lang: '$lang', label: '$subLabel'")
+                subtitleCallback.invoke(SubtitleFile(lang, subUrl))
+            }
+        }
     }
 }
 
