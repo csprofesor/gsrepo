@@ -58,12 +58,25 @@ class DiziGom : MainAPI() {
 
     private val genreRoutes = linkedMapOf(
         "Yeni Diziler" to "",
-        "Aile" to "aile", "Aksiyon" to "aksiyon", "Animasyon" to "animasyon",
-        "Belgesel" to "belgesel", "Bilim Kurgu" to "bilim-kurgu", "Biyografi" to "biyografi",
-        "Dram" to "dram", "Fantastik" to "fantastik", "Gençlik" to "genclik",
-        "Gerilim" to "gerilim", "Gizem" to "gizem", "Komedi" to "komedi",
-        "Korku" to "korku", "Macera" to "macera", "Polisiye" to "polisiye",
-        "Romantik" to "romantik", "Savaş" to "savas", "Suç" to "suc", "Tarih" to "tarih"
+        "Aile" to "Aile",
+        "Aksiyon" to "Aksiyon",
+        "Animasyon" to "Animasyon",
+        "Belgesel" to "Belgesel",
+        "Bilim Kurgu" to "Bilim Kurgu",
+        "Biyografi" to "Biyografi",
+        "Dram" to "Dram",
+        "Fantastik" to "Fantastik",
+        "Gençlik" to "Gençlik",
+        "Gerilim" to "Gerilim",
+        "Gizem" to "Gizem",
+        "Komedi" to "Komedi",
+        "Korku" to "Korku",
+        "Macera" to "Macera",
+        "Polisiye" to "Polisiye",
+        "Romantik" to "Romantik",
+        "Savaş" to "Savaş",
+        "Suç" to "Suç",
+        "Tarih" to "Tarih"
     )
 
     override val mainPage = mainPageOf(
