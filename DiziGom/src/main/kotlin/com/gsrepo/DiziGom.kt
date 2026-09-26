@@ -95,38 +95,27 @@ class DiziGom : MainAPI() {
             .firstOrNull()
     }
 
-    private fun Element.findCard(): Element {
-        if (hasClass("episode-box") || hasClass("single-item")) return this
-        return generateSequence(this as Element?) { it.parent() }
-            .take(12)
-            .firstOrNull { it.hasClass("episode-box") || it.hasClass("single-item") }
-            ?: this
-    }
-
     private fun Element.toMainPageResult(): SearchResponse? {
-        val card = findCard()
         val title = sequenceOf(
-            card.selectFirst("div.categorytitle a")?.text(),
-            card.selectFirst("div.cat-title a")?.text(),
-            card.selectFirst("div.serie-name a")?.text(),
-            card.selectFirst(".serie-name")?.text(),
-            card.selectFirst("a[title]")?.attr("title"),
-            card.selectFirst("img")?.attr("alt"),
-            card.selectFirst("img")?.attr("title"),
-            card.attr("title")
+            selectFirst("div.categorytitle a")?.text(),
+            selectFirst("div.cat-title a")?.text(),
+            selectFirst("div.episode-name a")?.text(),
+            selectFirst(".serie-name a")?.text(),
+            selectFirst(".serie-name")?.text(),
+            selectFirst("a[title]")?.attr("title")
         ).mapNotNull { it?.substringBefore(" izle")?.trim()?.takeIf { value -> value.isNotBlank() } }.firstOrNull() ?: return null
 
         val href = sequenceOf(
-            card.selectFirst("div.cat-img a")?.attr("href"),
-            card.selectFirst("a[href*='/diziler/']")?.attr("href"),
-            card.selectFirst("a[href*='/dizi/']")?.attr("href"),
-            card.selectFirst("a")?.attr("href"),
-            attr("href")
+            selectFirst("div.cat-img a")?.attr("href"),
+            selectFirst("div.episode-name a")?.attr("href"),
+            selectFirst("a[href*='/diziler/']")?.attr("href"),
+            selectFirst("a[href*='/dizi/']")?.attr("href"),
+            selectFirst("a")?.attr("href")
         ).mapNotNull { cleanUrl(it) }.firstOrNull() ?: return null
 
-        val posterUrl = card.selectFirst("div.cat-img img")?.let { img ->
-            cleanUrl(img.attr("data-src").takeIf { it.isNotBlank() } ?: img.attr("src"))
-        } ?: card.posterUrl()
+        val posterUrl = selectFirst("div.cat-img img, a img")?.let { img ->
+            cleanUrl(img.attr("data-src").takeIf { !it.isNullOrBlank() } ?: img.attr("src"))
+        } ?: posterUrl()
 
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = posterUrl
@@ -138,8 +127,8 @@ class DiziGom : MainAPI() {
         val document = runCatching { app.get(pageUrl, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
             ?: return newHomePageResponse(request.name, emptyList(), hasNext = false)
 
-        val results = (document.select("div.episode-box, div.single-item, a[href*='/diziler/'], a[href*='/dizi/']")
-            .mapNotNull { it.toMainPageResult() })
+        val results = document.select("div.single-item, div.episode-box")
+            .mapNotNull { it.toMainPageResult() }
             .distinctBy { it.url }
 
         Log.d("DiziGom", "${request.name}: page=$page count=${results.size} url=$pageUrl")
@@ -152,7 +141,7 @@ class DiziGom : MainAPI() {
             referer = "$mainUrl/",
             interceptor = interceptor
         ).document
-        return document.select("div.episode-box, div.single-item, a[href*='/diziler/'], a[href*='/dizi/']")
+        return document.select("div.single-item, div.episode-box")
             .mapNotNull { it.toMainPageResult() }
             .distinctBy { it.url }
     }
@@ -250,61 +239,79 @@ class DiziGom : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         Log.d("DiziGom", "Resolving episode: $data")
-        val document = runCatching { app.get(data, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull() ?: return false
+        var found = false
+        val document = runCatching { app.get(data, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
 
-        val playerUrl = extractPlayerUrl(document)
-        if (!playerUrl.isNullOrBlank()) {
-            val playerResponse = runCatching { app.get(playerUrl, referer = data, interceptor = interceptor) }.getOrNull()
-            val playerHtml = playerResponse?.text.orEmpty()
-            val streamUrl = extractPlayerStream(playerHtml)
+        if (document != null) {
+            val playerUrl = extractPlayerUrl(document)
+            if (!playerUrl.isNullOrBlank()) {
+                val playerResponse = runCatching { app.get(playerUrl, referer = data, interceptor = interceptor) }.getOrNull()
+                val playerHtml = playerResponse?.text.orEmpty()
+                val streamUrl = extractPlayerStream(playerHtml)
 
-            if (!streamUrl.isNullOrBlank()) {
-                Log.d("DiziGom", "PilayerPlay stream bulundu")
-                callback(
-                    newExtractorLink(
-                        source = name,
-                        name = "DiziGom 1080p",
-                        url = streamUrl,
-                        type = ExtractorLinkType.M3U8
-                    ) {
-                        referer = playerUrl
-                        quality = 1080
-                    }
-                )
-                return true
+                if (!streamUrl.isNullOrBlank()) {
+                    Log.d("DiziGom", "PilayerPlay stream bulundu: $streamUrl")
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = "DiziGom 1080p",
+                            url = streamUrl,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            referer = playerUrl
+                            quality = 1080
+                        }
+                    )
+                    found = true
+                }
+
+                val directPlayerUrl = Regex(
+                    "https?://[^\\\"'\\s<>]+(?:\\.m3u8(?:\\?[^\\\"'\\s<>]*)?|\\.mp4(?:\\?[^\\\"'\\s<>]*)?)",
+                    RegexOption.IGNORE_CASE
+                ).findAll(playerHtml).map { cleanUrl(it.value) }.filterNotNull().distinct().toList()
+
+                for (stream in directPlayerUrl) {
+                    callback(
+                        newExtractorLink(source = name, name = "DiziGom", url = stream,
+                            type = if (stream.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
+                            referer = playerUrl
+                            quality = getQualityFromName(stream)
+                        }
+                    )
+                    found = true
+                }
             }
 
-            val directPlayerUrl = Regex(
+            val directUrls = Regex(
                 "https?://[^\\\"'\\s<>]+(?:\\.m3u8(?:\\?[^\\\"'\\s<>]*)?|\\.mp4(?:\\?[^\\\"'\\s<>]*)?)",
                 RegexOption.IGNORE_CASE
-            ).findAll(playerHtml).map { cleanUrl(it.value) }.filterNotNull().distinct().toList()
+            ).findAll(document.html()).map { cleanUrl(it.value) }.filterNotNull().distinct().toList()
 
-            for (stream in directPlayerUrl) {
+            for (stream in directUrls) {
                 callback(
                     newExtractorLink(source = name, name = "DiziGom", url = stream,
                         type = if (stream.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
-                        referer = playerUrl
+                        referer = data
                         quality = getQualityFromName(stream)
                     }
                 )
+                found = true
             }
-            if (directPlayerUrl.isNotEmpty()) return true
         }
 
-        val directUrls = Regex(
-            "https?://[^\\\"'\\s<>]+(?:\\.m3u8(?:\\?[^\\\"'\\s<>]*)?|\\.mp4(?:\\?[^\\\"'\\s<>]*)?)",
-            RegexOption.IGNORE_CASE
-        ).findAll(document.html()).map { cleanUrl(it.value) }.filterNotNull().distinct().toList()
-
-        for (stream in directUrls) {
-            callback(
-                newExtractorLink(source = name, name = "DiziGom", url = stream,
-                    type = if (stream.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
-                    referer = data
-                    quality = getQualityFromName(stream)
+        if (!found) {
+            Log.d("DiziGom", "Fallback to DiziGomWebViewExtractor for $data")
+            DiziGomPlugin.pluginContext?.let { ctx ->
+                val webExtractor = DiziGomWebViewExtractor(ctx, name)
+                runCatching {
+                    webExtractor.getUrl(data, data, subtitleCallback) { link ->
+                        callback(link)
+                        found = true
+                    }
                 }
-            )
+            }
         }
-        return directUrls.isNotEmpty()
+
+        return found
     }
 }
