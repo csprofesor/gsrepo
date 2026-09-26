@@ -231,8 +231,11 @@ class DiziGom : MainAPI() {
     private fun extractPlayerUrl(document: Document): String? {
         return document.select("iframe[src], frame[src]")
             .mapNotNull { cleanUrl(it.attr("src")) }
-            .firstOrNull { it.contains("s.php", true) || it.contains("pilayerplay", true) }
-            ?: Regex("https?://[^\\\"'\\s<>]+/s\\.php\\?[^\\\"'\\s<>]+", RegexOption.IGNORE_CASE)
+            .firstOrNull { it.contains("s.php", true) || it.contains("pilayerplay", true) || it.contains("spidypro", true) || it.contains("embed", true) }
+            ?: document.select("iframe[src], frame[src]")
+                .mapNotNull { cleanUrl(it.attr("src")) }
+                .firstOrNull()
+            ?: Regex("https?://[^\\\"'\\s<>]+(?:/s\\.php\\?|/embed/|pilayerplay|spidypro)[^\\\"'\\s<>]+", RegexOption.IGNORE_CASE)
                 .find(document.html())?.value?.let { cleanUrl(it) }
     }
 
@@ -262,40 +265,18 @@ class DiziGom : MainAPI() {
         if (document != null) {
             val playerUrl = extractPlayerUrl(document)
             if (!playerUrl.isNullOrBlank()) {
-                val playerResponse = runCatching { app.get(playerUrl, referer = data, interceptor = interceptor) }.getOrNull()
-                val playerHtml = playerResponse?.text.orEmpty()
-                val streamUrl = extractPlayerStream(playerHtml)
-
-                if (!streamUrl.isNullOrBlank()) {
-                    Log.d("DiziGom", "PilayerPlay stream bulundu: $streamUrl")
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = "DiziGom 1080p",
-                            url = streamUrl,
-                            type = ExtractorLinkType.M3U8
-                        ) {
-                            referer = playerUrl
-                            quality = 1080
+                Log.d("DiziGom", "Found player iframe URL: $playerUrl")
+                DiziGomPlugin.pluginContext?.let { ctx ->
+                    val webExtractor = DiziGomWebViewExtractor(ctx, name)
+                    runCatching {
+                        webExtractor.getUrl(playerUrl, data, subtitleCallback) { link ->
+                            callback(link)
+                            found = true
                         }
-                    )
-                    found = true
+                    }
                 }
-
-                val directPlayerUrl = Regex(
-                    "https?://[^\\\"'\\s<>]+(?:\\.m3u8(?:\\?[^\\\"'\\s<>]*)?|\\.mp4(?:\\?[^\\\"'\\s<>]*)?)",
-                    RegexOption.IGNORE_CASE
-                ).findAll(playerHtml).map { cleanUrl(it.value) }.filterNotNull().distinct().toList()
-
-                for (stream in directPlayerUrl) {
-                    callback(
-                        newExtractorLink(source = name, name = "DiziGom", url = stream,
-                            type = if (stream.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
-                            referer = playerUrl
-                            quality = getQualityFromName(stream)
-                        }
-                    )
-                    found = true
+                if (!found) {
+                    found = loadExtractor(playerUrl, data, subtitleCallback, callback)
                 }
             }
 
@@ -317,7 +298,7 @@ class DiziGom : MainAPI() {
         }
 
         if (!found) {
-            Log.d("DiziGom", "Using loadExtractor fallback to DiziGomWebViewExtractor for $data")
+            Log.d("DiziGom", "Fallback to loadExtractor on $data")
             found = loadExtractor(data, data, subtitleCallback, callback)
         }
 
