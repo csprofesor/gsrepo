@@ -120,8 +120,13 @@ class DiziGom : MainAPI() {
             cleanUrl(img.attr("data-src").takeIf { !it.isNullOrBlank() } ?: img.attr("src"))
         } ?: posterUrl()
 
+        val imdbText = selectFirst("div.imdbp")?.text()
+        val rating = Regex("([0-9]+(?:[.,][0-9]+)?)", RegexOption.IGNORE_CASE)
+            .find(imdbText.orEmpty())?.value
+
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = posterUrl
+            this.score = Score.from10(rating)
         }
     }
 
@@ -135,7 +140,7 @@ class DiziGom : MainAPI() {
         val document = runCatching { app.get(pageUrl, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
             ?: return newHomePageResponse(request.name, emptyList(), hasNext = false)
 
-        val results = document.select("div.single-item, div.episode-box")
+        val results = document.select("div.single-item, div.episode-box, div.item, div.box, div.post")
             .mapNotNull { it.toMainPageResult() }
             .distinctBy { it.url }
 
@@ -149,7 +154,7 @@ class DiziGom : MainAPI() {
             referer = "$mainUrl/",
             interceptor = interceptor
         ).document
-        return document.select("div.single-item, div.episode-box")
+        return document.select("div.single-item, div.episode-box, div.item, div.box, div.post")
             .mapNotNull { it.toMainPageResult() }
             .distinctBy { it.url }
     }
