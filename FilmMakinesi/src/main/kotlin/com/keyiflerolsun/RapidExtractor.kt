@@ -20,7 +20,7 @@ open class RapidExtractor : ExtractorApi() {
 
         val response = app.get(url, referer = referer ?: mainUrl)
         val rawHtml = response.text
-        val cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         var videoUrl: String? = null
@@ -81,30 +81,53 @@ open class RapidExtractor : ExtractorApi() {
             }
         }
 
+        videoUrl = when {
+            videoUrl.isNullOrBlank() -> null
+            videoUrl.startsWith("//") -> "https:$videoUrl"
+            videoUrl.startsWith("http") -> videoUrl
+            else -> mainUrl.trimEnd('/') + "/" + videoUrl.trimStart('/')
+        }
+
         if (videoUrl.isNullOrBlank()) {
             Log.e(name, "Video URL bulunamadı!")
             return
         }
 
+        Log.d(name, "Stream test ediliyor: $videoUrl")
+        try {
+            val testResp = app.get(videoUrl, referer = mainUrl, headers = mapOf(
+                "Accept" to "*/*",
+                "Origin" to mainUrl,
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ))
+            Log.d(name, "Stream test status: ${testResp.code}")
+        } catch (e: Exception) {
+            Log.w(name, "Stream test hatası: ${e.message}")
+        }
+
         
-        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+ah/)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: "")
+        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: "")
         if (ajaxMatch != null) {
             val ajaxUrl = ajaxMatch.groupValues[1]
             val ajaxHash = ajaxMatch.groupValues[2]
-            val fullAjaxUrl = "$mainUrl$ajaxUrl"
+            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else "$mainUrl/" + ajaxUrl.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
-                app.post(
+                val ajaxRes = app.post(
                     url = fullAjaxUrl,
                     data = mapOf("hash" to ajaxHash),
                     headers = mapOf(
                         "Referer" to url,
                         "Origin" to mainUrl,
                         "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Norton/124.0.0.0",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                     ).filter { it.key.isNotBlank() }
                 )
+                val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                if (newCookies.isNotBlank()) {
+                    cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
+                }
             } catch (e: Exception) {
                 Log.w(name, "AJAX POST hatası: ${e.message}")
             }
@@ -113,16 +136,7 @@ open class RapidExtractor : ExtractorApi() {
         }
 
         parseSubtitles(rawHtml, subtitleCallback)
-        Log.d(name, "Master fetch deneniyor: $videoUrl")
-        try {
-            val masterResponse = app.get(videoUrl, referer = "$mainUrl/", headers = mapOf(
-                "Accept" to "*/*",
-                "Origin" to mainUrl
-            ))
-            Log.d(name, "Master status: ${masterResponse.code}")
-        } catch (e: Exception) {
-            Log.w(name, "Master fetch hatası (önemsiz): ${e.message}")
-        }
+
 
         
 
@@ -284,7 +298,7 @@ open class RapidExtractor : ExtractorApi() {
 
             val result = sb.toString()
             Log.d(name, "Çözülen değer: ${result.take(200)}")
-            result.trim().takeIf { it.startsWith("http") }
+            result.trim()
         } catch (e: Exception) {
             Log.e(name, "JS Parser hatası: ${e.message}")
             null
