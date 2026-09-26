@@ -266,66 +266,6 @@
     "fileHash": "sha256-2c7746933f8d62167677adea4cb08035619f593475159fd83f796db5333c42ca"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziYou.cs3",
-    "status": 1,
-    "version": 26,
-    "name": "DiziYou",
-    "internalName": "DiziYou",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Diziyou en kaliteli Türkçe dublaj ve altyazılı yabancı dizi izleme sitesidir. Güncel ve efsanevi dizileri 1080p Full HD kalitede izlemek için hemen tıkla!",
-    "fileSize": 15974,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "TvSeries"
-    ],
-    "iconUrl": "https://cdn.diziyou.one/wp-content/uploads/2020/04/diziyou-favicon.png",
-    "apiVersion": 1,
-    "fileHash": "sha256-5259d2d3443e93a0639c0407fc91c20f71cbad757408acaf31b4faf5ee8bab5b"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DMax.cs3",
-    "status": 1,
-    "version": 2,
-    "name": "DMax",
-    "internalName": "DMax",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "DMAX dizi ve programlarını takip etmek için ziyaret edin. DMAX dizi ve programlarını tek parça ve hd kalitesiyle izleyin.",
-    "fileSize": 14339,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "TvSeries"
-    ],
-    "iconUrl": "https://www.dmax.com.tr/favicon.ico",
-    "apiVersion": 1,
-    "fileHash": "sha256-ff9c9a5516068ec1d06d5027ed57cb2f7a2e76adb0c9cc831c63024f9bb0e70f"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Filmİzlesene.cs3",
-    "status": 0,
-    "version": 3,
-    "name": "Filmİzlesene",
-    "internalName": "Filmİzlesene",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Filmizlesene ile hızlı film izleme fırsatını yakala, en yeni ve iyi filmleri Full HD 1080p kalitesiyle online ve bedava izle",
-    "fileSize": 18941,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=filmizlesene.plus&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-3e4a185d2f152f73496ead0a4b83ea47fba3f4b213ceb9c2111ab590abbc4a65"
-  },
-  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3",
     "status": 1,
     "version": 59,
@@ -387,67 +327,6 @@
     "fileHash": "sha256-83de6f5e436bc671aef7925683ffa870a8f8264513d032e23e64b2d0d59515a4"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FullHDFilmizlesene.cs3",
-    "status": 1,
-    "version": 33,
-    "name": "FullHDFilmizlesene",
-    "internalName": "FullHDFilmizlesene",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Sinema zevkini evinize kadar getirdik. Türkiye'nin lider Film sitesinde, en yeni filmleri Full HD izleyin.",
-    "fileSize": 40117,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=www.fullhdfilmizlesene.de&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-8f2cff5f9fc87f38d415b65c30c7ad3b7c9a5d26f03d8e73b072ff520b499253"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi.cs3",
-    "status": 1,
-    "version": 48,
-    "name": "HDFilmCehennemi",
-    "internalName": "HDFilmCehennemi",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Türkiye'nin en hızlı hd film izleme sitesi",
-    "fileSize": 30707,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie",
-      "TvSeries"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.com&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-1795cd99649fc3295df22a5fa950fc726311c17bef222cdd100df869e11356c4"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi2.cs3",
-    "status": 1,
-    "version": 8,
-    "name": "HDFilmCehennemi2",
-    "internalName": "HDFilmCehennemi2",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Full hd film izleme keyfini hdfilmcehennemi2 ile yaşayın. Türkiyenin en güncel yüksek hd kalitede film izleme sitesi.",
-    "fileSize": 27803,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=www.hdfilmcehennemi2.nl&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-9d40401d743f0104f44cd3344756d516932333697295b808e9b278cbcea2897b"
-  },
-  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3",
     "status": 1,
     "version": 7,
@@ -467,26 +346,6 @@
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmizle.to&sz=%size%",
     "apiVersion": 1,
     "fileHash": "sha256-48cf5302a6ae123b8ca9a7e6b10a571df13ca656e36d3c607688d971b09d1c2f"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmSitesi.cs3",
-    "status": 1,
-    "version": 19,
-    "name": "HDFilmSitesi",
-    "internalName": "HDFilmSitesi",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Film izle, Hdfilmsitesi ile Online 1080p ve 4K kalite Full HD Filmlere Türkçe Dublaj ve Altyazılı olarak Reklamsız Kesintisiz HD Film izle.",
-    "fileSize": 28993,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmsitesi.net&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-1e42cb2ba862c2324ee5084f3f5399880d9a57e2d8db41d0f5089fa148c8467c"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HintFilmIzle.cs3",
@@ -510,28 +369,6 @@
     "fileHash": "sha256-75c59c0f5bdc3bbf64930ae6bde8e72b1310176e3cd111fe727d0451412434c4"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/InatBox.cs3",
-    "status": 1,
-    "version": 30,
-    "name": "InatBox",
-    "internalName": "InatBox",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "İnatBox cloudstream eklentisidir. Sevdiğiniz yayın platformlarını ve canlı maçları burada bulabilirsiniz.",
-    "fileSize": 36261,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie",
-      "TvSeries",
-      "Live"
-    ],
-    "iconUrl": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEh3vCp6N1K4bECoYRQD-cisJF2_6V_Hk01ZhDmoPR2JuM8O5qr4MqrPO1munM9cRlleBBSK6odYhLtDBWv4E3vhPhynlmS5hVVtJZShHoGA5REQ8_3v8SIlccTEqzVQu2UJyNYQdJNrKIfWy66RQeT0D-CcmFCbHPz5023H6p2v5fv4NVloZ5Rqo_yGrIY/s320/iNat-Box-App.png",
-    "apiVersion": 1,
-    "fileHash": "sha256-89059b959696716155e2d66264b70a31937758efa8dd578bdc1c7156acf24ba9"
-  },
-  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/JetFilmizle.cs3",
     "status": 1,
     "version": 47,
@@ -550,26 +387,6 @@
     "iconUrl": "https://www.google.com/s2/favicons?domain=https://jetfilmizle.de&sz=%size%",
     "apiVersion": 1,
     "fileHash": "sha256-1472a4fd418b77e82a5f21a15d838bc8a0a6b4a9c8189611c53c07df3dc916b9"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/KoreanTurk.cs3",
-    "status": 1,
-    "version": 6,
-    "name": "KoreanTurk",
-    "internalName": "KoreanTurk",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Güney Kore sevdalılarının vazgeçemediği ve Türkiye'nin en çok ziyaret edilen Güney Kore Portalı; Koreantürk'e hoşgeldiniz!",
-    "fileSize": 13224,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "AsianDrama"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=www.koreanturk.com&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-97c347f4a7ed1a148b5eda0592a44b4521eeb617857323df91f4bb75809961ea"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/KultFilmler.cs3",
@@ -591,28 +408,6 @@
     "iconUrl": "https://www.google.com/s2/favicons?domain=kultfilmler.net&sz=%size%",
     "apiVersion": 1,
     "fileHash": "sha256-47b263ff6bf1b4f65d17b3aee00112e687de473ce7fd2fd777b17c2ba0290104"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/RecTV.cs3",
-    "status": 1,
-    "version": 113,
-    "name": "RecTV",
-    "internalName": "RecTV",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "RecTv APK, Türkiye’deki en popüler Çevrimiçi Medya Akış platformlarından biridir. Filmlerin, Canlı Sporların, Web Dizilerinin ve çok daha fazlasının keyfini ücretsiz çıkarın.",
-    "fileSize": 26628,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie",
-      "Live",
-      "TvSeries"
-    ],
-    "iconUrl": "https://rectv.org.tr/wp-content/uploads/2024/11/rectv-modified.webp",
-    "apiVersion": 1,
-    "fileHash": "sha256-6b12435cd6c815b083c259604542eab8a9b43b282960c0a3cdc2ea6a644f6d71"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SelcukFlix.cs3",
@@ -739,26 +534,6 @@
     "iconUrl": "https://www.google.com/s2/favicons?domain=https://www.sinewix.com/&sz=%size%",
     "apiVersion": 1,
     "fileHash": "sha256-c1eb8c939d063e43ff8e8fd03eec66e73f4fb187fa638785d2cc3ed95eeb8e32"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SuperFilmGeldi.cs3",
-    "status": 1,
-    "version": 25,
-    "name": "SuperFilmGeldi",
-    "internalName": "SuperFilmGeldi",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "Hd film izliyerek arkadaşlarınızla ve sevdiklerinizle iyi bir vakit geçirmek istiyorsanız açın bir film eğlenmeye bakın. Bilim kurgu filmleri, aşk drama vahşet aşk romantik sıradışı korku filmlerini izle.",
-    "fileSize": 22306,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=www.superfilmgeldi.biz&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-4414ecf6e0432e2f7295619d8e41ef8fb5603b676ece324fc33ed21a3b7a1c28"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Watch2Movies.cs3",

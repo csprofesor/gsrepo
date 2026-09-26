@@ -187,14 +187,6 @@ class MainUrlUpdater:
                 print("\n")
                 konsol.log(f"[~] Kontrol Ediliyor : {eklenti_adi}")
 
-                if eklenti_adi == "RecTV":
-                    try:
-                        final_url = self._rectv_ver()
-                        konsol.log(f"[+] Kontrol Edildi   : {mainurl}")
-                    except Exception as hata:
-                        konsol.log(f"[!] Kontrol Edilemedi : {mainurl}")
-                        konsol.log(f"[!] {type(hata).__name__} : {hata}")
-                        continue
                 else:
                     try:
                         istek = self.oturum.get(mainurl, allow_redirects=True, timeout=20)
