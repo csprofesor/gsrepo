@@ -87,14 +87,9 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                 setInterval(() => {
                                     try {
                                         const v = document.querySelector('video');
-                                        if (v) {
-                                            if (v.src) window.AndroidBridge.onStreamFound(v.src, v.src);
-                                            v.querySelectorAll('source').forEach(s => { if (s.src) window.AndroidBridge.onStreamFound(s.src, s.src); });
-                                            v.muted = true;
-                                            if (v.paused) v.play().catch(() => {});
-                                        }
-                                        const btn = document.querySelector('[role="button"], .play-button, button');
-                                        if (btn) btn.click();
+                                        if (v && v.paused) { v.muted = true; v.play(); }
+                                        const btns = document.querySelectorAll('[role="button"], .play-button, button, .pld-play-button, .player-button, .play, iframe');
+                                        for (let b of btns) { b.click(); }
                                     } catch(e) {}
                                 }, 300);
 
@@ -148,7 +143,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                             return WebResourceResponse("text/plain", "UTF-8", null)
                         }
 
-                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains(".mp4", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true)) {
+                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true) || reqUrl.contains("hls", true) || reqUrl.contains("stream", true)) {
                             Log.d("DiziGomWebView", "INTERCEPTED_REQ=$reqUrl")
                             if (!foundStream.getAndSet(true)) {
                                 GlobalScope.launch(Dispatchers.IO) {
@@ -175,9 +170,9 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
         }
 
         var elapsed = 0L
-        while (!foundStream.get() && elapsed < 20000L) {
-            delay(200L)
-            elapsed += 200L
+        while (!foundStream.get() && elapsed < 15000L) {
+            delay(300L)
+            elapsed += 300L
         }
 
         withContext(Dispatchers.Main) {
