@@ -337,7 +337,7 @@ class Anizm : MainAPI() {
                     )
                 ).parsedSafe<Source>()
 
-                val videoSource = response?.videoSource ?: response?.securedLink
+                val videoSource = response?.securedLink ?: response?.videoSource
                 if (!videoSource.isNullOrBlank()) {
                     Log.d(logTag, "invokeLokalSource: found FirePlayer stream = $videoSource")
                     val displayName = if (sourceName.isNotBlank() && sourceName != translator) {
