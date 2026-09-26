@@ -1,6 +1,6 @@
 [
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/AnimeciX.cs3?v=63a0b89a612fb5820898dcf02e73d8b8d9b558f5f0d8ccd7ab15fce2217cd89f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/AnimeciX.cs3?v=63a0b89a612fb5820898dcf02e73d8b8d9b558f5f0d8ccd7ab15fce2217cd89f",
     "status": 1,
     "version": 21,
     "name": "AnimeciX",
@@ -20,7 +20,7 @@
     "fileHash": "sha256-63a0b89a612fb5820898dcf02e73d8b8d9b558f5f0d8ccd7ab15fce2217cd89f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/Anizm.cs3?v=4771dec4a1dcb0182bcc75273483c933a897307ae552bd841acdf21bb9ab9aa1",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Anizm.cs3?v=4771dec4a1dcb0182bcc75273483c933a897307ae552bd841acdf21bb9ab9aa1",
     "status": 1,
     "version": 10,
     "name": "Anizm",
@@ -41,7 +41,7 @@
     "fileHash": "sha256-4771dec4a1dcb0182bcc75273483c933a897307ae552bd841acdf21bb9ab9aa1"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/AsyaAnimeleri.cs3?v=a9d6c39db58cf5d3cf79506724011ea62c1f9e2cb4d5ff64eaf1297375adf948",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/AsyaAnimeleri.cs3?v=a9d6c39db58cf5d3cf79506724011ea62c1f9e2cb4d5ff64eaf1297375adf948",
     "status": 1,
     "version": 1,
     "name": "AsyaAnimeleri",
@@ -61,7 +61,7 @@
     "fileHash": "sha256-a9d6c39db58cf5d3cf79506724011ea62c1f9e2cb4d5ff64eaf1297375adf948"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/AsyaWatch.cs3?v=738a119dd0a65c5b7052571e522c342f862f333ce01d461edbfcfa315bcf6d93",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/AsyaWatch.cs3?v=e1509178090c01667f517e0c8b61ed2d702eb2dee5207222c75b5b2929b816f9",
     "status": 1,
     "version": 6,
     "name": "AsyaWatch",
@@ -70,7 +70,7 @@
       "csprofesor"
     ],
     "description": "Asyawatch",
-    "fileSize": 32164,
+    "fileSize": 32102,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -79,10 +79,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=asyawatch.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-738a119dd0a65c5b7052571e522c342f862f333ce01d461edbfcfa315bcf6d93"
+    "fileHash": "sha256-e1509178090c01667f517e0c8b61ed2d702eb2dee5207222c75b5b2929b816f9"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/BelgeselX.cs3?v=11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/BelgeselX.cs3?v=11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db",
     "status": 1,
     "version": 17,
     "name": "BelgeselX",
@@ -102,7 +102,7 @@
     "fileHash": "sha256-11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/CanliTV.cs3?v=bbe929f47b3999c16d019047263df26d6fe97b3c7627c57835146756d3fc1ad6",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CanliTV.cs3?v=bbe929f47b3999c16d019047263df26d6fe97b3c7627c57835146756d3fc1ad6",
     "status": 1,
     "version": 6,
     "name": "CanliTV",
@@ -122,7 +122,7 @@
     "fileHash": "sha256-bbe929f47b3999c16d019047263df26d6fe97b3c7627c57835146756d3fc1ad6"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/CizgiMax.cs3?v=03f8f6c63b88f23b62a434397562777594398e592da90d17be3f011432086294",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=03f8f6c63b88f23b62a434397562777594398e592da90d17be3f011432086294",
     "status": 1,
     "version": 16,
     "name": "CizgiMax",
@@ -144,7 +144,7 @@
     "fileHash": "sha256-03f8f6c63b88f23b62a434397562777594398e592da90d17be3f011432086294"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DDizi.cs3?v=f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DDizi.cs3?v=f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558",
     "status": 1,
     "version": 1,
     "name": "DDizi",
@@ -164,7 +164,7 @@
     "fileHash": "sha256-f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziBox.cs3?v=8ab5957d93c8fd9545179085605a9398d96d10209606aab5808e9efbcadb774f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziBox.cs3?v=8ab5957d93c8fd9545179085605a9398d96d10209606aab5808e9efbcadb774f",
     "status": 1,
     "version": 23,
     "name": "DiziBox",
@@ -184,7 +184,7 @@
     "fileHash": "sha256-8ab5957d93c8fd9545179085605a9398d96d10209606aab5808e9efbcadb774f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziGom.cs3?v=69dedd06815f61bbb69f470d8d227000489e06d56fd6aafdd5732c09a2f2f347",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=0f59346af8d37179fbec031574aa12fc20fdb361f0deaca21171b190c36d2ed6",
     "status": 1,
     "version": 16,
     "name": "DiziGom",
@@ -193,7 +193,7 @@
       "csprofesor"
     ],
     "description": "Türkçe altyazılı yabancı dizi izle, Tüm yabancı, kore, netflix dizilerin yeni ve eski sezonlarını orijinal dilinde dizigom1 alt yazılı film izleyebilir, sadece türkçe altyazılı en iyi yabancı diziler ve filmler hakkında yorum yapabilirsiniz.",
-    "fileSize": 28898,
+    "fileSize": 28851,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -201,10 +201,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dizigom.love&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-69dedd06815f61bbb69f470d8d227000489e06d56fd6aafdd5732c09a2f2f347"
+    "fileHash": "sha256-0f59346af8d37179fbec031574aa12fc20fdb361f0deaca21171b190c36d2ed6"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziKorea.cs3?v=1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziKorea.cs3?v=1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da",
     "status": 1,
     "version": 41,
     "name": "DiziKorea",
@@ -224,7 +224,7 @@
     "fileHash": "sha256-1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/Dizilla.cs3?v=25a5164a8a92dece1f5993e4ddd7be8399f53c92ebf7448177712fa51b853827",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Dizilla.cs3?v=25a5164a8a92dece1f5993e4ddd7be8399f53c92ebf7448177712fa51b853827",
     "status": 1,
     "version": 92,
     "name": "Dizilla",
@@ -244,7 +244,7 @@
     "fileHash": "sha256-25a5164a8a92dece1f5993e4ddd7be8399f53c92ebf7448177712fa51b853827"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziMag.cs3?v=9baca9e27e70d6966712b1e82d56050a00fb905c31c8207a1429b9a72bf9cdf9",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMag.cs3?v=b7fac0289f2bf503333fc478987373a6edb014213207634200d6f203b56cfc45",
     "status": 1,
     "version": 22,
     "name": "DiziMag",
@@ -253,7 +253,7 @@
       "csprofesor"
     ],
     "description": "En son çıkan yabancı dizi ve filmleri DiziMag farkıyla full hd 1080p kalitede izle. Dizimag Geniş ve güncel arşiviyle dizi ve filmlerin tadını çıkartın.",
-    "fileSize": 29437,
+    "fileSize": 29414,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -262,10 +262,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=dizimag.one&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-9baca9e27e70d6966712b1e82d56050a00fb905c31c8207a1429b9a72bf9cdf9"
+    "fileHash": "sha256-b7fac0289f2bf503333fc478987373a6edb014213207634200d6f203b56cfc45"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziMom.cs3?v=56a7a34d7ab414da583a0cab8f44c77fe0110d0529b284b6e6c46db0cb8b32e1",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMom.cs3?v=56a7a34d7ab414da583a0cab8f44c77fe0110d0529b284b6e6c46db0cb8b32e1",
     "status": 1,
     "version": 58,
     "name": "DiziMom",
@@ -285,7 +285,7 @@
     "fileHash": "sha256-56a7a34d7ab414da583a0cab8f44c77fe0110d0529b284b6e6c46db0cb8b32e1"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziPal.cs3?v=8e7537a984b5cc41b24436e505ca605caf9a53ef551d84abc67574bd0b33c1ff",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=8e7537a984b5cc41b24436e505ca605caf9a53ef551d84abc67574bd0b33c1ff",
     "status": 1,
     "version": 109,
     "name": "DiziPal",
@@ -306,7 +306,7 @@
     "fileHash": "sha256-8e7537a984b5cc41b24436e505ca605caf9a53ef551d84abc67574bd0b33c1ff"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziPalOriginal.cs3?v=2c7746933f8d62167677adea4cb08035619f593475159fd83f796db5333c42ca",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=2c7746933f8d62167677adea4cb08035619f593475159fd83f796db5333c42ca",
     "status": 1,
     "version": 92,
     "name": "DiziPalOriginal",
@@ -327,7 +327,7 @@
     "fileHash": "sha256-2c7746933f8d62167677adea4cb08035619f593475159fd83f796db5333c42ca"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DiziYou.cs3?v=5259d2d3443e93a0639c0407fc91c20f71cbad757408acaf31b4faf5ee8bab5b",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziYou.cs3?v=5259d2d3443e93a0639c0407fc91c20f71cbad757408acaf31b4faf5ee8bab5b",
     "status": 1,
     "version": 26,
     "name": "DiziYou",
@@ -347,7 +347,7 @@
     "fileHash": "sha256-5259d2d3443e93a0639c0407fc91c20f71cbad757408acaf31b4faf5ee8bab5b"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/DMax.cs3?v=ff9c9a5516068ec1d06d5027ed57cb2f7a2e76adb0c9cc831c63024f9bb0e70f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DMax.cs3?v=704bbb65983385d6614ac3b3d2d37e0b7ba7a5b3c78f3aa88a502a45dc783184",
     "status": 1,
     "version": 2,
     "name": "DMax",
@@ -356,7 +356,7 @@
       "csprofesor"
     ],
     "description": "DMAX dizi ve programlarını takip etmek için ziyaret edin. DMAX dizi ve programlarını tek parça ve hd kalitesiyle izleyin.",
-    "fileSize": 14339,
+    "fileSize": 14344,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -364,10 +364,10 @@
     ],
     "iconUrl": "https://www.dmax.com.tr/favicon.ico",
     "apiVersion": 1,
-    "fileHash": "sha256-ff9c9a5516068ec1d06d5027ed57cb2f7a2e76adb0c9cc831c63024f9bb0e70f"
+    "fileHash": "sha256-704bbb65983385d6614ac3b3d2d37e0b7ba7a5b3c78f3aa88a502a45dc783184"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/Filmİzlesene.cs3?v=3e4a185d2f152f73496ead0a4b83ea47fba3f4b213ceb9c2111ab590abbc4a65",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Filmİzlesene.cs3?v=628928adc2b5acc445fed842914c5e7bb399af3f5de94277435716c787022d8f",
     "status": 0,
     "version": 3,
     "name": "Filmİzlesene",
@@ -376,7 +376,7 @@
       "csprofesor"
     ],
     "description": "Filmizlesene ile hızlı film izleme fırsatını yakala, en yeni ve iyi filmleri Full HD 1080p kalitesiyle online ve bedava izle",
-    "fileSize": 18941,
+    "fileSize": 18916,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -384,10 +384,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=filmizlesene.plus&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-3e4a185d2f152f73496ead0a4b83ea47fba3f4b213ceb9c2111ab590abbc4a65"
+    "fileHash": "sha256-628928adc2b5acc445fed842914c5e7bb399af3f5de94277435716c787022d8f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/FilmMakinesi.cs3?v=662e2d93d85edd1cd74b8ba08d869cda1935a362b12503042171b64a38f471e2",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=662e2d93d85edd1cd74b8ba08d869cda1935a362b12503042171b64a38f471e2",
     "status": 1,
     "version": 59,
     "name": "FilmMakinesi",
@@ -407,7 +407,7 @@
     "fileHash": "sha256-662e2d93d85edd1cd74b8ba08d869cda1935a362b12503042171b64a38f471e2"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/FilmModu.cs3?v=3150a6212f052ad843a8b9e67d65c82b35078f502bb9f5032b1af808d87b862e",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmModu.cs3?v=3150a6212f052ad843a8b9e67d65c82b35078f502bb9f5032b1af808d87b862e",
     "status": 1,
     "version": 19,
     "name": "FilmModu",
@@ -427,7 +427,7 @@
     "fileHash": "sha256-3150a6212f052ad843a8b9e67d65c82b35078f502bb9f5032b1af808d87b862e"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/FullHDFilm.cs3?v=83de6f5e436bc671aef7925683ffa870a8f8264513d032e23e64b2d0d59515a4",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FullHDFilm.cs3?v=83de6f5e436bc671aef7925683ffa870a8f8264513d032e23e64b2d0d59515a4",
     "status": 1,
     "version": 36,
     "name": "FullHDFilm",
@@ -448,7 +448,7 @@
     "fileHash": "sha256-83de6f5e436bc671aef7925683ffa870a8f8264513d032e23e64b2d0d59515a4"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/FullHDFilmizlesene.cs3?v=8f2cff5f9fc87f38d415b65c30c7ad3b7c9a5d26f03d8e73b072ff520b499253",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FullHDFilmizlesene.cs3?v=8f2cff5f9fc87f38d415b65c30c7ad3b7c9a5d26f03d8e73b072ff520b499253",
     "status": 1,
     "version": 33,
     "name": "FullHDFilmizlesene",
@@ -468,7 +468,7 @@
     "fileHash": "sha256-8f2cff5f9fc87f38d415b65c30c7ad3b7c9a5d26f03d8e73b072ff520b499253"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/HDFilmCehennemi.cs3?v=d3edf0a3cce476d7a5b850950c0fe467102cfacc890da86c5fc39eaecd470c86",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi.cs3?v=d3edf0a3cce476d7a5b850950c0fe467102cfacc890da86c5fc39eaecd470c86",
     "status": 1,
     "version": 48,
     "name": "HDFilmCehennemi",
@@ -489,7 +489,7 @@
     "fileHash": "sha256-d3edf0a3cce476d7a5b850950c0fe467102cfacc890da86c5fc39eaecd470c86"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/HDFilmCehennemi2.cs3?v=018c86425d00c775b066b4d7ef605f13e811f15d6b7a0cba0174b4a3a4656265",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi2.cs3?v=be27258258a9e5ee444060f466620018ff8b735f286efbaa0061a1c397d853c2",
     "status": 1,
     "version": 8,
     "name": "HDFilmCehennemi2",
@@ -498,7 +498,7 @@
       "csprofesor"
     ],
     "description": "Full hd film izleme keyfini hdfilmcehennemi2 ile yaşayın. Türkiyenin en güncel yüksek hd kalitede film izleme sitesi.",
-    "fileSize": 32943,
+    "fileSize": 32857,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -506,10 +506,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.hdfilmcehennemi2.nl&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-018c86425d00c775b066b4d7ef605f13e811f15d6b7a0cba0174b4a3a4656265"
+    "fileHash": "sha256-be27258258a9e5ee444060f466620018ff8b735f286efbaa0061a1c397d853c2"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/HDFilmIzle.cs3?v=48cf5302a6ae123b8ca9a7e6b10a571df13ca656e36d3c607688d971b09d1c2f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=53f00446d1243d6926e5583e7fe707e17b350f65222d4d8647c002d7a859da6f",
     "status": 1,
     "version": 7,
     "name": "HDFilmIzle",
@@ -518,7 +518,7 @@
       "csprofesor"
     ],
     "description": "HDFilmizle ile Full HD izle, 1080p kalitede Yerli ve Yabancı filmlerle Türkçe dublaj veya Altyazı olarak kesintisiz film izlemenin tadını çıkarın.",
-    "fileSize": 32256,
+    "fileSize": 32205,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -527,10 +527,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmizle.to&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-48cf5302a6ae123b8ca9a7e6b10a571df13ca656e36d3c607688d971b09d1c2f"
+    "fileHash": "sha256-53f00446d1243d6926e5583e7fe707e17b350f65222d4d8647c002d7a859da6f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/HDFilmSitesi.cs3?v=1e42cb2ba862c2324ee5084f3f5399880d9a57e2d8db41d0f5089fa148c8467c",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmSitesi.cs3?v=0260be464dd319497e8e5c99b6caee6769b61d0e1037d4dd5bde27ba2fb8c039",
     "status": 1,
     "version": 19,
     "name": "HDFilmSitesi",
@@ -539,7 +539,7 @@
       "csprofesor"
     ],
     "description": "Film izle, Hdfilmsitesi ile Online 1080p ve 4K kalite Full HD Filmlere Türkçe Dublaj ve Altyazılı olarak Reklamsız Kesintisiz HD Film izle.",
-    "fileSize": 28993,
+    "fileSize": 28989,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -547,10 +547,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmsitesi.net&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-1e42cb2ba862c2324ee5084f3f5399880d9a57e2d8db41d0f5089fa148c8467c"
+    "fileHash": "sha256-0260be464dd319497e8e5c99b6caee6769b61d0e1037d4dd5bde27ba2fb8c039"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/HintFilmIzle.cs3?v=82ab1baf7b7ed3dc75b3884247f5ca486cdbaeb05dbb29f9d7e69f63839759c1",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HintFilmIzle.cs3?v=33c74eab31cb6edbcadc507238e4ff3f14070bca2f54c9f01651af3f3c03a05f",
     "status": 1,
     "version": 41,
     "name": "HintFilmIzle",
@@ -559,7 +559,7 @@
       "csprofesor"
     ],
     "description": "HintFilmizle.com Hint filmleri, yabancı filmler ve diziler",
-    "fileSize": 52844,
+    "fileSize": 52771,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -568,10 +568,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.hintfilmizle.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-82ab1baf7b7ed3dc75b3884247f5ca486cdbaeb05dbb29f9d7e69f63839759c1"
+    "fileHash": "sha256-33c74eab31cb6edbcadc507238e4ff3f14070bca2f54c9f01651af3f3c03a05f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/InatBox.cs3?v=006c7b68f7deb24c5356c753429c20607896f78009a8edbf27a46bd6ff0651fb",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/InatBox.cs3?v=006c7b68f7deb24c5356c753429c20607896f78009a8edbf27a46bd6ff0651fb",
     "status": 1,
     "version": 30,
     "name": "InatBox",
@@ -593,7 +593,7 @@
     "fileHash": "sha256-006c7b68f7deb24c5356c753429c20607896f78009a8edbf27a46bd6ff0651fb"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/JetFilmizle.cs3?v=1472a4fd418b77e82a5f21a15d838bc8a0a6b4a9c8189611c53c07df3dc916b9",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/JetFilmizle.cs3?v=1472a4fd418b77e82a5f21a15d838bc8a0a6b4a9c8189611c53c07df3dc916b9",
     "status": 1,
     "version": 47,
     "name": "JetFilmizle",
@@ -613,7 +613,7 @@
     "fileHash": "sha256-1472a4fd418b77e82a5f21a15d838bc8a0a6b4a9c8189611c53c07df3dc916b9"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/KoreanTurk.cs3?v=97c347f4a7ed1a148b5eda0592a44b4521eeb617857323df91f4bb75809961ea",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/KoreanTurk.cs3?v=97c347f4a7ed1a148b5eda0592a44b4521eeb617857323df91f4bb75809961ea",
     "status": 1,
     "version": 6,
     "name": "KoreanTurk",
@@ -633,7 +633,7 @@
     "fileHash": "sha256-97c347f4a7ed1a148b5eda0592a44b4521eeb617857323df91f4bb75809961ea"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/KultFilmler.cs3?v=47b263ff6bf1b4f65d17b3aee00112e687de473ce7fd2fd777b17c2ba0290104",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/KultFilmler.cs3?v=47b263ff6bf1b4f65d17b3aee00112e687de473ce7fd2fd777b17c2ba0290104",
     "status": 1,
     "version": 16,
     "name": "KultFilmler",
@@ -694,7 +694,7 @@
     "fileHash": "sha256-2e637ea633bf40a51ca27f6b10a423614d7e8e8686d306f254817bbd5495a474"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/RareFilmm.cs3?v=715efe42845a6e956970b7662aa406bfa7b3b7e1035914c8cc47ee3b1a05547f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/RareFilmm.cs3?v=715efe42845a6e956970b7662aa406bfa7b3b7e1035914c8cc47ee3b1a05547f",
     "status": 1,
     "version": 3,
     "name": "RareFilmm",
@@ -714,7 +714,7 @@
     "fileHash": "sha256-715efe42845a6e956970b7662aa406bfa7b3b7e1035914c8cc47ee3b1a05547f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/RecTV.cs3?v=00241eaa278d4d42710df1938ea9bce1fed0e5254d31083324add77aaa0c99b4",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/RecTV.cs3?v=00241eaa278d4d42710df1938ea9bce1fed0e5254d31083324add77aaa0c99b4",
     "status": 1,
     "version": 113,
     "name": "RecTV",
@@ -736,7 +736,7 @@
     "fileHash": "sha256-00241eaa278d4d42710df1938ea9bce1fed0e5254d31083324add77aaa0c99b4"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/RoketDizi.cs3?v=45f139faa782c5fd56ae0677b050dc1fc4ab849c95ace67ad3ece7a7e3f113ee",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/RoketDizi.cs3?v=1408421e329cb3ce02ef4b46173cf2589e2568da5e8c8fefdf95c0b3155c8ec7",
     "status": 1,
     "version": 15,
     "name": "RoketDizi",
@@ -745,7 +745,7 @@
       "csprofesor"
     ],
     "description": "Türkiye'nin en tatlış yabancı dizi izleme sitesi. Türkçe dublaj, altyazılı, eski ve yeni yabancı dizilerin yanı sıra kore (asya) dizileri izleyebilirsiniz.",
-    "fileSize": 40717,
+    "fileSize": 40611,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -753,10 +753,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=roketdizi.co&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-45f139faa782c5fd56ae0677b050dc1fc4ab849c95ace67ad3ece7a7e3f113ee"
+    "fileHash": "sha256-1408421e329cb3ce02ef4b46173cf2589e2568da5e8c8fefdf95c0b3155c8ec7"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SelcukFlix.cs3?v=835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SelcukFlix.cs3?v=835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20",
     "status": 1,
     "version": 2,
     "name": "SelcukFlix",
@@ -777,7 +777,7 @@
     "fileHash": "sha256-835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SetFilmIzle.cs3?v=89a5ceb5979fd2cac5795d48d6948324b59f79014127bd4005cc31d13e814c97",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SetFilmIzle.cs3?v=89a5ceb5979fd2cac5795d48d6948324b59f79014127bd4005cc31d13e814c97",
     "status": 1,
     "version": 30,
     "name": "SetFilmIzle",
@@ -798,7 +798,7 @@
     "fileHash": "sha256-89a5ceb5979fd2cac5795d48d6948324b59f79014127bd4005cc31d13e814c97"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SezonlukDizi.cs3?v=d20e1936290d33d0aa1ea07a262b371bcfcd866e56363cc2dcf1c1abd60eb91a",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SezonlukDizi.cs3?v=d20e1936290d33d0aa1ea07a262b371bcfcd866e56363cc2dcf1c1abd60eb91a",
     "status": 1,
     "version": 9,
     "name": "SezonlukDizi",
@@ -818,7 +818,7 @@
     "fileHash": "sha256-d20e1936290d33d0aa1ea07a262b371bcfcd866e56363cc2dcf1c1abd60eb91a"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SinemaCX.cs3?v=72a8d8da386d48becd4dca4a49dd47f8cbe87d5178e88ecda1101a719dbb3566",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaCX.cs3?v=72a8d8da386d48becd4dca4a49dd47f8cbe87d5178e88ecda1101a719dbb3566",
     "status": 1,
     "version": 25,
     "name": "SinemaCX",
@@ -838,7 +838,7 @@
     "fileHash": "sha256-72a8d8da386d48becd4dca4a49dd47f8cbe87d5178e88ecda1101a719dbb3566"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SinemaTvAz.cs3?v=93ae46972527786bf8b61ee75abc55d88d063d2d51956eeb808bc559a055c8c1",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTvAz.cs3?v=cb8df43f0513dad1b306c319bc000a243720f87b0cdbfd76e1a48fc706afb96f",
     "status": 1,
     "version": 1,
     "name": "SinemaTvAz",
@@ -847,7 +847,7 @@
       "csprofesor"
     ],
     "description": "SinemaTvAz - Azərbaycan dilində filmlər və seriallar",
-    "fileSize": 32439,
+    "fileSize": 32388,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "az",
     "tvTypes": [
@@ -857,10 +857,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=sinematv.az&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-93ae46972527786bf8b61ee75abc55d88d063d2d51956eeb808bc559a055c8c1"
+    "fileHash": "sha256-cb8df43f0513dad1b306c319bc000a243720f87b0cdbfd76e1a48fc706afb96f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SineWix.cs3?v=c1eb8c939d063e43ff8e8fd03eec66e73f4fb187fa638785d2cc3ed95eeb8e32",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SineWix.cs3?v=3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763",
     "status": 1,
     "version": 3,
     "name": "SineWix",
@@ -869,7 +869,7 @@
       "csprofesor"
     ],
     "description": "SineWix | Film - Dizi - Anime İzleme Uygulaması",
-    "fileSize": 30160,
+    "fileSize": 30070,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -879,10 +879,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=https://www.sinewix.com/&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-c1eb8c939d063e43ff8e8fd03eec66e73f4fb187fa638785d2cc3ed95eeb8e32"
+    "fileHash": "sha256-3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/SuperFilmGeldi.cs3?v=11cc18b43f19eba4913b2c402b679035895a92418f51ca69fceec648d481f63a",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SuperFilmGeldi.cs3?v=11cc18b43f19eba4913b2c402b679035895a92418f51ca69fceec648d481f63a",
     "status": 1,
     "version": 25,
     "name": "SuperFilmGeldi",
@@ -902,7 +902,7 @@
     "fileHash": "sha256-11cc18b43f19eba4913b2c402b679035895a92418f51ca69fceec648d481f63a"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/Tafdi.cs3?v=43c66949c3d37d48de07c04c5d545c9bb1fae95e0f60ff8c57a4941b6e8c7913",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Tafdi.cs3?v=178b538a48b91f4db0d1f07f6400f6fcb29863d6127a1a203871e84c1cac6700",
     "status": 0,
     "version": 3,
     "name": "Tafdi",
@@ -911,7 +911,7 @@
       "csprofesor"
     ],
     "description": "Türkçe altyazılı film izle, full hd olarak film izlemenin keyfini çıkarın. Türkiyenin en büyük film izleme platformu tafdi kalitesiyle sizlerle.",
-    "fileSize": 12617,
+    "fileSize": 12607,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -919,7 +919,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=tafdi.info&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-43c66949c3d37d48de07c04c5d545c9bb1fae95e0f60ff8c57a4941b6e8c7913"
+    "fileHash": "sha256-178b538a48b91f4db0d1f07f6400f6fcb29863d6127a1a203871e84c1cac6700"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/TLC.cs3?v=abfff834e70502385b2763702b32b2110bce03a71a5b41e63354eeafcfe4f3ec",
@@ -942,7 +942,7 @@
     "fileHash": "sha256-abfff834e70502385b2763702b32b2110bce03a71a5b41e63354eeafcfe4f3ec"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/TLCtr.cs3?v=824c09393361fbd6a4f680bb5ed0e4df3de5dc415505313f173bdd2816919b4d",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TLCtr.cs3?v=824c09393361fbd6a4f680bb5ed0e4df3de5dc415505313f173bdd2816919b4d",
     "status": 1,
     "version": 19,
     "name": "TLCtr",
@@ -962,7 +962,7 @@
     "fileHash": "sha256-824c09393361fbd6a4f680bb5ed0e4df3de5dc415505313f173bdd2816919b4d"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/TRanimaci.cs3?v=c48bc5c8042edfd196d31c55a28c53d98a892777e624bccdacdce79c888b069c",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TRanimaci.cs3?v=c48bc5c8042edfd196d31c55a28c53d98a892777e624bccdacdce79c888b069c",
     "status": 1,
     "version": 19,
     "name": "TRanimaci",
@@ -982,7 +982,7 @@
     "fileHash": "sha256-c48bc5c8042edfd196d31c55a28c53d98a892777e624bccdacdce79c888b069c"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/TRasyalog.cs3?v=6d01026fa4978b7642d336924eeb5e1a788e8bd4047be1d3a4d5ae7426764600",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TRasyalog.cs3?v=6d01026fa4978b7642d336924eeb5e1a788e8bd4047be1d3a4d5ae7426764600",
     "status": 1,
     "version": 65,
     "name": "TRasyalog",
@@ -1002,7 +1002,7 @@
     "fileHash": "sha256-6d01026fa4978b7642d336924eeb5e1a788e8bd4047be1d3a4d5ae7426764600"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/TurkAnime.cs3?v=d7ee0b46c87af55f42f080972f05e610fe2e0b21a7e7858dc80c171d2e308fa7",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TurkAnime.cs3?v=d7ee0b46c87af55f42f080972f05e610fe2e0b21a7e7858dc80c171d2e308fa7",
     "status": 1,
     "version": 14,
     "name": "TurkAnime",
@@ -1022,7 +1022,7 @@
     "fileHash": "sha256-d7ee0b46c87af55f42f080972f05e610fe2e0b21a7e7858dc80c171d2e308fa7"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/TvDiziler.cs3?v=ae61e416eec6f14e23b8dc1dcdf811adcc1d5790bba8b3cf9150361f8f4299ea",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TvDiziler.cs3?v=97561922b0108dec72c625fcc6c4e41a07ce46f2cc3bc9060b94f5091dc04227",
     "status": 1,
     "version": 6,
     "name": "TvDiziler",
@@ -1031,7 +1031,7 @@
       "csprofesor"
     ],
     "description": "Ücretsiz yerli dizi izleme sitesi en popüler dizileri tek parça hd kalitesiyle ve reklamsız bedava olarak buradan tv dizileri izleyin.",
-    "fileSize": 29036,
+    "fileSize": 28969,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -1039,10 +1039,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=tvdiziler.cc&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-ae61e416eec6f14e23b8dc1dcdf811adcc1d5790bba8b3cf9150361f8f4299ea"
+    "fileHash": "sha256-97561922b0108dec72c625fcc6c4e41a07ce46f2cc3bc9060b94f5091dc04227"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/UgurFilm.cs3?v=bd87bd50a655e273fbf0837184b44be5af46af56299655698e4027ae71498ea2",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/UgurFilm.cs3?v=bd87bd50a655e273fbf0837184b44be5af46af56299655698e4027ae71498ea2",
     "status": 1,
     "version": 6,
     "name": "UgurFilm",
@@ -1062,7 +1062,7 @@
     "fileHash": "sha256-bd87bd50a655e273fbf0837184b44be5af46af56299655698e4027ae71498ea2"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/vavooSpor.cs3?v=59da871ac9f05961623e71a77d1c1993fb86dbaae9462ee6705673365bed0835",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/vavooSpor.cs3?v=59da871ac9f05961623e71a77d1c1993fb86dbaae9462ee6705673365bed0835",
     "status": 1,
     "version": 2,
     "name": "vavooSpor",
@@ -1082,7 +1082,7 @@
     "fileHash": "sha256-59da871ac9f05961623e71a77d1c1993fb86dbaae9462ee6705673365bed0835"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/Watch2Movies.cs3?v=047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Watch2Movies.cs3?v=047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f",
     "status": 1,
     "version": 6,
     "name": "Watch2Movies",
@@ -1103,7 +1103,7 @@
     "fileHash": "sha256-047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/WebteIzle.cs3?v=c014c951be6263c0eea12449fa1ebf5b0cbd309bf7359afff7dc4f9720540d63",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=c014c951be6263c0eea12449fa1ebf5b0cbd309bf7359afff7dc4f9720540d63",
     "status": 1,
     "version": 21,
     "name": "WebteIzle",
@@ -1123,7 +1123,7 @@
     "fileHash": "sha256-c014c951be6263c0eea12449fa1ebf5b0cbd309bf7359afff7dc4f9720540d63"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/WFilmİzle.cs3?v=df72d0fe9229329d2928182a4b83c64f08cd64333f11561c89153117a3deadab",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WFilmİzle.cs3?v=d9be19b4ee5c19a2221eeee3e4bfeb6ab82757ca22cec5f39932e740d58e5352",
     "status": 1,
     "version": 7,
     "name": "WFilmİzle",
@@ -1132,7 +1132,7 @@
       "csprofesor"
     ],
     "description": "Aile Filmleri izle, Yerli ve yabancı en yeni Aile filmlerini Full HD 1080p görüntü kalitesiyle Türkçe Dublaj ve Türkçe Altyazı seçenekleriyle izleyin.",
-    "fileSize": 17216,
+    "fileSize": 17178,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -1140,10 +1140,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=wfilmizle.my&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-df72d0fe9229329d2928182a4b83c64f08cd64333f11561c89153117a3deadab"
+    "fileHash": "sha256-d9be19b4ee5c19a2221eeee3e4bfeb6ab82757ca22cec5f39932e740d58e5352"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/XPrime.cs3?v=442ad87bc486e3a7e61b75a2dff4b137fd691050c3c7847dcfc9bf59ff182d9f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/XPrime.cs3?v=e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a",
     "status": 1,
     "version": 6,
     "name": "XPrime",
@@ -1152,7 +1152,7 @@
       "csprofesor"
     ],
     "description": "XPrime.Tv",
-    "fileSize": 31075,
+    "fileSize": 31025,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -1160,10 +1160,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=xprime.tv&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-442ad87bc486e3a7e61b75a2dff4b137fd691050c3c7847dcfc9bf59ff182d9f"
+    "fileHash": "sha256-e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/nik-cloudstream/builds/YabanciDizi.cs3?v=ff37203f3d0646e1f524b9359f3f07af047dbacc9b2a7cdba5381413e6f97494",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3?v=04dad114d0a47829f880c292be64540bfdebe33ffae6f21533e27e8adb852bae",
     "status": 1,
     "version": 8,
     "name": "YabanciDizi",
@@ -1172,7 +1172,7 @@
       "csprofesor"
     ],
     "description": "Son çıkan yabancı dizi ve filmleri yabancidizi' de izle. En yeni yabancı film ve diziler, türkçe altyazılı yada dublaj olarak 1080p kalitesinde hd izle.",
-    "fileSize": 49809,
+    "fileSize": 49744,
     "repositoryUrl": "https://github.com/csprofesor/nik-cloudstream",
     "language": "tr",
     "tvTypes": [
@@ -1180,6 +1180,6 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=yabancidizi.tv&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-ff37203f3d0646e1f524b9359f3f07af047dbacc9b2a7cdba5381413e6f97494"
+    "fileHash": "sha256-04dad114d0a47829f880c292be64540bfdebe33ffae6f21533e27e8adb852bae"
   }
 ]
