@@ -46,12 +46,12 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/csprofesor/nik-cloudstream")
+        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/gokturk/gsrepo")
         authors = listOf("gsrepo")
     }
 
     android {
-        namespace = "com.nikyokki"
+        namespace = "com.gsrepo"
         compileSdk = 36
         defaultConfig { minSdk = 21 }
         lint { targetSdk = 36 }
