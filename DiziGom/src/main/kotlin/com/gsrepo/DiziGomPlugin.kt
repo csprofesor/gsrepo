@@ -13,5 +13,6 @@ class DiziGomPlugin: Plugin() {
     override fun load(context: Context) {
         pluginContext = context
         registerMainAPI(DiziGom())
+        registerExtractorAPI(DiziGomWebViewExtractor(context, "DiziGom"))
     }
 }

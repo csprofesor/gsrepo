@@ -22,6 +22,7 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -316,16 +317,8 @@ class DiziGom : MainAPI() {
         }
 
         if (!found) {
-            Log.d("DiziGom", "Fallback to DiziGomWebViewExtractor for $data")
-            DiziGomPlugin.pluginContext?.let { ctx ->
-                val webExtractor = DiziGomWebViewExtractor(ctx, name)
-                runCatching {
-                    webExtractor.getUrl(data, data, subtitleCallback) { link ->
-                        callback(link)
-                        found = true
-                    }
-                }
-            }
+            Log.d("DiziGom", "Using loadExtractor fallback to DiziGomWebViewExtractor for $data")
+            found = loadExtractor(data, data, subtitleCallback, callback)
         }
 
         return found
