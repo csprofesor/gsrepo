@@ -93,6 +93,33 @@ open class RapidExtractor : ExtractorApi() {
             return
         }
 
+        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
+        if (ajaxMatch != null) {
+            val ajaxUrl = ajaxMatch.groupValues[1]
+            val ajaxHash = ajaxMatch.groupValues[2]
+            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else domain.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
+            Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
+            try {
+                val ajaxRes = app.post(
+                    url = fullAjaxUrl,
+                    data = mapOf("hash" to ajaxHash),
+                    headers = mapOf(
+                        "Referer" to url,
+                        "Origin" to domain,
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+                    ).filter { it.key.isNotBlank() }
+                )
+                val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                if (newCookies.isNotBlank()) {
+                    cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
+                }
+            } catch (e: Exception) {
+                Log.w(name, "AJAX POST hatası: ${e.message}")
+            }
+        }
+
         Log.d(name, "Stream test ediliyor: $videoUrl")
         try {
             val testResp = app.get(videoUrl, referer = mainUrl, headers = mapOf(
@@ -106,32 +133,7 @@ open class RapidExtractor : ExtractorApi() {
         }
 
         
-        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: "")
-        if (ajaxMatch != null) {
-            val ajaxUrl = ajaxMatch.groupValues[1]
-            val ajaxHash = ajaxMatch.groupValues[2]
-            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else "$mainUrl/" + ajaxUrl.trimStart('/')
-            Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
-            try {
-                val ajaxRes = app.post(
-                    url = fullAjaxUrl,
-                    data = mapOf("hash" to ajaxHash),
-                    headers = mapOf(
-                        "Referer" to url,
-                        "Origin" to mainUrl,
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                    ).filter { it.key.isNotBlank() }
-                )
-                val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                if (newCookies.isNotBlank()) {
-                    cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
-                }
-            } catch (e: Exception) {
-                Log.w(name, "AJAX POST hatası: ${e.message}")
-            }
-        } else {
+         else {
             Log.w(name, "AJAX hash bulunamadı!")
         }
 
@@ -147,7 +149,7 @@ open class RapidExtractor : ExtractorApi() {
                 source = name,
                 name = name,
                 url = videoUrl,
-                type = if (videoUrl.contains(".txt") || videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                type = if (videoUrl!!.contains("m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
                 this.referer = "$mainUrl/"
                 this.quality = Qualities.Unknown.value

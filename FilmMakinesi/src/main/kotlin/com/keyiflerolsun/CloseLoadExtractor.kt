@@ -107,19 +107,6 @@ open class CloseLoadExtractor : ExtractorApi() {
             return
         }
 
-        Log.d(name, "Stream test ediliyor: $videoUrl")
-        try {
-            val testResp = app.get(videoUrl, referer = "$mainUrl/", headers = mapOf(
-                "Accept" to "*/*",
-                "Origin" to domain,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-            ).filter { it.key.isNotBlank() })
-            Log.d(name, "Stream test status: ${testResp.code}")
-        } catch (e: Exception) {
-            Log.w(name, "Stream test hatası: ${e.message}")
-        }
-
         val ajaxMatch = Regex("""url\s*:\s*["']([^"']+)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
         if (ajaxMatch != null) {
             val ajaxUrl = ajaxMatch.groupValues[1]
@@ -147,6 +134,21 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         }
 
+        Log.d(name, "Stream test ediliyor: $videoUrl")
+        try {
+            val testResp = app.get(videoUrl, referer = "$domain/", headers = mapOf(
+                "Accept" to "*/*",
+                "Origin" to domain,
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+            ).filter { it.key.isNotBlank() })
+            Log.d(name, "Stream test status: ${testResp.code}")
+        } catch (e: Exception) {
+            Log.w(name, "Stream test hatası: ${e.message}")
+        }
+
+        
+
         parseSubtitles(rawHtml, subtitleCallback)
 
         callback.invoke(
@@ -154,7 +156,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                 source = name,
                 name = name,
                 url = videoUrl,
-                type = if (videoUrl.contains(".txt") || videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                type = if (videoUrl!!.contains("m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
                 this.referer = "$domain/"
                 this.quality = Qualities.Unknown.value
