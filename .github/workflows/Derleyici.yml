@@ -99,6 +99,7 @@ jobs:
           else
             git commit -m "Yeni SinemaTvAz derlemesi: $GITHUB_SHA"
             for deneme in 1 2 3; do
+              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
               git fetch origin builds
               git reset --hard HEAD
               if ! git rebase origin/builds; then
