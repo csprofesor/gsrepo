@@ -94,9 +94,28 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         }
 
+        videoUrl = when {
+            videoUrl.isNullOrBlank() -> null
+            videoUrl.startsWith("//") -> "https:$videoUrl"
+            videoUrl.startsWith("http") -> videoUrl
+            else -> mainUrl.trimEnd('/') + "/" + videoUrl.trimStart('/')
+        }
+
         if (videoUrl.isNullOrBlank()) {
             Log.e(name, "Video URL bulunamadı!")
             return
+        }
+
+        Log.d(name, "Stream test ediliyor: $videoUrl")
+        try {
+            val testResp = app.get(videoUrl, referer = mainUrl, headers = mapOf(
+                "Accept" to "*/*",
+                "Origin" to mainUrl,
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ))
+            Log.d(name, "Stream test status: ${testResp.code}")
+        } catch (e: Exception) {
+            Log.w(name, "Stream test hatası: ${e.message}")
         }
 
         val ajaxMatch = Regex("""url\s*:\s*["']([^"']+ah/)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
@@ -131,12 +150,12 @@ open class CloseLoadExtractor : ExtractorApi() {
                 url = videoUrl,
                 type = if (videoUrl.contains(".txt") || videoUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
-                this.referer = referer ?: mainUrl
+                this.referer = mainUrl
                 this.quality = Qualities.Unknown.value
                 this.headers = mapOf(
                     "Accept" to "*/*",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer" to (referer ?: mainUrl),
+                    "Referer" to mainUrl,
                     "Origin" to mainUrl,
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                 ).filter { it.key.isNotBlank() }
@@ -378,7 +397,7 @@ open class CloseLoadExtractor : ExtractorApi() {
         return xorUnmix(decoded, 130, 10)
     }
 
-    private suspend fun parseSubtitles(
+    private fun parseSubtitles(
         rawHtml: String,
         subtitleCallback: (SubtitleFile) -> Unit
     ) {
