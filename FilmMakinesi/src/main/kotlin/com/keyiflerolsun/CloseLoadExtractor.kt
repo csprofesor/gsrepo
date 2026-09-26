@@ -107,10 +107,12 @@ open class CloseLoadExtractor : ExtractorApi() {
             return
         }
 
-        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
-        if (ajaxMatch != null) {
-            val ajaxUrl = ajaxMatch.groupValues[1]
-            val ajaxHash = ajaxMatch.groupValues[2]
+        val ajaxHashMatch = Regex("""hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
+        val ajaxUrlMatch = Regex("""url\s*:\s*["']([^"']+ah/)["']""").find(unpackedJs ?: rawHtml) ?: Regex("""url\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
+        
+        if (ajaxHashMatch != null && ajaxUrlMatch != null) {
+            val ajaxUrl = ajaxUrlMatch.groupValues[1]
+            val ajaxHash = ajaxHashMatch.groupValues[1]
             val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else domain.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
@@ -125,6 +127,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                     ).filter { it.key.isNotBlank() }
                 )
+                Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
                 val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
                 if (newCookies.isNotBlank()) {
                     cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
@@ -156,7 +159,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                 source = name,
                 name = name,
                 url = videoUrl,
-                type = if (videoUrl!!.contains("m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                type = if (videoUrl.contains(".m3u8") || videoUrl.contains(".txt")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
                 this.referer = "$domain/"
                 this.quality = Qualities.Unknown.value

@@ -93,10 +93,12 @@ open class RapidExtractor : ExtractorApi() {
             return
         }
 
-        val ajaxMatch = Regex("""url\s*:\s*["']([^"']+)["'].*?data\s*:\s*\{\s*hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
-        if (ajaxMatch != null) {
-            val ajaxUrl = ajaxMatch.groupValues[1]
-            val ajaxHash = ajaxMatch.groupValues[2]
+        val ajaxHashMatch = Regex("""hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
+        val ajaxUrlMatch = Regex("""url\s*:\s*["']([^"']+ah/)["']""").find(unpackedJs ?: rawHtml) ?: Regex("""url\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
+        
+        if (ajaxHashMatch != null && ajaxUrlMatch != null) {
+            val ajaxUrl = ajaxUrlMatch.groupValues[1]
+            val ajaxHash = ajaxHashMatch.groupValues[1]
             val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else mainUrl.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
@@ -111,6 +113,7 @@ open class RapidExtractor : ExtractorApi() {
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                     ).filter { it.key.isNotBlank() }
                 )
+                Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
                 val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
                 if (newCookies.isNotBlank()) {
                     cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
@@ -125,8 +128,9 @@ open class RapidExtractor : ExtractorApi() {
             val testResp = app.get(videoUrl, referer = mainUrl, headers = mapOf(
                 "Accept" to "*/*",
                 "Origin" to mainUrl,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ))
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+            ).filter { it.key.isNotBlank() })
             Log.d(name, "Stream test status: ${testResp.code}")
         } catch (e: Exception) {
             Log.w(name, "Stream test hatası: ${e.message}")
@@ -144,7 +148,7 @@ open class RapidExtractor : ExtractorApi() {
                 source = name,
                 name = name,
                 url = videoUrl,
-                type = if (videoUrl!!.contains("m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                type = if (videoUrl.contains(".m3u8") || videoUrl.contains(".txt")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             ) {
                 this.referer = "$mainUrl/"
                 this.quality = Qualities.Unknown.value
