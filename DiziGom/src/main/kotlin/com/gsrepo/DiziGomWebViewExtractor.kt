@@ -20,6 +20,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DiziGomWebViewExtractor(private val context: Context, private val pluginName: String) : ExtractorApi() {
@@ -40,6 +41,13 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
         val foundStream = AtomicBoolean(false)
         val targetUrl = if (url.contains("?")) "$url&autoplay=1&muted=1&playsinline=1" else "$url?autoplay=1&muted=1&playsinline=1"
 
+        val domain = runCatching {
+            val uri = URI(url)
+            "${uri.scheme}://${uri.host}"
+        }.getOrNull() ?: "https://spidypro.com"
+
+        val browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
         withContext(Dispatchers.Main) {
             webView = WebView(context).apply {
                 settings.apply {
@@ -49,7 +57,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     loadWithOverviewMode = true
                     useWideViewPort = true
-                    userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                    userAgentString = browserUserAgent
                 }
 
                 addJavascriptInterface(object : Any() {
@@ -71,7 +79,11 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                         type = if (m3u8.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                     ) {
                                         this.quality = Qualities.P1080.value
-                                        this.headers = mapOf("Referer" to targetUrl, "Origin" to "https://pilavyerplay.top")
+                                        this.headers = mapOf(
+                                            "Referer" to targetUrl,
+                                            "Origin" to domain,
+                                            "User-Agent" to browserUserAgent
+                                        )
                                     }
                                 )
                             }
@@ -155,7 +167,11 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                             type = if (reqUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                         ) {
                                             this.quality = Qualities.P1080.value
-                                            this.headers = mapOf("Referer" to targetUrl, "Origin" to "https://pilavyerplay.top")
+                                            this.headers = mapOf(
+                                                "Referer" to targetUrl,
+                                                "Origin" to domain,
+                                                "User-Agent" to browserUserAgent
+                                            )
                                         }
                                     )
                                 }
