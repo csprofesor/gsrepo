@@ -92,13 +92,13 @@ class FilmMakinesi : MainAPI() {
                 val epHref = fixUrlNull(ep.attr("href")) ?: return@forEach
                 val epName = ep.selectFirst(".ep-details")?.text()?.trim() ?: ""
                 val epTitleText = ep.selectFirst(".ep-title")?.text()?.trim() ?: ""
-                val seasonMatch = Regex("""(d+).s*Sezon""").find(epTitleText)
-                val epMatch = Regex("""(d+).s*Bölüm""").find(epTitleText)
+                val seasonMatch = Regex("""(\d+)\.\s*Sezon""").find(epTitleText)
+                val epMatch = Regex("""(\d+)\.\s*Bölüm""").find(epTitleText)
                 val seasonNum = seasonMatch?.groupValues?.get(1)?.toIntOrNull()
-                    ?: Regex("""/sezon-(d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""/sezon-(\d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
                     ?: 1
                 val epNum = epMatch?.groupValues?.get(1)?.toIntOrNull()
-                    ?: Regex("""/bolum-(d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""/bolum-(\d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
                     ?: return@forEach
 
                 episodes.add(newEpisode(epHref) {
@@ -147,46 +147,27 @@ class FilmMakinesi : MainAPI() {
         val document = app.get(data, referer = mainUrl).document
         Log.d(name, "Sayfa yüklendi")
 
-        var foundAny = false
+        val videoParts = document.select(".video-parts a[data-video_url]")
+        Log.d(name, "Video part sayısı: ${videoParts.size}")
 
-        // Öncelik: FilmMakinesi'nin video partları.
-        document.select(".video-parts a[data-video_url]").forEachIndexed { index, part ->
-            val embedUrl = part.attr("data-video_url")
-
-            if (embedUrl.isNotBlank()) {
-                Log.d(name, "Video part #$index: $embedUrl")
-                try {
-                    if (loadExtractor(embedUrl, data, subtitleCallback, callback)) {
-                        foundAny = true
-                    }
-                } catch (e: Exception) {
-                    Log.e(name, "Video part extractor hatası: $embedUrl", e)
+        if (videoParts.isNotEmpty()) {
+            videoParts.forEachIndexed { index, part ->
+                val embedUrl = part.attr("data-video_url")
+                val label = part.text().trim()
+                Log.d(name, "Part #$index - label: '$label', url: '$embedUrl'")
+                if (embedUrl.isNotBlank()) {
+                    loadExtractor(embedUrl, data, subtitleCallback, callback)
                 }
+            }
+        } else {
+            val iframeSrc = document.selectFirst(".after-player iframe")?.attr("data-src")
+            Log.d(name, "Fallback iframe: $iframeSrc")
+            if (iframeSrc != null) {
+                loadExtractor(iframeSrc, data, subtitleCallback, callback)
             }
         }
 
-        // Video part bulunamazsa player iframe'ine düş.
-        if (!foundAny) {
-            val iframe = document.selectFirst(
-                ".after-player iframe, div.player-div iframe"
-            )
-
-            val iframeUrl = iframe?.attr("data-src")
-                ?.ifBlank { iframe.attr("src") }
-
-            if (!iframeUrl.isNullOrBlank()) {
-                Log.d(name, "Fallback iframe: $iframeUrl")
-                try {
-                    if (loadExtractor(iframeUrl, data, subtitleCallback, callback)) {
-                        foundAny = true
-                    }
-                } catch (e: Exception) {
-                    Log.e(name, "Iframe extractor hatası: $iframeUrl", e)
-                }
-            }
-        }
-
-        Log.d(name, "loadLinks tamamlandı, sonuç: $foundAny")
-        return foundAny
+        Log.d(name, "loadLinks tamamlandı")
+        return true
     }
 }
