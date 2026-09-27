@@ -120,7 +120,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                     url = fullAjaxUrl,
                     data = mapOf("hash" to ajaxHash),
                     headers = mapOf(
-                        "Referer" to url,
+                        "Referer" to "$domain/",
                         "Origin" to domain,
                         "X-Requested-With" to "XMLHttpRequest",
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -139,7 +139,7 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         Log.d(name, "Stream test ediliyor: $videoUrl")
         try {
-            val testResp = app.get(videoUrl, referer = url, headers = mapOf(
+            val testResp = app.get(videoUrl, referer = "$domain/", headers = mapOf(
                 "Accept" to "*/*",
                 "Origin" to domain,
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -166,13 +166,13 @@ open class CloseLoadExtractor : ExtractorApi() {
                 mapOf(
                     "Accept" to "*/*",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer" to url,
+                    "Referer" to "$domain/",
                     "Origin" to domain,
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                 ).filter { it.key.isNotBlank() }
             )
         )
-        Log.d(name, "ExtractorLink eklendi: $videoUrl")
+        Log.d(name, "ExtractorLink eklendi: $videoUrl, Cookies: $cookies")
     }
 
     private fun unpackPackerJs(rawHtml: String): String? {
