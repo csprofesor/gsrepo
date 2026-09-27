@@ -24,7 +24,47 @@ open class RapidExtractor : ExtractorApi() {
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         var videoUrl: String? = null
-        val unpackedJs = unpackPackerJs(rawHtml)
+        var unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
+        if (unpackedJs == rawHtml) unpackedJs = null
+
+        // GitHub'da çalışan sürümden (RapidVid) alınan mantık
+        if (videoUrl.isNullOrBlank()) {
+            try {
+                var extractedValue = Regex("""file": "(.*)",""").find(rawHtml)?.groupValues?.get(1)
+                if (extractedValue != null) {
+                    val bytes = extractedValue.split("\\x").filter { it.isNotEmpty() }.map { it.toInt(16).toByte() }.toByteArray()
+                    videoUrl = String(bytes, Charsets.UTF_8)
+                    Log.d(name, "GitHub logic decoded from \\x bytes: $videoUrl")
+                } else {
+                    val evalJWSsetup = Regex("""\};\s*(eval\(function[\s\S]*?)var played = \d+;""").find(rawHtml)?.groupValues?.get(1)
+                    if (evalJWSsetup != null) {
+                        val JWSsetup = getAndUnpack(getAndUnpack(evalJWSsetup)).replace("\\\\", "\\")
+                        extractedValue = Regex("""file":"(.*)","label"""").find(JWSsetup)?.groupValues?.get(1)?.replace("\\x", "")
+                        val bytes = extractedValue?.chunked(2)?.map { it.toInt(16).toByte() }?.toByteArray()
+                        if (bytes != null) {
+                            videoUrl = String(bytes, Charsets.UTF_8)
+                            Log.d(name, "GitHub logic decoded from JWSsetup: $videoUrl")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(name, "GitHub logic failed: ${e.message}")
+            }
+        }
+        
+        if (videoUrl.isNullOrBlank() && unpackedJs != null) {
+            val dataMatch = Regex("""return result\}var .*?=.*?\("(.*?)"\)""").find(unpackedJs)
+            if (dataMatch != null) {
+                try {
+                    val first = Base64.decode(dataMatch.groupValues[1], Base64.DEFAULT).reversedArray()
+                    val second = Base64.decode(first, Base64.DEFAULT)
+                    videoUrl = second.toString(Charsets.UTF_8).split("|")[1]
+                    Log.d(name, "GitHub logic decoded m3uLink (CloseLoad type) for Rapid: $videoUrl")
+                } catch (e: Exception) {
+                    Log.w(name, "GitHub logic failed: ${e.message}")
+                }
+            }
+        }
         if (unpackedJs != null) {
             Log.d(name, "JS unpack edildi, uzunluk: ${unpackedJs.length}")
 

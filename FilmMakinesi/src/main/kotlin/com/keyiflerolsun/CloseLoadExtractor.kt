@@ -5,6 +5,13 @@ import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
+
+private fun getm3uLink(data: String): String {
+    val first = Base64.decode(data, Base64.DEFAULT).reversedArray()
+    val second = Base64.decode(first, Base64.DEFAULT)
+    return second.toString(Charsets.UTF_8).split("|")[1]
+}
+
 open class CloseLoadExtractor : ExtractorApi() {
     override val mainUrl = "https://closeload.filmmakinesi.to"
     override val name = "CloseLoad"
@@ -25,7 +32,21 @@ open class CloseLoadExtractor : ExtractorApi() {
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         var videoUrl: String? = null
-        val unpackedJs = unpackPackerJs(rawHtml)
+        var unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
+        if (unpackedJs == rawHtml) unpackedJs = null // getAndUnpack returns raw if not found sometimes
+
+        // GitHub'da çalışan sürümden alınan mantık
+        if (videoUrl.isNullOrBlank() && unpackedJs != null) {
+            val dataMatch = Regex("""return result\}var .*?=.*?\("(.*?)"\)""").find(unpackedJs)
+            if (dataMatch != null) {
+                try {
+                    videoUrl = getm3uLink(dataMatch.groupValues[1])
+                    Log.d(name, "GitHub logic decoded m3uLink: $videoUrl")
+                } catch (e: Exception) {
+                    Log.w(name, "GitHub logic failed: ${e.message}")
+                }
+            }
+        }
         val searchHtml = unpackedJs ?: rawHtml
 
         val varPattern = Regex("""(?:var|let|const)\s+(\w+)\s*=\s*(\w+)\s*\(\s*\[(.*?)\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
