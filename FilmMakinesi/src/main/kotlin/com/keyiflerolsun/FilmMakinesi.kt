@@ -2,6 +2,7 @@ package com.keyiflerolsun
 
 import android.util.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
@@ -27,7 +28,7 @@ class FilmMakinesi : MainAPI() {
         return newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
     }
 
-    fun parseHomePage(doc: org.jsoup.nodes.Document): List<SearchResponse> {
+    private fun parseHomePage(doc: org.jsoup.nodes.Document): List<SearchResponse> {
         return doc.select("a.item, a.slide, div.item-relative a.item")
             .mapNotNull { parseSearchElement(it) }
             .distinctBy { it.url }
@@ -41,21 +42,22 @@ class FilmMakinesi : MainAPI() {
             ?: link.attr("title").ifEmpty { null }
             ?: element.selectFirst("img")?.attr("alt")?.trim()
             ?: return null
-        val poster = fixUrlNull(element.selectFirst("img")?.let {
-            it.attr("src").ifEmpty { null }
-                ?: it.attr("srcset").split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-        })
+
+        val poster = element.selectFirst("img")?.let {
+            val src = it.attr("src").ifEmpty { it.attr("data-src") }
+            fixUrlNull(src)
+        }
+
         val score = element.attr("data-score").ifEmpty { null }
             ?: element.selectFirst(".rating, .imdb-score span")?.text()?.trim()
-        val type = if (href.contains("/dizi/")) TvType.TvSeries else TvType.Movie
 
-        return if (type == TvType.TvSeries) {
-            newTvSeriesSearchResponse(title, href, type) {
+        return if (href.contains("/dizi/")) {
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 posterUrl = poster
                 this.score = Score.from10(score)
             }
         } else {
-            newMovieSearchResponse(title, href, type) {
+            newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
                 this.score = Score.from10(score)
             }
@@ -77,6 +79,7 @@ class FilmMakinesi : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val doc = app.get(url, referer = "${mainUrl}/").document
+
         val title = doc.selectFirst("h1, meta[property='og:title']")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text().trim()
         }?.replace(" - FilmMakinesi", "")?.replace(" izle", "")?.trim() ?: return null
@@ -92,10 +95,10 @@ class FilmMakinesi : MainAPI() {
             val episodes = doc.select("a[href*='bolum'], div.episodes a").mapNotNull { a ->
                 val epHref = fixUrlNull(a.attr("href")) ?: return@mapNotNull null
                 val epTitle = a.text().trim()
-                val season = Regex("""(d+)\.\s*Sezon""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
-                    ?: Regex("""/sezon-(d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                val episode = Regex("""(d+)\.\s*B[öo]l[üu]m""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
-                    ?: Regex("""/bolum-(d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+                val season = Regex("""(\d+)\.\s*Sezon""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""/sezon-(\d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                val episode = Regex("""(\d+)\.\s*B[öo]l[üu]m""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""/bolum-(\d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
                 newEpisode(epHref) {
                     name = epTitle
                     this.season = season
