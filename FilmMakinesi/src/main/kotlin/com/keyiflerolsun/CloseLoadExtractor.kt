@@ -28,7 +28,20 @@ open class CloseLoadExtractor : ExtractorApi() {
         val unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
         val searchHtml = unpackedJs ?: rawHtml
 
-        // 2. AJAX Hash authorization & Video URL retrieval (Must happen before extracting final video URL to avoid fallback/dummy URLs)
+        // 2. CloseLoad exposes the current stream directly in the embed HTML.
+        // Prefer this source before the legacy AJAX endpoint, which can return a stale PlayMix URL.
+        var videoUrl: String? = null
+        val directFileMatch = Regex("""(?i)(?:["']?file["']?)\\s*:\\s*["'](https?://[^"']+)["']""")
+            .find(searchHtml)
+            ?: Regex("""(?i)(?:["']?file["']?)\\s*:\\s*["'](https?://[^"']+)["']""")
+                .find(rawHtml)
+
+        if (directFileMatch != null) {
+            videoUrl = directFileMatch.groupValues[1].replace("\\/","/")
+            Log.d(name, "Current CloseLoad file source: $videoUrl")
+        }
+
+        // 3. AJAX Hash authorization & Video URL retrieval as fallback only.
         var ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
             ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
             ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
@@ -37,9 +50,7 @@ open class CloseLoadExtractor : ExtractorApi() {
             ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
             ?: "/video/ah/"
 
-        var videoUrl: String? = null
-
-        if (ajaxHash != null) {
+        if (videoUrl.isNullOrBlank() && ajaxHash != null) {
             val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
@@ -77,7 +88,7 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         }
 
-        // 3. Look for m3u8 or .txt direct link in unpacked JS or raw HTML if not found in AJAX
+        // 4. Look for m3u8 or .txt direct link in unpacked JS or raw HTML if not found above
         if (videoUrl.isNullOrBlank()) {
             val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchHtml)
                 ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(rawHtml)
@@ -87,7 +98,7 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         }
 
-        // 4. Look for base64 / atob in script
+        // 5. Look for base64 / atob in script
         if (videoUrl.isNullOrBlank()) {
             val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(searchHtml) ?: Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
             if (atobMatch != null) {
@@ -105,7 +116,7 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         }
 
-        // 5. Look for file: "..."
+        // 6. Look for file: "..."
         if (videoUrl.isNullOrBlank()) {
             val fileMatch = Regex(""""file"\s*:\s*"([^"]+)"""").find(searchHtml) ?: Regex(""""file"\s*:\s*"([^"]+)"""").find(rawHtml)
             if (fileMatch != null) {
