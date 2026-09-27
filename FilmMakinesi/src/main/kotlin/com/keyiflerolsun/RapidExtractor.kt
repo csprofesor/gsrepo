@@ -125,7 +125,7 @@ open class RapidExtractor : ExtractorApi() {
 
         Log.d(name, "Stream test ediliyor: $videoUrl")
         try {
-            val testResp = app.get(videoUrl, referer = mainUrl, headers = mapOf(
+            val testResp = app.get(videoUrl, referer = url, headers = mapOf(
                 "Accept" to "*/*",
                 "Origin" to mainUrl,
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -143,27 +143,24 @@ open class RapidExtractor : ExtractorApi() {
 
         
         
+        @Suppress("DEPRECATION", "DEPRECATION_ERROR")
         callback.invoke(
-            newExtractorLink(
-                source = name,
-                name = name,
-                url = videoUrl,
-                type = if (videoUrl.contains(".m3u8") || videoUrl.contains(".txt")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-            ) {
-                this.referer = "$mainUrl/"
-                this.quality = Qualities.Unknown.value
-                this.headers = mapOf(
+            ExtractorLink(
+                name,
+                name,
+                videoUrl,
+                url,
+                Qualities.Unknown.value,
+                videoUrl.contains(".m3u8") || videoUrl.contains(".txt"),
+                mapOf(
                     "Accept" to "*/*",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer" to "$mainUrl/",
+                    "Referer" to url,
                     "Origin" to mainUrl,
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                 ).filter { it.key.isNotBlank() }
-            }
+            )
         )
-        Log.d(name, "ExtractorLink eklendi: $videoUrl")
-
-
         Log.d(name, "ExtractorLink eklendi: $videoUrl")
     }
     private fun unpackPackerJs(rawHtml: String): String? {
