@@ -3,7 +3,10 @@ package com.keyiflerolsun
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -144,6 +147,151 @@ class FilmMakinesi : MainAPI() {
         }
     }
 
+    private fun decodeCloseLoadSource(encoded: String): String? {
+        return try {
+            val parts = encoded.split("#").toMutableList()
+            if (parts.size < 3) return null
+
+            val d26e = parts.size - 2
+            val g7kx = d26e % 7
+            val g87 = 8 + (d26e % 5)
+
+            if (g87 !in parts.indices) return null
+            val qg00 = parts.removeAt(g87)
+
+            if (g7kx !in parts.indices) return null
+            val e217w = parts.removeAt(g7kx)
+
+            var mam2j = parts.joinToString("")
+
+            var p1m2w = 0
+            var pv4 = 0
+            for (i in e217w.indices) {
+                val r2s = e217w[i].code
+                p1m2w = (p1m2w * 37 + r2s) % 241
+                pv4 = (pv4 + ((r2s shl 1) xor i)) and 255
+            }
+
+            val lr7 = (p1m2w * 3 + pv4) % 256
+            val w70 = (pv4 % 11) + 5
+            var w4l0 = ((pv4 * 251 + p1m2w) % 65519) + 1
+
+            fun shiftLetters(value: String, key: Int): String {
+                return buildString(value.length) {
+                    value.forEach { ch ->
+                        when {
+                            ch in 'A'..'Z' -> append(((ch.code - 'A'.code + key) % 26 + 'A'.code).toChar())
+                            ch in 'a'..'z' -> append(((ch.code - 'a'.code + key) % 26 + 'a'.code).toChar())
+                            else -> append(ch)
+                        }
+                    }
+                }
+            }
+
+            for (i in qg00.indices.reversed()) {
+                when (val op = qg00[i]) {
+                    '7' -> mam2j = String(
+                        android.util.Base64.decode(mam2j, android.util.Base64.DEFAULT),
+                        Charsets.ISO_8859_1
+                    )
+                    '3' -> mam2j = mam2j.reversed()
+                    else -> {
+                        val key = (26 - ((op.code - 96) % 26)) % 26
+                        mam2j = shiftLetters(mam2j, key)
+                    }
+                }
+            }
+
+            if (e217w.length > 4096) {
+                mam2j = String(
+                    android.util.Base64.decode(mam2j, android.util.Base64.DEFAULT),
+                    Charsets.ISO_8859_1
+                )
+            }
+
+            val n = mam2j.length
+            val rrx31 = IntArray(n)
+            for (i in n - 1 downTo 1) {
+                w4l0 = (w4l0 * 97 + 41) % 65519
+                rrx31[i] = w4l0 % (i + 1)
+            }
+
+            val chars = mam2j.toCharArray()
+            for (i in 1 until n) {
+                val j = rrx31[i]
+                val tmp = chars[i]
+                chars[i] = chars[j]
+                chars[j] = tmp
+            }
+
+            var wqoz1 = lr7
+            return buildString(n) {
+                chars.forEach { ch ->
+                    val r2s = ch.code
+                    wqoz1 = (wqoz1 * 5 + w70) % 256
+                    append((r2s xor wqoz1).toChar())
+                    wqoz1 = (wqoz1 + r2s) % 256
+                }
+            }
+        } catch (e: Exception) {
+            Log.d(name, "CloseLoad decode failed: " + e.message)
+            null
+        }
+    }
+
+    private suspend fun loadCloseLoad(
+        embedUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        return try {
+            val html = app.get(
+                embedUrl,
+                referer = mainUrl,
+                interceptor = interceptor
+            ).text
+
+            val encoded = Regex(
+                """var\s+m97\s*=\s*ag9br\("([^"]+)"\.split\("#"\)\)"""
+            ).find(html)?.groupValues?.getOrNull(1)
+
+            val sourceUrl = encoded?.let(::decodeCloseLoadSource)
+            if (sourceUrl.isNullOrBlank()) {
+                Log.d(name, "CloseLoad: m97 source not found")
+                false
+            } else {
+                callback(
+                    newExtractorLink(
+                        source = "CloseLoad",
+                        name = "CloseLoad",
+                        url = sourceUrl,
+                        type = ExtractorLinkType.M3U8
+                    ) {
+                        referer = embedUrl
+                        quality = Qualities.Unknown.value
+                    }
+                )
+
+                Regex(
+                    """"file"\s*:\s*"(https?://[^"]+\.vtt)"[^}]*?"label"\s*:\s*"([^"]+)""""
+                ).findAll(html).forEach { match ->
+                    subtitleCallback(
+                        newSubtitleFile(
+                            match.groupValues[2],
+                            match.groupValues[1].replace("\\/", "/")
+                        )
+                    )
+                }
+
+                Log.d(name, "CloseLoad source: " + sourceUrl)
+                true
+            }
+        } catch (e: Exception) {
+            Log.d(name, "CloseLoad failed: " + e.message)
+            false
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -164,14 +312,19 @@ class FilmMakinesi : MainAPI() {
         var found = false
         candidates.forEach { embedUrl ->
             try {
-                loadExtractor(embedUrl, data, subtitleCallback) { link ->
-                    found = true
-                    callback(link)
+                if (embedUrl.contains("closeload.filmmakinesi.to", ignoreCase = true)) {
+                    if (loadCloseLoad(embedUrl, subtitleCallback, callback)) found = true
+                } else {
+                    loadExtractor(embedUrl, data, subtitleCallback) { link ->
+                        found = true
+                        callback(link)
+                    }
                 }
             } catch (e: Exception) {
-                Log.d(name, "Extractor failed: $embedUrl - ${e.message}")
+                Log.d(name, "Extractor failed: " + embedUrl + " - " + e.message)
             }
         }
         return found
     }
+}
 }
