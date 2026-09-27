@@ -4,97 +4,11 @@ import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import java.util.regex.Pattern
 
 open class RapidExtractor : ExtractorApi() {
     override val mainUrl = "https://rapid.filmmakinesi.to"
     override val name = "Rapid"
     override val requiresReferer = true
-
-    companion object {
-        fun decodeCloseLoad(jsCode: String, arrStr: String): String {
-            val arrRegex = Pattern.compile("\"([^\"]+)\"")
-            val arrMatcher = arrRegex.matcher(arrStr)
-            val sb = java.lang.StringBuilder()
-            while (arrMatcher.find()) {
-                sb.append(arrMatcher.group(1))
-            }
-            var kspgo = sb.toString()
-
-            val keysRegex = Pattern.compile("var\\s+[a-zA-Z0-9_]+\\s*=\\s*\"([^\"]+)\";\\s*var\\s+[a-zA-Z0-9_]+\\s*=\\s*\"([^\"]+)\";")
-            val keysMatcher = keysRegex.matcher(jsCode)
-            if (!keysMatcher.find()) return ""
-            val key1 = keysMatcher.group(1) ?: return ""
-            val key2 = keysMatcher.group(2) ?: return ""
-
-            var o0v = 0
-            var rbc = 0
-            for (ro7 in key1.indices) {
-                val wlv = key1[ro7].code
-                o0v = (o0v * 31 + wlv) % 251
-                rbc = (rbc xor (wlv + ro7)) and 255
-            }
-
-            val lbxe = (o0v + rbc) % 256
-            val u2u5r = (o0v % 13) + 3
-            var d6en9 = ((o0v * 256 + rbc) % 65521) + 1
-
-            for (ro7 in key2.length - 1 downTo 0) {
-                val x7ed6 = key2[ro7]
-                if (x7ed6 == 'b') {
-                    var padded = kspgo
-                    val missing = padded.length % 4
-                    if (missing != 0) {
-                        padded += "=".repeat(4 - missing)
-                    }
-                    val decodedBytes = Base64.decode(padded, Base64.DEFAULT)
-                    kspgo = String(decodedBytes, Charsets.ISO_8859_1)
-                } else if (x7ed6 == 'v') {
-                    kspgo = kspgo.reversed()
-                } else {
-                    val ql55 = (26 - ((x7ed6.code - 64) % 26)) % 26
-                    val chars = java.lang.StringBuilder()
-                    for (c in kspgo) {
-                        if (c.isLetter()) {
-                            val y85 = c.code
-                            val fro = if (y85 <= 90) 65 else 97
-                            chars.append(((y85 - fro + ql55) % 26 + fro).toChar())
-                        } else {
-                            chars.append(c)
-                        }
-                    }
-                    kspgo = chars.toString()
-                }
-            }
-
-            val trn = kspgo.length
-            val npz8 = IntArray(trn)
-            for (ro7 in trn - 1 downTo 1) {
-                d6en9 = (d6en9 * 75 + 74) % 65537
-                npz8[ro7] = d6en9 % (ro7 + 1)
-            }
-
-            val oe7 = kspgo.toCharArray()
-            for (ro7 in 1 until trn) {
-                val fy6 = npz8[ro7]
-                val awn = oe7[ro7]
-                oe7[ro7] = oe7[fy6]
-                oe7[fy6] = awn
-            }
-            kspgo = String(oe7)
-
-            var tds = lbxe
-            val v8y7l = java.lang.StringBuilder()
-            for (ro7 in kspgo.indices) {
-                val wlv = kspgo[ro7].code
-                tds = (tds + u2u5r) % 256
-                v8y7l.append((wlv xor tds).toChar())
-                tds = (tds + wlv) % 256
-            }
-
-            return v8y7l.toString()
-        }
-    }
 
     override suspend fun getUrl(
         url: String,
@@ -104,124 +18,46 @@ open class RapidExtractor : ExtractorApi() {
     ) {
         Log.d(name, "getUrl çağrıldı, url: $url")
 
-        val response = app.get(url, referer = referer ?: mainUrl)
+        val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
+        val response = app.get(url, referer = referer ?: domain)
         val rawHtml = response.text
         var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         var videoUrl: String? = null
 
-        val arrRegex = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]")
-        val arrMatcher = arrRegex.matcher(rawHtml)
-        while (arrMatcher.find()) {
-            val arrStr = arrMatcher.group(0) ?: continue
-            if (arrStr.contains(".jpg") || arrStr.contains(".png") || arrStr.contains(".webp")) continue
-            try {
-                val streamUrl = decodeCloseLoad(rawHtml, arrStr)
-                if (streamUrl.isNotEmpty() && (streamUrl.contains(".m3u8") || streamUrl.contains(".txt") || streamUrl.contains("/hls/"))) {
-                    videoUrl = streamUrl
-                    Log.d(name, "Emre logic decoded m3uLink: $videoUrl")
-                    break
-                }
-            } catch (e: Exception) {
-                Log.w(name, "Emre logic failed: ${e.message}")
-            }
-        }
+        val unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
+        val searchHtml = unpackedJs ?: rawHtml
 
-        var unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
-        if (unpackedJs == rawHtml) unpackedJs = null
-
-        // GitHub'da çalışan sürümden (RapidVid) alınan mantık
-        if (videoUrl.isNullOrBlank()) {
-            try {
-                var extractedValue = Regex("""file": "(.*)",""").find(rawHtml)?.groupValues?.get(1)
-                if (extractedValue != null) {
-                    val bytes = extractedValue.split("\\x").filter { it.isNotEmpty() }.map { it.toInt(16).toByte() }.toByteArray()
-                    videoUrl = String(bytes, Charsets.UTF_8)
-                    Log.d(name, "GitHub logic decoded from \\x bytes: $videoUrl")
-                } else {
-                    val evalJWSsetup = Regex("""\};\s*(eval\(function[\s\S]*?)var played = \d+;""").find(rawHtml)?.groupValues?.get(1)
-                    if (evalJWSsetup != null) {
-                        val JWSsetup = getAndUnpack(getAndUnpack(evalJWSsetup)).replace("\\\\", "\\")
-                        extractedValue = Regex("""file":"(.*)","label"""").find(JWSsetup)?.groupValues?.get(1)?.replace("\\x", "")
-                        val bytes = extractedValue?.chunked(2)?.map { it.toInt(16).toByte() }?.toByteArray()
-                        if (bytes != null) {
-                            videoUrl = String(bytes, Charsets.UTF_8)
-                            Log.d(name, "GitHub logic decoded from JWSsetup: $videoUrl")
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(name, "GitHub logic failed: ${e.message}")
-            }
-        }
-        
-        if (videoUrl.isNullOrBlank() && unpackedJs != null) {
-            val dataMatch = Regex("""return result\}var .*?=.*?\("(.*?)"\)""").find(unpackedJs)
-            if (dataMatch != null) {
-                try {
-                    val first = Base64.decode(dataMatch.groupValues[1], Base64.DEFAULT).reversedArray()
-                    val second = Base64.decode(first, Base64.DEFAULT)
-                    videoUrl = second.toString(Charsets.UTF_8).split("|")[1]
-                    Log.d(name, "GitHub logic decoded m3uLink (CloseLoad type) for Rapid: $videoUrl")
-                } catch (e: Exception) {
-                    Log.w(name, "GitHub logic failed: ${e.message}")
-                }
-            }
-        }
-        if (unpackedJs != null) {
-            Log.d(name, "JS unpack edildi, uzunluk: ${unpackedJs.length}")
-
-            val varPattern = Regex(
-                """(?:var|let|const)\s+(\w+)\s*=\s*(\w+)\s*\(\s*\[(.*?)\]\s*\)""",
-                RegexOption.DOT_MATCHES_ALL
-            )
-            val varMatch = varPattern.find(unpackedJs)
-
-            if (varMatch != null) {
-                val varName = varMatch.groupValues[1]
-                val funcName = varMatch.groupValues[2]
-                val partsStr = varMatch.groupValues[3]
-
-                val parts = Regex(""""([^"]*)"""").findAll(partsStr).map {
-                    it.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
-                }.toList()
-
-                Log.d(name, "Dinamik bulundu: var=$varName, func=$funcName, parts=${parts.size}")
-
-                val funcBody = extractFuncBody(unpackedJs, funcName)
-                if (funcBody != null) {
-                    Log.d(name, "Fonksiyon body bulundu, uzunluk: ${funcBody.length}")
-                    videoUrl = parseAndExecuteJs(funcBody, parts)
-                    Log.d(name, "Dinamik çözülen URL: $videoUrl")
-                }
-            } else {
-                Log.w(name, "Unpack edilmiş JS'te var X = Y([...]) bulunamadı")
-            }
-        } else {
-            Log.w(name, "Packed JS bulunamadı veya unpack edilemedi")
-        }
-        if (videoUrl.isNullOrBlank()) {
-            val jsonLdMatch = Regex(""""contentUrl"\s*:\s*"([^"]+)"""").find(rawHtml)
-            videoUrl = jsonLdMatch?.groupValues?.get(1)
-            Log.d(name, "Fallback JSON-LD: $videoUrl")
-        }
-        if (videoUrl.isNullOrBlank()) {
-            val directMatch = Regex("""(https?://[^"'\s]+\.m3u8[^"'\s]*)""").find(rawHtml)
-            videoUrl = directMatch?.groupValues?.get(1)?.replace("\\/", "/")
-            Log.d(name, "Fallback direkt m3u8: $videoUrl")
+        val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt)[^"'\s]*)""").find(searchHtml)
+            ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt)[^"'\s]*)""").find(rawHtml)
+        if (directMatch != null) {
+            videoUrl = directMatch.groupValues[1].replace("\\/", "/")
+            Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
         }
 
         if (videoUrl.isNullOrBlank()) {
-            val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
+            val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(searchHtml) ?: Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
             if (atobMatch != null) {
                 var atob = atobMatch.value
                 val padding = atob.length % 4
                 if (padding != 0) {
                     atob += "=".repeat(4 - padding)
                 }
-                videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
-                Log.d(name, "Fallback atob m3u8: $videoUrl")
+                try {
+                    videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
+                    Log.d(name, "Atob decoded URL: $videoUrl")
+                } catch (e: Exception) {
+                    Log.w(name, "Atob decode hatası: ${e.message}")
+                }
+            }
+        }
+
+        if (videoUrl.isNullOrBlank()) {
+            val fileMatch = Regex(""""file"\s*:\s*"([^"]+)"""").find(searchHtml) ?: Regex(""""file"\s*:\s*"([^"]+)"""").find(rawHtml)
+            if (fileMatch != null) {
+                videoUrl = fileMatch.groupValues[1].replace("\\/", "/")
+                Log.d(name, "File match URL: $videoUrl")
             }
         }
 
@@ -229,7 +65,7 @@ open class RapidExtractor : ExtractorApi() {
             videoUrl.isNullOrBlank() -> null
             videoUrl.startsWith("//") -> "https:$videoUrl"
             videoUrl.startsWith("http") -> videoUrl
-            else -> mainUrl.trimEnd('/') + "/" + videoUrl.trimStart('/')
+            else -> domain.trimEnd('/') + "/" + videoUrl.trimStart('/')
         }
 
         if (videoUrl.isNullOrBlank()) {
@@ -237,21 +73,21 @@ open class RapidExtractor : ExtractorApi() {
             return
         }
 
-        val ajaxHashMatch = Regex("""hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
-        val ajaxUrlMatch = Regex("""url\s*:\s*["']([^"']+ah/)["']""").find(unpackedJs ?: rawHtml) ?: Regex("""url\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
+        val ajaxHashMatch = Regex("""hash\s*:\s*["']([^"']+)["']""").find(searchHtml)
+        val ajaxUrlMatch = Regex("""url\s*:\s*["']([^"']+ah/)["']""").find(searchHtml) ?: Regex("""url\s*:\s*["']([^"']+)["']""").find(searchHtml)
         
         if (ajaxHashMatch != null && ajaxUrlMatch != null) {
             val ajaxUrl = ajaxUrlMatch.groupValues[1]
             val ajaxHash = ajaxHashMatch.groupValues[1]
-            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else mainUrl.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
+            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else domain.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
                 val ajaxRes = app.post(
                     url = fullAjaxUrl,
                     data = mapOf("hash" to ajaxHash),
                     headers = mapOf(
-                        "Referer" to "$mainUrl/",
-                        "Origin" to mainUrl,
+                        "Referer" to "$domain/",
+                        "Origin" to domain,
                         "X-Requested-With" to "XMLHttpRequest",
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
@@ -267,27 +103,8 @@ open class RapidExtractor : ExtractorApi() {
             }
         }
 
-        Log.d(name, "Stream test ediliyor: $videoUrl")
-        try {
-            val testResp = app.get(videoUrl, referer = "$mainUrl/", headers = mapOf(
-                "Accept" to "*/*",
-                "Origin" to mainUrl,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-            ).filter { it.key.isNotBlank() })
-            Log.d(name, "Stream test status: ${testResp.code}")
-        } catch (e: Exception) {
-            Log.w(name, "Stream test hatası: ${e.message}")
-        }
-
         parseSubtitles(rawHtml, subtitleCallback)
 
-
-        
-
-        
-        
-        @Suppress("DEPRECATION", "DEPRECATION_ERROR")
         callback.invoke(
             newExtractorLink(
                 source = name,
@@ -295,222 +112,44 @@ open class RapidExtractor : ExtractorApi() {
                 url = videoUrl,
                 type = INFER_TYPE
             ) {
-                val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1)
-                this.referer = domain?.plus("/") ?: mainUrl
+                this.referer = domain + "/"
                 this.headers = mapOf(
-                    "Origin" to (domain ?: mainUrl),
+                    "Origin" to domain,
+                    "Referer" to (domain + "/"),
                     "Accept" to "*/*",
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+                ).filter { it.key.isNotBlank() }
             }
         )
         Log.d(name, "ExtractorLink eklendi: $videoUrl, Cookies: $cookies")
     }
-    private fun unpackPackerJs(rawHtml: String): String? {
-        return try {
-            val startMarker = "eval(function(p,a,c,k,e,d){"
-            val endMarker = ",0,{}))"
 
-            val startIdx = rawHtml.indexOf(startMarker)
-            if (startIdx == -1) return null
-
-            val endIdx = rawHtml.indexOf(endMarker, startIdx + startMarker.length)
-            if (endIdx == -1) return null
-
-            val block = rawHtml.substring(startIdx, endIdx + endMarker.length)
-            val packedStart = block.indexOf("}('") + 3
-            val packedEnd = block.indexOf("',", packedStart)
-            if (packedStart == -1 || packedEnd == -1) return null
-            val packed = block.substring(packedStart, packedEnd)
-            val afterPacked = block.substring(packedEnd + 2)
-            val baseEnd = afterPacked.indexOf(",")
-            if (baseEnd == -1) return null
-            val base = afterPacked.substring(0, baseEnd).toInt()
-            val afterBase = afterPacked.substring(baseEnd + 1)
-            val countEnd = afterBase.indexOf(",")
-            if (countEnd == -1) return null
-            val count = afterBase.substring(0, countEnd).toInt()
-            val dictQuoteStart = afterBase.indexOf("'") + 1
-            val dictQuoteEnd = afterBase.indexOf("'.split", dictQuoteStart)
-            if (dictQuoteStart == -1 || dictQuoteEnd == -1) return null
-            val dictStr = afterBase.substring(dictQuoteStart, dictQuoteEnd)
-
-            // Log removed
-
-            val dictionary = dictStr.split('|')
-            val lookup = mutableMapOf<String, String>()
-
-            var c = count - 1
-            while (c >= 0) {
-                val key = packerEncode(c, base)
-                lookup[key] = if (c < dictionary.size && dictionary[c].isNotEmpty()) {
-                    dictionary[c]
-                } else {
-                    key
-                }
-                c--
-            }
-
-            var result = packed
-            val sortedKeys = lookup.keys.sortedByDescending { it.length }
-            for (key in sortedKeys) {
-                val value = lookup[key]!!
-                result = result.replace(Regex("\\b${Regex.escape(key)}\\b"), value)
-            }
-
-            result
-        } catch (e: Exception) {
-            Log.e(name, "Unpack hatası: ${e.message}")
-            null
-        }
-    }
-
-    private fun packerEncode(num: Int, base: Int): String {
-        val digits = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        if (num == 0) return "0"
-        var n = num
-        val sb = StringBuilder()
-        while (n > 0) {
-            sb.insert(0, digits[n % base])
-            n /= base
-        }
-        return sb.toString()
-    }
-    private fun parseAndExecuteJs(funcBody: String, parts: List<String>): String? {
-        return try {
-            val seedMatch = Regex(
-                """var\s+(\w+)\s*=\s*"([^"]+)"\s*;\s*var\s+(\w+)\s*=\s*"([^"]+)""""
-            ).find(funcBody) ?: run {
-                Log.w(name, "Seed/ops string'leri bulunamadı")
-                return null
-            }
-            val seedStr = seedMatch.groupValues[2]
-            val opsStr = seedMatch.groupValues[4]
-            Log.d(name, "Seed: '$seedStr', Ops: '$opsStr'")
-
-            var u3e = parts.joinToString("")
-            var gzx1 = 0
-            var mff = 0
-            for (i in seedStr.indices) {
-                val ngm = seedStr[i].code
-                gzx1 = (gzx1 * 31 + ngm) % 251
-                mff = (mff xor (ngm + i)) and 255
-            }
-            val ghihx = (gzx1 + mff) % 256
-            val cv1 = (gzx1 % 13) + 3
-            var pzvvv = ((gzx1 * 256 + mff) % 65521) + 1
-            Log.d(name, "ghihx=$ghihx, cv1=$cv1, pzvvv=$pzvvv")
-            for (i in opsStr.length - 1 downTo 0) {
-                val ch = opsStr[i]
-                u3e = when (ch) {
-                    'b' -> atob(u3e)
-                    'v' -> u3e.reversed()
-                    else -> {
-                        val oufo = (26 - ((ch.code - 64) % 26)) % 26
-                        caesarShift(u3e, oufo)
-                    }
-                }
-            }
-            Log.d(name, "Operasyonlar sonrası uzunluk: ${u3e.length}")
-            val imm = u3e.length
-            if (imm > 1) {
-                val irdt = IntArray(imm)
-                for (sm7 in imm - 1 downTo 1) {
-                    pzvvv = (pzvvv * 75 + 74) % 65537
-                    irdt[sm7] = pzvvv % (sm7 + 1)
-                }
-                val arr = u3e.toCharArray()
-                for (sm7 in 1 until imm) {
-                    val j = irdt[sm7]
-                    val tmp = arr[sm7]
-                    arr[sm7] = arr[j]
-                    arr[j] = tmp
-                }
-                u3e = String(arr)
-            }
-            val sb = StringBuilder(imm)
-            var to4 = ghihx
-            for (c in u3e) {
-                val ngm = c.code
-                to4 = (to4 + cv1) % 256
-                sb.append((ngm xor to4).toChar())
-                to4 = (to4 + ngm) % 256
-            }
-
-            val result = sb.toString()
-            Log.d(name, "Çözülen değer: ${result.take(200)}")
-            result.trim()
-        } catch (e: Exception) {
-            Log.e(name, "JS Parser hatası: ${e.message}")
-            null
-        }
-    }
-    private fun atob(s: String): String {
-        var str = s.trim()
-        val padding = 4 - str.length % 4
-        if (padding != 4) str += "=".repeat(padding)
-        return Base64.decode(str, Base64.DEFAULT).toString(Charsets.ISO_8859_1)
-    }
-
-    private fun btoa(s: String): String {
-        return Base64.encodeToString(s.toByteArray(Charsets.ISO_8859_1), Base64.DEFAULT).trim()
-    }
-
-    private fun caesarShift(text: String, shift: Int): String {
-        return text.map { c ->
-            when {
-                c in 'A'..'Z' -> ((c.code - 'A'.code + shift) % 26 + 'A'.code).toChar()
-                c in 'a'..'z' -> ((c.code - 'a'.code + shift) % 26 + 'a'.code).toChar()
-                else -> c
-            }
-        }.joinToString("")
-    }
-
-    private fun extractFuncBody(jsCode: String, funcName: String): String? {
-        val startIdx = jsCode.indexOf("function $funcName")
-        if (startIdx == -1) return null
-        val braceIdx = jsCode.indexOf('{', startIdx)
-        if (braceIdx == -1) return null
-        var braceCount = 1
-        var i = braceIdx + 1
-        while (braceCount > 0 && i < jsCode.length) {
-            when (jsCode[i]) {
-                '{' -> braceCount++
-                '}' -> braceCount--
-            }
-            i++
-        }
-        return if (braceCount == 0) jsCode.substring(braceIdx + 1, i - 1) else null
-    }
-    private suspend fun parseSubtitles(
+    private fun parseSubtitles(
         rawHtml: String,
         subtitleCallback: (SubtitleFile) -> Unit
     ) {
         val tracksMatch = Regex("""tracks:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(rawHtml)
         tracksMatch?.groupValues?.get(1)?.let { tracksStr ->
             val subMatches = Regex(
-                """"file"\s*:\s*"([^"]+)".*?"label"\s*:\s*"([^"]+)".*?"language"\s*:\s*"([^"]+)"""",
+                """"file"\s*:\s*"([^"]+)".*?"label"\s*:\s*"([^"]+)"""",
                 RegexOption.DOT_MATCHES_ALL
             ).findAll(tracksStr).toList()
 
-            Log.d(name, "Bulunan altyazı sayısı: ${subMatches.size}")
-
-            subMatches.forEachIndexed { index, match ->
+            subMatches.forEachIndexed { _, match ->
                 var subUrl = match.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
                 val subLabel = match.groupValues[2]
-                val langCode = match.groupValues[3]
                 if (!subUrl.startsWith("http")) {
                     subUrl = mainUrl.trimEnd('/') + (if (subUrl.startsWith("/")) "" else "/") + subUrl
                 }
 
                 val lang = when {
-                    langCode == "forced" || subLabel.contains("Forced", ignoreCase = true) -> "Forced"
-                    langCode == "tr" || subLabel.contains("Turkish", ignoreCase = true) -> "Türkçe"
-                    langCode == "en" || subLabel.contains("English", ignoreCase = true) -> "İngilizce"
-                    else -> return@forEachIndexed
+                    subLabel.contains("Turkish", ignoreCase = true) -> "Türkçe"
+                    subLabel.contains("Forced", ignoreCase = true) -> "Forced"
+                    subLabel.contains("English", ignoreCase = true) -> "İngilizce"
+                    else -> "Türkçe"
                 }
 
-                Log.d(name, "Altyazı #$index - lang: '$lang', url: '$subUrl'")
                 subtitleCallback.invoke(SubtitleFile(lang, subUrl))
             }
         }
