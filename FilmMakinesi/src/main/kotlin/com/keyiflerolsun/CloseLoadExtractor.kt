@@ -160,7 +160,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                 name,
                 name,
                 videoUrl,
-                url,
+                "$domain/",
                 Qualities.Unknown.value,
                 videoUrl.contains(".m3u8") || videoUrl.contains(".txt"),
                 mapOf(

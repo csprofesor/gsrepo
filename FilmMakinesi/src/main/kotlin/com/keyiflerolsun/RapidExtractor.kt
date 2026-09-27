@@ -149,7 +149,7 @@ open class RapidExtractor : ExtractorApi() {
                 name,
                 name,
                 videoUrl,
-                url,
+                "$mainUrl/",
                 Qualities.Unknown.value,
                 videoUrl.contains(".m3u8") || videoUrl.contains(".txt"),
                 mapOf(
