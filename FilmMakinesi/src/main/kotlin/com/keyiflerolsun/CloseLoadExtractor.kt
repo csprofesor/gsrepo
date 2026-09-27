@@ -109,195 +109,56 @@ open class CloseLoadExtractor : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        Log.d(name, "getUrl çağrıldı, url: $url")
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer" to (referer ?: "https://filmmakinesi.to/")
+        )
 
-        val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
-        val response = app.get(url, referer = referer ?: domain)
-        val rawHtml = response.text
-        var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
-
-        var videoUrl: String? = null
+        val html = app.get(url, headers = headers).text
 
         val arrRegex = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]")
-        val arrMatcher = arrRegex.matcher(rawHtml)
+        val arrMatcher = arrRegex.matcher(html)
+
         while (arrMatcher.find()) {
             val arrStr = arrMatcher.group(0) ?: continue
-            if (arrStr.contains(".jpg") || arrStr.contains(".png") || arrStr.contains(".webp")) continue
+
+            if (arrStr.contains(".jpg") || arrStr.contains(".png") || arrStr.contains(".webp")) {
+                continue
+            }
+
             try {
-                val streamUrl = decodeCloseLoad(rawHtml, arrStr)
-                if (streamUrl.isNotEmpty() && (streamUrl.contains(".m3u8") || streamUrl.contains(".txt") || streamUrl.contains("/hls/"))) {
-                    videoUrl = streamUrl
-                    Log.d(name, "Emre logic decoded m3uLink: $videoUrl")
+                val streamUrl = decodeCloseLoad(html, arrStr)
+
+                if (
+                    streamUrl.isNotEmpty() &&
+                    (streamUrl.contains(".m3u8") || streamUrl.contains(".txt") || streamUrl.contains("/hls/"))
+                ) {
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = name,
+                            url = streamUrl,
+                            type = INFER_TYPE
+                        ) {
+                            this.referer = url
+                        }
+                    )
                     break
                 }
-            } catch (e: Exception) {
-                Log.w(name, "Emre logic failed: ${e.message}")
+            } catch (_: Exception) {
             }
         }
 
-        var unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
-        if (unpackedJs == rawHtml) unpackedJs = null // getAndUnpack returns raw if not found sometimes
-
-        // GitHub'da çalışan sürümden alınan mantık
-        if (videoUrl.isNullOrBlank() && unpackedJs != null) {
-            val dataMatch = Regex("""return result\}var .*?=.*?\("(.*?)"\)""").find(unpackedJs)
-            if (dataMatch != null) {
-                try {
-                    videoUrl = getm3uLink(dataMatch.groupValues[1])
-                    Log.d(name, "GitHub logic decoded m3uLink: $videoUrl")
-                } catch (e: Exception) {
-                    Log.w(name, "GitHub logic failed: ${e.message}")
-                }
-            }
-        }
-        val searchHtml = unpackedJs ?: rawHtml
-
-        val varPattern = Regex("""(?:var|let|const)\s+(\w+)\s*=\s*(\w+)\s*\(\s*\[(.*?)\]\s*\)""", RegexOption.DOT_MATCHES_ALL)
-        var varMatch = varPattern.find(searchHtml)
-        if (varMatch == null && unpackedJs != null) {
-            varMatch = varPattern.find(rawHtml)
-        }
-
-        var parts = listOf<String>()
-        if (varMatch != null) {
-            val varName = varMatch.groupValues[1]
-            val funcName = varMatch.groupValues[2]
-            val partsStr = varMatch.groupValues[3]
-            parts = Regex(""""([^"]*)"""").findAll(partsStr).map {
-                it.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
-            }.toList()
-
-            Log.d(name, "Dinamik bulundu: var=$varName, func=$funcName, parts=${parts.size}")
-            val funcBody = extractFuncBody(searchHtml, funcName) ?: extractFuncBody(rawHtml, funcName)
-            if (funcBody != null) {
-                Log.d(name, "Fonksiyon body bulundu, uzunluk: ${funcBody.length}")
-                videoUrl = parseAndExecuteJs(funcBody, parts)
-                Log.d(name, "Dinamik çözülen URL: $videoUrl")
-            }
-        }
-
-        if (videoUrl.isNullOrBlank() && parts.isNotEmpty()) {
-            Log.w(name, "Fonksiyon body çözülemedi, decryptor'ları deniyorum")
-            videoUrl = tryAllDecryptors(parts)
-        }
-
-        if (videoUrl.isNullOrBlank()) {
-            val jsonLdMatch = Regex(""""contentUrl"\s*:\s*"([^"]+)"""").find(rawHtml)
-            videoUrl = jsonLdMatch?.groupValues?.get(1)
-            Log.d(name, "Fallback JSON-LD contentUrl: $videoUrl")
-        }
-
-        if (videoUrl.isNullOrBlank()) {
-            val directMatch = Regex("""(https?://[^"'\s]+\.m3u8[^"'\s]*)""").find(rawHtml)
-            videoUrl = directMatch?.groupValues?.get(1)?.replace("\\/", "/")
-            Log.d(name, "Fallback direkt m3u8: $videoUrl")
-        }
-
-        if (videoUrl.isNullOrBlank()) {
-            val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
-            if (atobMatch != null) {
-                var atob = atobMatch.value
-                val padding = atob.length % 4
-                if (padding != 0) {
-                    atob += "=".repeat(4 - padding)
-                }
-                try {
-                    videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
-                    Log.d(name, "Fallback atob m3u8: $videoUrl")
-                } catch (e: Exception) {
-                    Log.w(name, "Atob decode hatası: ${e.message}")
-                }
-            }
-        }
-
-        if (videoUrl.isNullOrBlank()) {
-            val thumbnailMatch = Regex("""/img/([a-zA-Z0-9]+)\.jpg""").find(rawHtml)
-            if (thumbnailMatch != null) {
-                val thumbnail = thumbnailMatch.groupValues[1]
-                videoUrl = "https://balancehls6.closeload.com/hls/${thumbnail}.mp4/master.txt"
-                Log.d(name, "Fallback BalanceHLS URL: $videoUrl")
-            }
-        }
-
-        videoUrl = when {
-            videoUrl.isNullOrBlank() -> null
-            videoUrl.startsWith("//") -> "https:$videoUrl"
-            videoUrl.startsWith("http") -> videoUrl
-            else -> mainUrl.trimEnd('/') + "/" + videoUrl.trimStart('/')
-        }
-
-        if (videoUrl.isNullOrBlank()) {
-            Log.e(name, "Video URL bulunamadı!")
-            return
-        }
-
-        val ajaxHashMatch = Regex("""hash\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
-        val ajaxUrlMatch = Regex("""url\s*:\s*["']([^"']+ah/)["']""").find(unpackedJs ?: rawHtml) ?: Regex("""url\s*:\s*["']([^"']+)["']""").find(unpackedJs ?: rawHtml)
-        
-        if (ajaxHashMatch != null && ajaxUrlMatch != null) {
-            val ajaxUrl = ajaxUrlMatch.groupValues[1]
-            val ajaxHash = ajaxHashMatch.groupValues[1]
-            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else domain.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
-            Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
-            try {
-                val ajaxRes = app.post(
-                    url = fullAjaxUrl,
-                    data = mapOf("hash" to ajaxHash),
-                    headers = mapOf(
-                        "Referer" to "$domain/",
-                        "Origin" to domain,
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                    ).filter { it.key.isNotBlank() }
+        val tracksRegex = Regex("""\{"file":"(https?:[^"]+\\.vtt)"[^}]+?"label":"([^"]+)"""")
+        tracksRegex.findAll(html).forEach { match ->
+            val subUrl = match.groupValues[1].replace("\\\\/", "/")
+            subtitleCallback(
+                SubtitleFile(
+                    lang = match.groupValues[2],
+                    url = subUrl
                 )
-                Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
-                val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                if (newCookies.isNotBlank()) {
-                    cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
-                }
-            } catch (e: Exception) {
-                Log.w(name, "AJAX POST hatası: ${e.message}")
-            }
-        }
-
-        Log.d(name, "Stream test ediliyor: $videoUrl")
-        try {
-            val testResp = app.get(videoUrl, referer = "$domain/", headers = mapOf(
-                "Accept" to "*/*",
-                "Origin" to domain,
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-            ).filter { it.key.isNotBlank() })
-            Log.d(name, "Stream test status: ${testResp.code}")
-        } catch (e: Exception) {
-            Log.w(name, "Stream test hatası: ${e.message}")
-        }
-
-        
-
-        parseSubtitles(rawHtml, subtitleCallback)
-
-        @Suppress("DEPRECATION", "DEPRECATION_ERROR")
-        callback.invoke(
-            ExtractorLink(
-                name,
-                name,
-                videoUrl,
-                "$domain/",
-                Qualities.Unknown.value,
-                videoUrl.contains(".m3u8") || videoUrl.contains(".txt"),
-                mapOf(
-                    "Accept" to "*/*",
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer" to "$domain/",
-                    "Origin" to domain,
-                    if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                ).filter { it.key.isNotBlank() }
             )
-        )
-        Log.d(name, "ExtractorLink eklendi: $videoUrl, Cookies: $cookies")
+        }
     }
 
     private fun unpackPackerJs(rawHtml: String): String? {
