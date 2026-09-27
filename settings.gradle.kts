@@ -10,7 +10,7 @@ rootProject.name = "gsrepo"
 
 // All plugin directories containing build.gradle.kts are included automatically.
 // Only the shared template directory is excluded.
-val disabled = listOf<String>("__Temel")
+val disabled = listOf<String>("__Temel", "HDFilmCehennemi")
 
 File(rootDir, ".").eachDir { dir ->
     if (!disabled.contains(dir.name) && File(dir, "build.gradle.kts").exists()) {
