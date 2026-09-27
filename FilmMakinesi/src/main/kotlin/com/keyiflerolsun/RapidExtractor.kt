@@ -24,16 +24,65 @@ open class RapidExtractor : ExtractorApi() {
         var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
-        var videoUrl: String? = null
-
         val unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
         val searchHtml = unpackedJs ?: rawHtml
 
-        val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt)[^"'\s]*)""").find(searchHtml)
-            ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt)[^"'\s]*)""").find(rawHtml)
-        if (directMatch != null) {
-            videoUrl = directMatch.groupValues[1].replace("\\/", "/")
-            Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
+        // AJAX Hash authorization & Video URL retrieval (Must happen before extracting final video URL)
+        var ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
+            ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
+            ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
+
+        var ajaxPath = Regex(""""url"\s*:\s*"([^"]+ah/)"\s*""").find(searchHtml)?.groupValues?.get(1)
+            ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
+            ?: "/video/ah/"
+
+        var videoUrl: String? = null
+
+        if (ajaxHash != null) {
+            val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
+            Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
+            try {
+                val ajaxRes = app.post(
+                    url = fullAjaxUrl,
+                    data = mapOf("hash" to ajaxHash),
+                    headers = mapOf(
+                        "Referer" to url,
+                        "Origin" to domain,
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+                    ).filter { it.key.isNotBlank() }
+                )
+                Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
+                val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                if (newCookies.isNotBlank()) {
+                    cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
+                }
+
+                val ajaxText = ajaxRes.text
+                val jsonMatch = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").find(ajaxText)
+                if (jsonMatch != null) {
+                    videoUrl = jsonMatch.groupValues[1].replace("\\/", "/")
+                    Log.d(name, "AJAX Response'dan video URL bulundu: $videoUrl")
+                } else {
+                    val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(ajaxText)
+                    if (urlMatch != null) {
+                        videoUrl = urlMatch.groupValues[1].replace("\\/", "/")
+                        Log.d(name, "AJAX Response'dan direkt URL bulundu: $videoUrl")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(name, "AJAX POST hatası: ${e.message}")
+            }
+        }
+
+        if (videoUrl.isNullOrBlank()) {
+            val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchHtml)
+                ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(rawHtml)
+            if (directMatch != null) {
+                videoUrl = directMatch.groupValues[1].replace("\\/", "/")
+                Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
+            }
         }
 
         if (videoUrl.isNullOrBlank()) {
@@ -71,39 +120,6 @@ open class RapidExtractor : ExtractorApi() {
         if (videoUrl.isNullOrBlank()) {
             Log.e(name, "Video URL bulunamadı!")
             return
-        }
-
-                var ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
-            ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
-            ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
-
-        var ajaxPath = Regex(""""url"\s*:\s*"([^"]+ah/)"\s*""").find(searchHtml)?.groupValues?.get(1)
-            ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
-            ?: "/video/ah/"
-
-        if (ajaxHash != null) {
-            val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
-            Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
-            try {
-                val ajaxRes = app.post(
-                    url = fullAjaxUrl,
-                    data = mapOf("hash" to ajaxHash),
-                    headers = mapOf(
-                        "Referer" to url,
-                        "Origin" to domain,
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                    ).filter { it.key.isNotBlank() }
-                )
-                Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
-                val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                if (newCookies.isNotBlank()) {
-                    cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
-                }
-            } catch (e: Exception) {
-                Log.w(name, "AJAX POST hatası: ${e.message}")
-            }
         }
 
         parseSubtitles(rawHtml, subtitleCallback)

@@ -24,67 +24,20 @@ open class CloseLoadExtractor : ExtractorApi() {
         var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
-        var videoUrl: String? = null
-
         // 1. Try unpacking packer JS
         val unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
         val searchHtml = unpackedJs ?: rawHtml
 
-        // 2. Look for m3u8 or .txt direct link in unpacked JS or raw HTML
-        val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt)[^"'\s]*)""").find(searchHtml)
-            ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt)[^"'\s]*)""").find(rawHtml)
-        if (directMatch != null) {
-            videoUrl = directMatch.groupValues[1].replace("\\/", "/")
-            Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
-        }
-
-        // 3. Look for base64 / atob in script
-        if (videoUrl.isNullOrBlank()) {
-            val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(searchHtml) ?: Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
-            if (atobMatch != null) {
-                var atob = atobMatch.value
-                val padding = atob.length % 4
-                if (padding != 0) {
-                    atob += "=".repeat(4 - padding)
-                }
-                try {
-                    videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
-                    Log.d(name, "Atob decoded URL: $videoUrl")
-                } catch (e: Exception) {
-                    Log.w(name, "Atob decode hatası: ${e.message}")
-                }
-            }
-        }
-
-        // 4. Look for file: "..."
-        if (videoUrl.isNullOrBlank()) {
-            val fileMatch = Regex(""""file"\s*:\s*"([^"]+)"""").find(searchHtml) ?: Regex(""""file"\s*:\s*"([^"]+)"""").find(rawHtml)
-            if (fileMatch != null) {
-                videoUrl = fileMatch.groupValues[1].replace("\\/", "/")
-                Log.d(name, "File match URL: $videoUrl")
-            }
-        }
-
-        videoUrl = when {
-            videoUrl.isNullOrBlank() -> null
-            videoUrl.startsWith("//") -> "https:$videoUrl"
-            videoUrl.startsWith("http") -> videoUrl
-            else -> domain.trimEnd('/') + "/" + videoUrl.trimStart('/')
-        }
-
-        if (videoUrl.isNullOrBlank()) {
-            Log.e(name, "Video URL bulunamadı!")
-            return
-        }
-
-        // 5. AJAX Hash authorization (Crucial for CloseLoad to authorize IP and prevent 404)
-                var ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
+        // 2. AJAX Hash authorization & Video URL retrieval (Must happen before extracting final video URL to avoid fallback/dummy URLs)
+        var ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
             ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
             ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
 
         var ajaxPath = Regex(""""url"\s*:\s*"([^"]+ah/)"\s*""").find(searchHtml)?.groupValues?.get(1)
             ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
             ?: "/video/ah/"
+
+        var videoUrl: String? = null
 
         if (ajaxHash != null) {
             val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
@@ -106,9 +59,71 @@ open class CloseLoadExtractor : ExtractorApi() {
                 if (newCookies.isNotBlank()) {
                     cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
                 }
+
+                val ajaxText = ajaxRes.text
+                val jsonMatch = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").find(ajaxText)
+                if (jsonMatch != null) {
+                    videoUrl = jsonMatch.groupValues[1].replace("\\/", "/")
+                    Log.d(name, "AJAX Response'dan video URL bulundu: $videoUrl")
+                } else {
+                    val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(ajaxText)
+                    if (urlMatch != null) {
+                        videoUrl = urlMatch.groupValues[1].replace("\\/", "/")
+                        Log.d(name, "AJAX Response'dan direkt URL bulundu: $videoUrl")
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(name, "AJAX POST hatası: ${e.message}")
             }
+        }
+
+        // 3. Look for m3u8 or .txt direct link in unpacked JS or raw HTML if not found in AJAX
+        if (videoUrl.isNullOrBlank()) {
+            val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchHtml)
+                ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(rawHtml)
+            if (directMatch != null) {
+                videoUrl = directMatch.groupValues[1].replace("\\/", "/")
+                Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
+            }
+        }
+
+        // 4. Look for base64 / atob in script
+        if (videoUrl.isNullOrBlank()) {
+            val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(searchHtml) ?: Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
+            if (atobMatch != null) {
+                var atob = atobMatch.value
+                val padding = atob.length % 4
+                if (padding != 0) {
+                    atob += "=".repeat(4 - padding)
+                }
+                try {
+                    videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
+                    Log.d(name, "Atob decoded URL: $videoUrl")
+                } catch (e: Exception) {
+                    Log.w(name, "Atob decode hatası: ${e.message}")
+                }
+            }
+        }
+
+        // 5. Look for file: "..."
+        if (videoUrl.isNullOrBlank()) {
+            val fileMatch = Regex(""""file"\s*:\s*"([^"]+)"""").find(searchHtml) ?: Regex(""""file"\s*:\s*"([^"]+)"""").find(rawHtml)
+            if (fileMatch != null) {
+                videoUrl = fileMatch.groupValues[1].replace("\\/", "/")
+                Log.d(name, "File match URL: $videoUrl")
+            }
+        }
+
+        videoUrl = when {
+            videoUrl.isNullOrBlank() -> null
+            videoUrl.startsWith("//") -> "https:$videoUrl"
+            videoUrl.startsWith("http") -> videoUrl
+            else -> domain.trimEnd('/') + "/" + videoUrl.trimStart('/')
+        }
+
+        if (videoUrl.isNullOrBlank()) {
+            Log.e(name, "Video URL bulunamadı!")
+            return
         }
 
         parseSubtitles(rawHtml, subtitleCallback)
