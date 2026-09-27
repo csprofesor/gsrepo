@@ -73,20 +73,23 @@ open class RapidExtractor : ExtractorApi() {
             return
         }
 
-        val ajaxHashMatch = Regex("""hash\s*:\s*["']([^"']+)["']""").find(searchHtml)
-        val ajaxUrlMatch = Regex("""url\s*:\s*["']([^"']+ah/)["']""").find(searchHtml) ?: Regex("""url\s*:\s*["']([^"']+)["']""").find(searchHtml)
-        
-        if (ajaxHashMatch != null && ajaxUrlMatch != null) {
-            val ajaxUrl = ajaxUrlMatch.groupValues[1]
-            val ajaxHash = ajaxHashMatch.groupValues[1]
-            val fullAjaxUrl = if (ajaxUrl.startsWith("http")) ajaxUrl else domain.trimEnd('/') + "/" + ajaxUrl.trimStart('/')
+                var ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
+            ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
+            ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
+
+        var ajaxPath = Regex(""""url"\s*:\s*"([^"]+ah/)"\s*""").find(searchHtml)?.groupValues?.get(1)
+            ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
+            ?: "/video/ah/"
+
+        if (ajaxHash != null) {
+            val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
             Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
             try {
                 val ajaxRes = app.post(
                     url = fullAjaxUrl,
                     data = mapOf("hash" to ajaxHash),
                     headers = mapOf(
-                        "Referer" to "$domain/",
+                        "Referer" to url,
                         "Origin" to domain,
                         "X-Requested-With" to "XMLHttpRequest",
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
