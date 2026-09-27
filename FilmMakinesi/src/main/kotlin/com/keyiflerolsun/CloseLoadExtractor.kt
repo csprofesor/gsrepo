@@ -4,6 +4,7 @@ import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import java.util.regex.Pattern
 
 
 private fun getm3uLink(data: String): String {
@@ -16,6 +17,91 @@ open class CloseLoadExtractor : ExtractorApi() {
     override val mainUrl = "https://closeload.filmmakinesi.to"
     override val name = "CloseLoad"
     override val requiresReferer = true
+
+    companion object {
+        fun decodeCloseLoad(jsCode: String, arrStr: String): String {
+            val arrRegex = Pattern.compile("\"([^\"]+)\"")
+            val arrMatcher = arrRegex.matcher(arrStr)
+            val sb = java.lang.StringBuilder()
+            while (arrMatcher.find()) {
+                sb.append(arrMatcher.group(1))
+            }
+            var kspgo = sb.toString()
+
+            val keysRegex = Pattern.compile("var\\s+[a-zA-Z0-9_]+\\s*=\\s*\"([^\"]+)\";\\s*var\\s+[a-zA-Z0-9_]+\\s*=\\s*\"([^\"]+)\";")
+            val keysMatcher = keysRegex.matcher(jsCode)
+            if (!keysMatcher.find()) return ""
+            val key1 = keysMatcher.group(1) ?: return ""
+            val key2 = keysMatcher.group(2) ?: return ""
+
+            var o0v = 0
+            var rbc = 0
+            for (ro7 in key1.indices) {
+                val wlv = key1[ro7].code
+                o0v = (o0v * 31 + wlv) % 251
+                rbc = (rbc xor (wlv + ro7)) and 255
+            }
+
+            val lbxe = (o0v + rbc) % 256
+            val u2u5r = (o0v % 13) + 3
+            var d6en9 = ((o0v * 256 + rbc) % 65521) + 1
+
+            for (ro7 in key2.length - 1 downTo 0) {
+                val x7ed6 = key2[ro7]
+                if (x7ed6 == 'b') {
+                    var padded = kspgo
+                    val missing = padded.length % 4
+                    if (missing != 0) {
+                        padded += "=".repeat(4 - missing)
+                    }
+                    val decodedBytes = Base64.decode(padded, Base64.DEFAULT)
+                    kspgo = String(decodedBytes, Charsets.ISO_8859_1)
+                } else if (x7ed6 == 'v') {
+                    kspgo = kspgo.reversed()
+                } else {
+                    val ql55 = (26 - ((x7ed6.code - 64) % 26)) % 26
+                    val chars = java.lang.StringBuilder()
+                    for (c in kspgo) {
+                        if (c.isLetter()) {
+                            val y85 = c.code
+                            val fro = if (y85 <= 90) 65 else 97
+                            chars.append(((y85 - fro + ql55) % 26 + fro).toChar())
+                        } else {
+                            chars.append(c)
+                        }
+                    }
+                    kspgo = chars.toString()
+                }
+            }
+
+            val trn = kspgo.length
+            val npz8 = IntArray(trn)
+            for (ro7 in trn - 1 downTo 1) {
+                d6en9 = (d6en9 * 75 + 74) % 65537
+                npz8[ro7] = d6en9 % (ro7 + 1)
+            }
+
+            val oe7 = kspgo.toCharArray()
+            for (ro7 in 1 until trn) {
+                val fy6 = npz8[ro7]
+                val awn = oe7[ro7]
+                oe7[ro7] = oe7[fy6]
+                oe7[fy6] = awn
+            }
+            kspgo = String(oe7)
+
+            var tds = lbxe
+            val v8y7l = java.lang.StringBuilder()
+            for (ro7 in kspgo.indices) {
+                val wlv = kspgo[ro7].code
+                tds = (tds + u2u5r) % 256
+                v8y7l.append((wlv xor tds).toChar())
+                tds = (tds + wlv) % 256
+            }
+
+            return v8y7l.toString()
+        }
+    }
 
     override suspend fun getUrl(
         url: String,
@@ -32,6 +118,24 @@ open class CloseLoadExtractor : ExtractorApi() {
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         var videoUrl: String? = null
+
+        val arrRegex = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]")
+        val arrMatcher = arrRegex.matcher(rawHtml)
+        while (arrMatcher.find()) {
+            val arrStr = arrMatcher.group(0) ?: continue
+            if (arrStr.contains(".jpg") || arrStr.contains(".png") || arrStr.contains(".webp")) continue
+            try {
+                val streamUrl = decodeCloseLoad(rawHtml, arrStr)
+                if (streamUrl.isNotEmpty() && (streamUrl.contains(".m3u8") || streamUrl.contains(".txt") || streamUrl.contains("/hls/"))) {
+                    videoUrl = streamUrl
+                    Log.d(name, "Emre logic decoded m3uLink: $videoUrl")
+                    break
+                }
+            } catch (e: Exception) {
+                Log.w(name, "Emre logic failed: ${e.message}")
+            }
+        }
+
         var unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
         if (unpackedJs == rawHtml) unpackedJs = null // getAndUnpack returns raw if not found sometimes
 
