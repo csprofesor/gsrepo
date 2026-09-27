@@ -289,21 +289,20 @@ open class RapidExtractor : ExtractorApi() {
         
         @Suppress("DEPRECATION", "DEPRECATION_ERROR")
         callback.invoke(
-            ExtractorLink(
-                name,
-                name,
-                videoUrl,
-                "$mainUrl/",
-                Qualities.Unknown.value,
-                videoUrl.contains(".m3u8") || videoUrl.contains(".txt"),
-                mapOf(
+            newExtractorLink(
+                source = name,
+                name = name,
+                url = videoUrl,
+                type = INFER_TYPE
+            ) {
+                val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1)
+                this.referer = domain?.plus("/") ?: mainUrl
+                this.headers = mapOf(
+                    "Origin" to (domain ?: mainUrl),
                     "Accept" to "*/*",
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer" to "$mainUrl/",
-                    "Origin" to mainUrl,
-                    if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                ).filter { it.key.isNotBlank() }
-            )
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+            }
         )
         Log.d(name, "ExtractorLink eklendi: $videoUrl, Cookies: $cookies")
     }
