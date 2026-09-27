@@ -162,9 +162,9 @@ class FilmMakinesi : MainAPI() {
             // CloseLoad exposes the current stream directly in the embed HTML.
             // The old generic extractor was returning a stale PlayMix URL (404).
             val sourceUrl = Regex(
-                """(?i)(?:["']?file["']?)\\s*:\\s*["'](https?://[^"']+)["']"""
+                """(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']"""
             ).find(html)?.groupValues?.getOrNull(1)
-                ?.replace("\\\\/", "/")
+                ?.replace("\\/", "/")
 
             if (sourceUrl.isNullOrBlank()) {
                 Log.d(name, "CloseLoad: current file source not found")
