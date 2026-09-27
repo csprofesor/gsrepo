@@ -46,32 +46,12 @@ jobs:
           else
             echo "degisiklik=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Pull Request Oluştur ve Otomatik Birleştir
+      - name: Değişiklikleri Commit ve Push Yap
         if: steps.degisiklik_kontrol.outputs.degisiklik == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "♻️ Domain Değişikliği" -m "🔄 Otomatik domain güncellemeleri yapıldı."
-
-          BRANCH="domain-degisikligi"
-          git checkout -B "$BRANCH"
-          git push origin "$BRANCH" --force
-
-          PR_NUMBER=$(gh pr list --base master --head "$BRANCH" --state open --json number --jq '.[0].number')
-
-          if [ -z "$PR_NUMBER" ]; then
-            PR_NUMBER=$(gh pr create \
-              --base master \
-              --head "$BRANCH" \
-              --title "♻️ Domain Değişikliği" \
-              --body "🔄 Otomatik tespit edilen domain değişiklikleri uygulandı.\n\n🤖 Değişiklikler doğrulandıktan sonra otomatik olarak birleştirilecektir.")
-            PR_NUMBER=$(echo "$PR_NUMBER" | grep -oE '[0-9]+$')
-          fi
-
-          echo "PR #$PR_NUMBER hazır. Otomatik birleştirme başlatılıyor."
-          gh pr merge "$PR_NUMBER" --squash --delete-branch --admin || \
-          gh pr merge "$PR_NUMBER" --squash --delete-branch
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push origin master
