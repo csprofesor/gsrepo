@@ -128,6 +128,8 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         parseSubtitles(rawHtml, subtitleCallback)
 
+        val videoDomain = Regex("""(https?://[^/]+)""").find(videoUrl)?.groupValues?.get(1) ?: domain
+
         callback.invoke(
             newExtractorLink(
                 source = name,
@@ -135,10 +137,10 @@ open class CloseLoadExtractor : ExtractorApi() {
                 url = videoUrl,
                 type = INFER_TYPE
             ) {
-                this.referer = domain + "/"
+                this.referer = "$videoDomain/"
                 this.headers = mapOf(
-                    "Origin" to domain,
-                    "Referer" to (domain + "/"),
+                    "Origin" to videoDomain,
+                    "Referer" to "$videoDomain/",
                     "Accept" to "*/*",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
