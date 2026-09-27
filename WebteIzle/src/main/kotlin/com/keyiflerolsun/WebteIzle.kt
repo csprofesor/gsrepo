@@ -92,7 +92,7 @@ class WebteIzle : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if ("SAYFA" in request.data) request.data.replace("SAYFA", "$page") else "${request.data}$page"
-        val document = app.get(url).document
+        val document = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
         val home = document.select("div.golgever").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(request.name, home)
@@ -122,7 +122,7 @@ class WebteIzle : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url).document
+        val document = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
 
         val title = document.selectFirst("[property='og:title']")?.attr("content")?.substringBefore(" izle") ?: return null
         val poster = fixUrlNull(document.selectFirst("div.card img")?.attr("data-src"))
@@ -153,7 +153,7 @@ class WebteIzle : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         Log.d("WBTI", "data » $data")
-        val document = app.get(data).document
+        val document = app.get(data, referer = "${mainUrl}/", interceptor = interceptor).document
 
         val filmId = document.selectFirst("button#wip")?.attr("data-id") ?: return false
         Log.d("WBTI", "filmId » $filmId")
@@ -173,6 +173,8 @@ class WebteIzle : MainAPI() {
             val playerApi = app.post(
                 "${mainUrl}/ajax/dataAlternatif3.asp",
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                referer = "${mainUrl}/",
+                interceptor = interceptor,
                 data = mapOf(
                     "filmid" to filmId,
                     "dil" to it,
@@ -187,6 +189,8 @@ class WebteIzle : MainAPI() {
                 val embedApi = app.post(
                     "${mainUrl}/ajax/dataEmbed.asp",
                     headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                    referer = "${mainUrl}/",
+                    interceptor = interceptor,
                     data = mapOf("id" to thisEmbed.id.toString())
                 ).document
 
