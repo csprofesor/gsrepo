@@ -171,24 +171,23 @@ class MainUrlUpdater:
                 print("\n")
                 konsol.log(f"[~] Kontrol Ediliyor : {eklenti_adi}")
 
-                else:
+                try:
+                    istek = self.oturum.get(mainurl, allow_redirects=True, timeout=20)
+                    if istek.status_code >= 400:
+                        raise RuntimeError(f"HTTP {istek.status_code}")
+                    konsol.log(f"[+] Kontrol Edildi   : {mainurl}")
+                    final_url = istek.url[:-1] if istek.url.endswith("/") else istek.url
+                except Exception as hata:
+                    konsol.log(f"[!] Mevcut domain çalışmıyor : {mainurl}")
+                    konsol.log(f"[!] {type(hata).__name__} : {hata}")
                     try:
-                        istek = self.oturum.get(mainurl, allow_redirects=True, timeout=20)
-                        if istek.status_code >= 400:
-                            raise RuntimeError(f"HTTP {istek.status_code}")
-                        konsol.log(f"[+] Kontrol Edildi   : {mainurl}")
-                        final_url = istek.url[:-1] if istek.url.endswith("/") else istek.url
-                    except Exception as hata:
-                        konsol.log(f"[!] Mevcut domain çalışmıyor : {mainurl}")
-                        konsol.log(f"[!] {type(hata).__name__} : {hata}")
-                        try:
-                            final_url = self._yeni_domain_bul(eklenti_adi, mainurl)
-                        except Exception as bulma_hatasi:
-                            konsol.log(f"[!] Domain arama hatası : {type(bulma_hatasi).__name__} : {bulma_hatasi}")
-                            final_url = None
-                        if not final_url:
-                            konsol.log(f"[-] Yeni domain bulunamadı : {eklenti_adi}")
-                            continue
+                        final_url = self._yeni_domain_bul(eklenti_adi, mainurl)
+                    except Exception as bulma_hatasi:
+                        konsol.log(f"[!] Domain arama hatası : {type(bulma_hatasi).__name__} : {bulma_hatasi}")
+                        final_url = None
+                    if not final_url:
+                        konsol.log(f"[-] Yeni domain bulunamadı : {eklenti_adi}")
+                        continue
 
                 if not isinstance(final_url, str):
                     konsol.log(f"[-] Geçersiz yeni URL (string değil) : {eklenti_adi}")
