@@ -212,7 +212,7 @@ class FilmMakinesi : MainAPI() {
         candidates.forEach { embedUrl ->
             try {
                 if (embedUrl.contains("closeload.filmmakinesi.to", ignoreCase = true)) {
-                    if (loadCloseLoad(embedUrl, subtitleCallback, callback)) found = true
+                    if (loadCloseLoad(embedUrl, data, callback)) found = true
                 } else {
                     loadExtractor(embedUrl, data, subtitleCallback) { link ->
                         found = true
