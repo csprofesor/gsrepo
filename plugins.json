@@ -327,7 +327,7 @@
     "fileHash": "sha256-83de6f5e436bc671aef7925683ffa870a8f8264513d032e23e64b2d0d59515a4"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=53f00446d1243d6926e5583e7fe707e17b350f65222d4d8647c002d7a859da6f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=4c82d46ddcd05a94a8d0baf0c4f5c841bbffef557a704974579f57578da28012",
     "status": 1,
     "version": 7,
     "name": "HDFilmIzle",
@@ -336,7 +336,7 @@
       "csprofesor"
     ],
     "description": "HDFilmizle ile Full HD izle, 1080p kalitede Yerli ve Yabancı filmlerle Türkçe dublaj veya Altyazı olarak kesintisiz film izlemenin tadını çıkarın.",
-    "fileSize": 32205,
+    "fileSize": 32203,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -345,7 +345,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmizle.to&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-53f00446d1243d6926e5583e7fe707e17b350f65222d4d8647c002d7a859da6f"
+    "fileHash": "sha256-4c82d46ddcd05a94a8d0baf0c4f5c841bbffef557a704974579f57578da28012"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HintFilmIzle.cs3?v=33c74eab31cb6edbcadc507238e4ff3f14070bca2f54c9f01651af3f3c03a05f",
@@ -557,7 +557,7 @@
     "fileHash": "sha256-047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=c014c951be6263c0eea12449fa1ebf5b0cbd309bf7359afff7dc4f9720540d63",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=251c192410f7ff933efcf0b2910454081bf4d380baf20c06001a5e1bc0b31f71",
     "status": 1,
     "version": 21,
     "name": "WebteIzle",
@@ -566,7 +566,7 @@
       "csprofesor"
     ],
     "description": "Her türlü filmi ister dublaj ister altyazılı, en kaliteli bir şekilde izleyebileceğiniz arşivi en geniş gerçek film izleme siteniz.",
-    "fileSize": 24117,
+    "fileSize": 24288,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -574,7 +574,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=webteizle3.xyz&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-c014c951be6263c0eea12449fa1ebf5b0cbd309bf7359afff7dc4f9720540d63"
+    "fileHash": "sha256-251c192410f7ff933efcf0b2910454081bf4d380baf20c06001a5e1bc0b31f71"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/XPrime.cs3?v=e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a",
