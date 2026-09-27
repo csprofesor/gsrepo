@@ -4,6 +4,11 @@ import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.network.CloudflareKiller
+import okhttp3.Interceptor
+import okhttp3.Response
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class FilmMakinesi : MainAPI() {
@@ -14,6 +19,24 @@ class FilmMakinesi : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
+    // ! CloudFlare v2
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request  = chain.request()
+            val response = chain.proceed(request)
+            val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
+
+            if (doc.html().contains("Just a moment")) {
+                return cloudflareKiller.intercept(chain)
+            }
+
+            return response
+        }
+    }
+
     override val mainPage = mainPageOf(
         "${mainUrl}/filmler-1/" to "Son Eklenen Filmler",
         "${mainUrl}/tur/aksiyon-fmy54y/film/" to "Aksiyon Filmleri",
@@ -23,12 +46,12 @@ class FilmMakinesi : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) request.data else "${request.data.removeSuffix("/")}/sayfa/$page/"
-        val doc = app.get(url).document
+        val doc = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
         val home = parseHomePage(doc)
         return newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
     }
 
-    private fun parseHomePage(doc: org.jsoup.nodes.Document): List<SearchResponse> {
+    private fun parseHomePage(doc: Document): List<SearchResponse> {
         return doc.select("a.item, a.slide, div.item-relative a.item")
             .mapNotNull { parseSearchElement(it) }
             .distinctBy { it.url }
@@ -66,7 +89,7 @@ class FilmMakinesi : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         return try {
-            val doc = app.get("${mainUrl}/arama/?s=$query", referer = "${mainUrl}/").document
+            val doc = app.get("${mainUrl}/arama/?s=$query", referer = "${mainUrl}/", interceptor = interceptor).document
             doc.select("a.item, div.item-relative a.item")
                 .mapNotNull { parseSearchElement(it) }
                 .distinctBy { it.url }
@@ -78,7 +101,7 @@ class FilmMakinesi : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = app.get(url, referer = "${mainUrl}/").document
+        val doc = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
 
         val title = doc.selectFirst("h1, meta[property='og:title']")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text().trim()
@@ -127,7 +150,7 @@ class FilmMakinesi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data, referer = mainUrl).document
+        val doc = app.get(data, referer = mainUrl, interceptor = interceptor).document
         val candidates = doc.select("iframe").mapNotNull {
             val src = it.attr("data-src").ifEmpty { it.attr("src") }
             fixUrlNull(src)?.takeUnless { it.contains("youtube.com") || it.contains("youtu.be") }
