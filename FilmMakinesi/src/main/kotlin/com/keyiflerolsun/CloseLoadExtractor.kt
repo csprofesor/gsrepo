@@ -31,7 +31,7 @@ open class CloseLoadExtractor : ExtractorApi() {
         // 2. CloseLoad exposes the current stream directly in the embed HTML.
         // Prefer this source before the legacy AJAX endpoint, which can return a stale PlayMix URL.
         var videoUrl: String? = null
-        val directFileMatch = Regex("""(?i)(?:["']?file["']?)\\s*:\\s*["'](https?://[^"']+)["']""")
+        val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
             .find(searchHtml)
             ?: Regex("""(?i)(?:["']?file["']?)\\s*:\\s*["'](https?://[^"']+)["']""")
                 .find(rawHtml)
