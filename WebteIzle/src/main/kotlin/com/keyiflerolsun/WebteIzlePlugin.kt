@@ -9,6 +9,7 @@ class WebteIzlePlugin: Plugin() {
     override fun load(context: Context) {
         registerMainAPI(WebteIzle())
 		registerExtractorAPI(DzenRu())
-		
+        registerExtractorAPI(VidMolyBiz())
+        registerExtractorAPI(RubyVidHub())
     }
 }

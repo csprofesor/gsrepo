@@ -199,19 +199,22 @@ class WebteIzle : MainAPI() {
 if (iframe == null) {
     val scriptSource = embedApi.html()
 
-    // Önce vidmoly gibi doğrudan eşleşmeyi dene
-    val matchResult = Regex("""(vidmoly)\('([\d\w]+)','""").find(scriptSource)
-
-    if (matchResult != null) {
-        val platform = matchResult.groupValues[1]
-        val vidId = matchResult.groupValues[2]
+    val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
+    if (functionMatch != null) {
+        val platform = functionMatch.groupValues[1]
+        val vidId = functionMatch.groupValues[2]
 
         iframe = when (platform) {
-            "vidmoly" -> "https://vidmoly.net/embed-${vidId}.html"
+            "vidmoly" -> "https://vidmoly.biz/embed-${vidId}.html"
+            "sruby" -> "https://rubyvidhub.com/embed-${vidId}.html"
+            "filemoon" -> "https://bysezoxexe.com/e/${vidId}"
+            "pixel" -> "https://pixeldrain.com/u/${vidId}"
+            "okru" -> "https://ok.ru/videoembed/${vidId}"
+            "mailru" -> "https://my.mail.ru/video/embed/${vidId}"
             else -> null
         }
     } else {
-        // Eğer vidmoly yoksa, _0x5c93 tanımı var mı diye kontrol et
+        // Fallback for Dzen.ru if any
         val hasDzen = Regex("""var\s+_0x5c93\s*=""").containsMatchIn(scriptSource)
         if (hasDzen) {
             val dzenMatch = Regex("""var\s+vid\s*=\s*['"]([^'"]+)['"]""").find(scriptSource)
@@ -220,7 +223,7 @@ if (iframe == null) {
                 iframe = "https://dzen.ru/embed/$videoId"
             }
         } else {
-            Log.d("WBTI", "scriptSource » $scriptSource")
+            Log.d("WBTI", "Unhandled scriptSource » $scriptSource")
         }
     }
 }
