@@ -3,10 +3,7 @@ package com.keyiflerolsun
 import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -15,7 +12,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 class FilmMakinesi : MainAPI() {
-    override var mainUrl = "https://filmmakinesi.to"
+    override var mainUrl = "https://filmmakinesi.de"
     override var name = "FilmMakinesi"
     override val hasMainPage = true
     override var lang = "tr"
@@ -147,50 +144,6 @@ class FilmMakinesi : MainAPI() {
         }
     }
 
-    private suspend fun loadCloseLoad(
-        embedUrl: String,
-        pageUrl: String,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        return try {
-            val html = app.get(
-                embedUrl,
-                referer = pageUrl,
-                interceptor = interceptor
-            ).text
-
-            // CloseLoad exposes the current stream directly in the embed HTML.
-            // The old generic extractor was returning a stale PlayMix URL (404).
-            val sourceUrl = Regex(
-                """(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']"""
-            ).find(html)?.groupValues?.getOrNull(1)
-                ?.replace("\\/", "/")
-
-            if (sourceUrl.isNullOrBlank()) {
-                Log.d(name, "CloseLoad: current file source not found")
-                return false
-            }
-
-            callback(
-                newExtractorLink(
-                    source = "CloseLoad",
-                    name = "CloseLoad",
-                    url = sourceUrl,
-                    type = ExtractorLinkType.M3U8
-                ) {
-                    referer = embedUrl
-                    quality = Qualities.Unknown.value
-                }
-            )
-
-            Log.d(name, "CloseLoad current source: $sourceUrl")
-            true
-        } catch (e: Exception) {
-            Log.d(name, "CloseLoad failed: " + e.message)
-            false
-        }
-    }
-
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -211,16 +164,26 @@ class FilmMakinesi : MainAPI() {
         var found = false
         candidates.forEach { embedUrl ->
             try {
-                if (embedUrl.contains("closeload.filmmakinesi.to", ignoreCase = true)) {
-                    if (loadCloseLoad(embedUrl, data, callback)) found = true
-                } else {
-                    loadExtractor(embedUrl, data, subtitleCallback) { link ->
-                        found = true
-                        callback(link)
+                loadExtractor(embedUrl, data, subtitleCallback) { link ->
+                    found = true
+                    callback(link)
+                }
+
+                if (!found) {
+                    if (embedUrl.contains("closeload", ignoreCase = true)) {
+                        CloseLoadExtractor().getUrl(embedUrl, data, subtitleCallback) { link ->
+                            found = true
+                            callback(link)
+                        }
+                    } else if (embedUrl.contains("rapid", ignoreCase = true)) {
+                        RapidExtractor().getUrl(embedUrl, data, subtitleCallback) { link ->
+                            found = true
+                            callback(link)
+                        }
                     }
                 }
             } catch (e: Exception) {
-                Log.d(name, "Extractor failed: " + embedUrl + " - " + e.message)
+                Log.d(name, "Extractor failed: $embedUrl - ${e.message}")
             }
         }
         return found

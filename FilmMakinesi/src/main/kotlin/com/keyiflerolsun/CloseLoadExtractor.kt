@@ -3,12 +3,33 @@ package com.keyiflerolsun
 import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
+import okhttp3.Interceptor
+import okhttp3.Response
+import org.jsoup.Jsoup
 
 open class CloseLoadExtractor : ExtractorApi() {
     override val mainUrl = "https://closeload.filmmakinesi.to"
     override val name = "CloseLoad"
     override val requiresReferer = true
+
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    private class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request  = chain.request()
+            val response = chain.proceed(request)
+            val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
+
+            if (doc.html().contains("Just a moment")) {
+                return cloudflareKiller.intercept(chain)
+            }
+
+            return response
+        }
+    }
 
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
@@ -25,7 +46,13 @@ open class CloseLoadExtractor : ExtractorApi() {
         Log.d(name, "getUrl çağrıldı, url: $url")
 
         val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
-        val response = app.get(url, referer = referer ?: domain)
+        val response = try {
+            app.get(url, referer = referer ?: domain, interceptor = interceptor)
+        } catch (e: Exception) {
+            Log.e(name, "Embed GET hatası: ${e.message}")
+            return
+        }
+
         val rawHtml = response.text
         var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
@@ -87,7 +114,8 @@ open class CloseLoadExtractor : ExtractorApi() {
                             "X-Requested-With" to "XMLHttpRequest",
                             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                             if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                        ).filter { it.key.isNotBlank() }
+                        ).filter { it.key.isNotBlank() },
+                        interceptor = interceptor
                     )
                     Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
                     val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
@@ -175,29 +203,37 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         parseSubtitles(rawHtml, subtitleCallback)
 
-        val videoDomain = Regex("""(https?://[^/]+)""").find(videoUrl)?.groupValues?.get(1) ?: domain
+        val linkType = if (videoUrl.contains(".m3u8", ignoreCase = true) ||
+            videoUrl.contains(".txt", ignoreCase = true) ||
+            videoUrl.contains("/hls/", ignoreCase = true) ||
+            videoUrl.contains("playlist", ignoreCase = true)
+        ) {
+            ExtractorLinkType.M3U8
+        } else {
+            INFER_TYPE
+        }
 
         callback.invoke(
             newExtractorLink(
                 source = name,
                 name = name,
                 url = videoUrl,
-                type = INFER_TYPE
+                type = linkType
             ) {
-                this.referer = "$videoDomain/"
+                this.referer = url
                 this.headers = mapOf(
-                    "Origin" to videoDomain,
-                    "Referer" to "$videoDomain/",
-                    "Accept" to "*/*",
                     "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Referer" to url,
+                    "Origin" to domain,
+                    "Accept" to "*/*",
                     if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                 ).filter { it.key.isNotBlank() }
             }
         )
-        Log.d(name, "ExtractorLink eklendi: $videoUrl, Cookies: $cookies")
+        Log.d(name, "ExtractorLink eklendi: $videoUrl, Referer: $url, Cookies: $cookies")
     }
 
-    private fun parseSubtitles(
+    private suspend fun parseSubtitles(
         rawHtml: String,
         subtitleCallback: (SubtitleFile) -> Unit
     ) {
@@ -208,7 +244,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                 RegexOption.DOT_MATCHES_ALL
             ).findAll(tracksStr).toList()
 
-            subMatches.forEachIndexed { index, match ->
+            subMatches.forEach { match ->
                 var subUrl = match.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
                 val subLabel = match.groupValues[2]
                 if (!subUrl.startsWith("http")) {
@@ -222,7 +258,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                     else -> "Türkçe"
                 }
 
-                subtitleCallback.invoke(SubtitleFile(lang, subUrl))
+                subtitleCallback.invoke(newSubtitleFile(lang, subUrl))
             }
         }
     }
@@ -246,4 +282,16 @@ class CloseLoadTv : CloseLoadExtractor() {
 
 class CloseLoadSh : CloseLoadExtractor() {
     override val mainUrl = "https://closeload.filmmakinesi.sh"
+}
+
+class CloseLoadCom : CloseLoadExtractor() {
+    override val mainUrl = "https://closeload.com"
+}
+
+class CloseLoadNet : CloseLoadExtractor() {
+    override val mainUrl = "https://closeload.net"
+}
+
+class CloseLoadOrg : CloseLoadExtractor() {
+    override val mainUrl = "https://closeload.org"
 }
