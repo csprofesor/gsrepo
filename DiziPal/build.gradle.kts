@@ -14,5 +14,5 @@ cloudstream {
     **/
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("TvSeries", "Movie")
-    iconUrl = "https://dizipal1563.com/assets/favicon/favicon-32x32.png?v=3"
+    iconUrl = "https://dizipal2223.com/assets/favicon/favicon-32x32.png?v=3"
 }
