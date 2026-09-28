@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
+import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
@@ -79,11 +80,13 @@ class DiziPal : MainAPI() {
         "${mainUrl}/anime"                             to "Anime"
     )
 
+    private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val home = mutableListOf<SearchResponse>()
 
         try {
-            val url = if (page > 1 && !request.data.contains("/kanal/")) {
+            val url = if (page > 1) {
                 if (request.data.contains("?")) "${request.data}&sayfa=$page" else "${request.data}?sayfa=$page"
             } else {
                 request.data
@@ -94,10 +97,8 @@ class DiziPal : MainAPI() {
             ).document
 
             // 1. HTML içindeki mevcut dizileri / filmleri al
-            if (!request.data.contains("/kanal/") || page == 1) {
-                val cardElements = document.select("a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, div.dp-card, div.bg-\\[\\#22232a\\]")
-                home.addAll(cardElements.mapNotNull { it.diziler() })
-            }
+            val cardElements = document.select(cardSelector)
+            home.addAll(cardElements.mapNotNull { it.diziler() })
 
             // 2. Eğer bir kanal sayfasındaysak API'den verileri çek
             if (request.data.contains("/kanal/")) {
@@ -130,7 +131,7 @@ class DiziPal : MainAPI() {
                     if (!htmlNode.isMissingNode) {
                         val htmlContent = htmlNode.asText()
                         val parsedDoc = Jsoup.parse(htmlContent)
-                        val apiResults = parsedDoc.select("a[data-dizipal-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, div.dp-card, div.bg-\\[\\#22232a\\]").mapNotNull { it.diziler() }
+                        val apiResults = parsedDoc.select(cardSelector).mapNotNull { it.diziler() }
 
                         apiResults.forEach { res ->
                             if (home.none { it.url == res.url }) {
@@ -154,39 +155,89 @@ class DiziPal : MainAPI() {
         val aTag = if (this.tagName() == "a") this else this.selectFirst("a[href]") ?: return null
         val href = fixUrlNull(aTag.attr("href")) ?: return null
 
-        if (href.isBlank() || href.endsWith("/kanal/") || href.endsWith("/yabanci-dizi-izle") || href.endsWith("/hd-film-izle")) return null
+        if (href.isBlank()
+            || href.endsWith("/kanal/")
+            || href.endsWith("/yabanci-dizi-izle")
+            || href.endsWith("/hd-film-izle")
+            || href.endsWith("/anime")
+            || href.contains("/tur/")
+            || href.contains("/kategori/")
+            || href == mainUrl
+            || href == "$mainUrl/"
+            || href.contains("javascript:")
+        ) return null
 
         val imgEl = this.selectFirst("img") ?: aTag.selectFirst("img")
-        val rawTitle = (this.selectFirst("h2, h3, h4")?.text()
-            ?: imgEl?.attr("alt")
-            ?: aTag.attr("title")
-            ?: this.attr("title")).toString().trim()
 
-        val title = rawTitle.removeSuffix(" izle").removeSuffix(" İzle").trim()
+        val rawTitle = (
+            this.selectFirst("h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name")?.text()
+            ?: aTag.selectFirst("h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name")?.text()
+            ?: imgEl?.attr("alt")
+            ?: imgEl?.attr("title")
+            ?: aTag.attr("title")
+            ?: this.attr("title")
+        ).toString().trim()
+
+        val title = rawTitle.removeSuffix(" izle").removeSuffix(" İzle").removeSuffix(" izle -").removeSuffix(" İzle -").trim()
         if (title.isBlank()) return null
 
         val posterUrl = fixUrlNull(
-            imgEl?.attr("data-src")?.takeIf { it.isNotEmpty() && !it.startsWith("data:image") }
-                ?: imgEl?.attr("src")?.takeIf { !it.startsWith("data:image") }
+            imgEl?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("data-original")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("data-lazy-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("data-bg")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: this.selectFirst("[style*='background-image']")?.attr("style")?.let { style ->
+                    Regex("""url\((['"]?)(.*?)\1\)""").find(style)?.groupValues?.get(2)
+                }
+                ?: aTag.selectFirst("[style*='background-image']")?.attr("style")?.let { style ->
+                    Regex("""url\((['"]?)(.*?)\1\)""").find(style)?.groupValues?.get(2)
+                }
         )
+
+        val scoreRaw = (
+            this.selectFirst(".imdb, .rating, .score, .point, .dp-rating, .dp-imdb, span[class*='imdb'], div[class*='imdb'], span[class*='rating'], div[class*='rating'], span[class*='score'], div[class*='score']")?.text()
+            ?: aTag.selectFirst(".imdb, .rating, .score, .point, .dp-rating, .dp-imdb, span[class*='imdb'], div[class*='imdb'], span[class*='rating'], div[class*='rating'], span[class*='score'], div[class*='score']")?.text()
+            ?: this.attr("data-imdb").takeIf { it.isNotBlank() }
+            ?: aTag.attr("data-imdb").takeIf { it.isNotBlank() }
+            ?: this.attr("data-score").takeIf { it.isNotBlank() }
+            ?: aTag.attr("data-score").takeIf { it.isNotBlank() }
+        )?.trim()
+
+        val scoreNum = scoreRaw?.let { Regex("""(\d+(?:[.,]\d+)?)""").find(it)?.groupValues?.get(1)?.replace(",", ".") }
 
         val isMovie = href.contains("/movies/") || href.contains("/film/")
         return if (isMovie) {
-            newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                this.posterUrl = posterUrl
+                this.score     = Score.from10(scoreNum)
+            }
         } else {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl }
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                this.posterUrl = posterUrl
+                this.score     = Score.from10(scoreNum)
+            }
         }
     }
 
-    private fun SearchItem.toPostSearchResult(): SearchResponse {
-        val title     = this.title
-        val href      = "${mainUrl}/${this.slug}"
-        val posterUrl = this.poster
+    private fun SearchItem.toPostSearchResult(): SearchResponse? {
+        val title     = this.title.trim().takeIf { it.isNotBlank() } ?: return null
+        val slugStr   = this.slug?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val href      = if (slugStr.startsWith("http")) slugStr else "${mainUrl}/${slugStr}"
+        val posterUrl = fixUrlNull(this.poster?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
+        val imdbScore = this.imdb?.toString()?.trim()?.takeIf { it.isNotBlank() }
 
-        return if (this.type == "series" || this.type == "Series") {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl }
+        return if (this.type.equals("series", ignoreCase = true) || href.contains("/series/") || href.contains("/dizi/")) {
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                this.posterUrl = posterUrl
+                this.score     = Score.from10(imdbScore)
+            }
         } else {
-            newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                this.posterUrl = posterUrl
+                this.score     = Score.from10(imdbScore)
+            }
         }
     }
 
@@ -216,7 +267,7 @@ class DiziPal : MainAPI() {
             }
 
             val searchItems: List<SearchItem> = mapper.readValue(resultArrayNode.traverse())
-            searchItems.map { it.toPostSearchResult() }
+            searchItems.mapNotNull { it.toPostSearchResult() }
         } catch (e: Exception) {
             Log.e("DiziPal", "Search hatası: ${e.message}")
             emptyList()
@@ -233,8 +284,9 @@ class DiziPal : MainAPI() {
             ?: return null
 
         val poster = fixUrlNull(
-            document.selectFirst("div.page-top img[alt]")?.attr("src")
-                ?: document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("data-src")
+            document.selectFirst("div.page-top img[alt]")?.attr("src")?.takeIf { !it.startsWith("data:") }
+                ?: document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("data-src")?.takeIf { !it.startsWith("data:") }
+                ?: document.selectFirst("img[src*='/poster/']")?.attr("src")?.takeIf { !it.startsWith("data:") }
                 ?: document.selectFirst("meta[property='og:image']")?.attr("content")
         )
 
@@ -246,6 +298,9 @@ class DiziPal : MainAPI() {
             .ifEmpty { document.select("a[href*='/tur/'], a[href*='/kategori/']").map { it.text().trim() } }
         val duration = Regex("(\\d+)").find(document.selectXpath("//div[text()='Süre']//following-sibling::div").text())?.value?.toIntOrNull()
 
+        val scoreRaw = document.selectFirst(".imdb, .rating, .dp-rating, span[class*='imdb'], div[class*='imdb']")?.text()?.trim()
+        val ratingNum = scoreRaw?.let { Regex("""(\d+(?:[.,]\d+)?)""").find(it)?.groupValues?.get(1)?.replace(",", ".") }
+
         if (url.contains("/movies/") || url.contains("/film/")) {
             return newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
@@ -253,6 +308,7 @@ class DiziPal : MainAPI() {
                 this.plot      = description
                 this.tags      = tags
                 this.duration  = duration
+                this.score     = Score.from10(ratingNum)
             }
         } else {
             val episodeElements = document.select("div.relative.w-full.flex.items-start.gap-4, a.dp-detail-episode, a[href*='/episode/'], a[href*='/bolum/']")
@@ -283,6 +339,7 @@ class DiziPal : MainAPI() {
                 this.plot      = description
                 this.tags      = tags
                 this.duration  = duration
+                this.score     = Score.from10(ratingNum)
             }
         }
     }

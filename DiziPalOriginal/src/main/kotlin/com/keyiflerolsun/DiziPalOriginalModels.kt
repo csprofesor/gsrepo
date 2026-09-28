@@ -8,13 +8,16 @@ import com.fasterxml.jackson.annotation.JsonProperty
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class DizipalSearchResult(
     @JsonProperty("object_id")
-    val id: Int? = null,
+    val id: Any? = null,
 
     @JsonProperty("object_name")
     val title: String? = null,
 
     @JsonProperty("object_poster_url")
     val poster: String? = null,
+
+    @JsonProperty("object_related_imdb_point")
+    val imdb: Any? = null,
 
     @JsonProperty("used_type")
     val type: String? = null,
