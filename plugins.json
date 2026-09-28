@@ -266,7 +266,7 @@
     "fileHash": "sha256-c2fc2c5b27d3ceb884f5f2b024211d0f89c170177586149b3ae0d5e4951ff746"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=3b0b02a5c981d358732d2db2804491ad872ad5165906b1c32ae15992d9fd3d3d",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=3f1f251eea4092bc6c8355cc5840f5f153a617f4689c79fc3eedbf9d29f3c60e",
     "status": 1,
     "version": 59,
     "name": "FilmMakinesi",
@@ -275,7 +275,7 @@
       "csprofesor"
     ],
     "description": "Film Makinesi, en yeni ve en güncel filmleri sitemizde full HD kalite farkı ile izleyebilirsiniz. HD film izle denildiğinde akla gelen en kaliteli film izleme sitesi.",
-    "fileSize": 40147,
+    "fileSize": 40150,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -283,7 +283,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=filmmakinesi.film&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-3b0b02a5c981d358732d2db2804491ad872ad5165906b1c32ae15992d9fd3d3d"
+    "fileHash": "sha256-3f1f251eea4092bc6c8355cc5840f5f153a617f4689c79fc3eedbf9d29f3c60e"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmModu.cs3?v=3150a6212f052ad843a8b9e67d65c82b35078f502bb9f5032b1af808d87b862e",
