@@ -224,7 +224,7 @@
     "fileHash": "sha256-56a7a34d7ab414da583a0cab8f44c77fe0110d0529b284b6e6c46db0cb8b32e1"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=8e7537a984b5cc41b24436e505ca605caf9a53ef551d84abc67574bd0b33c1ff",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=4c78dd284813495362e80a7164a9402180454e521e53b5bfd0c95db0c4838495",
     "status": 1,
     "version": 109,
     "name": "DiziPal",
@@ -233,7 +233,7 @@
       "csprofesor"
     ],
     "description": "en yeni dizileri güvenli ve hızlı şekilde sunar.",
-    "fileSize": 29472,
+    "fileSize": 29462,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -242,10 +242,10 @@
     ],
     "iconUrl": "https://dizipal1563.com/assets/favicon/favicon-32x32.png?v=3",
     "apiVersion": 1,
-    "fileHash": "sha256-8e7537a984b5cc41b24436e505ca605caf9a53ef551d84abc67574bd0b33c1ff"
+    "fileHash": "sha256-4c78dd284813495362e80a7164a9402180454e521e53b5bfd0c95db0c4838495"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=c2fc2c5b27d3ceb884f5f2b024211d0f89c170177586149b3ae0d5e4951ff746",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=44a7ed7d32a5b53a3fb694827fab44da80eef091396845322665221d002fc5f9",
     "status": 1,
     "version": 92,
     "name": "DiziPalOriginal",
@@ -263,7 +263,7 @@
     ],
     "iconUrl": "https://chessplyimages.cfd/uploads/site/favicon-32x32.png",
     "apiVersion": 1,
-    "fileHash": "sha256-c2fc2c5b27d3ceb884f5f2b024211d0f89c170177586149b3ae0d5e4951ff746"
+    "fileHash": "sha256-44a7ed7d32a5b53a3fb694827fab44da80eef091396845322665221d002fc5f9"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=ca536a2771cf0576d11098f491756d771d56711eb8f13d8a6c7eb8c3f5a5cb2f",
