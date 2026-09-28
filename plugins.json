@@ -123,7 +123,7 @@
     "fileHash": "sha256-8ab5957d93c8fd9545179085605a9398d96d10209606aab5808e9efbcadb774f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=47ed4402c30ea74b8128b9101153d99cf1c52c0f107df547396dc4d0bd6e0419",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=50a4ad0f9e272f10709cc4301b57959a286549498b22b357f49a677fab18f93f",
     "status": 1,
     "version": 16,
     "name": "DiziGom",
@@ -132,7 +132,7 @@
       "csprofesor"
     ],
     "description": "Türkçe altyazılı yabancı dizi izle, Tüm yabancı, kore, netflix dizilerin yeni ve eski sezonlarını orijinal dilinde dizigom1 alt yazılı film izleyebilir, sadece türkçe altyazılı en iyi yabancı diziler ve filmler hakkında yorum yapabilirsiniz.",
-    "fileSize": 30040,
+    "fileSize": 31538,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -140,7 +140,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dizigom.love&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-47ed4402c30ea74b8128b9101153d99cf1c52c0f107df547396dc4d0bd6e0419"
+    "fileHash": "sha256-50a4ad0f9e272f10709cc4301b57959a286549498b22b357f49a677fab18f93f"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziKorea.cs3?v=1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da",
