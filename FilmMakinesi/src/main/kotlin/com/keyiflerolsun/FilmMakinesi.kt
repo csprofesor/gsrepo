@@ -164,7 +164,12 @@ class FilmMakinesi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data, referer = mainUrl, interceptor = interceptor).document
+        val doc = try {
+            app.get(data, referer = mainUrl, interceptor = interceptor).document
+        } catch (e: Exception) {
+            Log.e(name, "loadLinks app.get failed: ${e.message}")
+            return false
+        }
         val candidates = doc.select("iframe").mapNotNull {
             val src = it.attr("data-src").ifEmpty { it.attr("src") }.ifEmpty { it.attr("data-lazy-src") }
             fixUrlNull(src)?.takeUnless { it.contains("youtube.com") || it.contains("youtu.be") }

@@ -2,6 +2,7 @@ package com.keyiflerolsun
 
 import android.util.Base64
 import android.util.Log
+import android.webkit.CookieManager
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
@@ -43,6 +44,9 @@ open class CloseLoadExtractor : ExtractorApi() {
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         if (url.contains("playmix.uno", ignoreCase = true)) return false
+        if (url.contains(".vtt", ignoreCase = true)) return false
+        if (url.contains(".srt", ignoreCase = true)) return false
+        if (url.contains(".jpg", ignoreCase = true) || url.contains(".png", ignoreCase = true)) return false
         return true
     }
 
@@ -63,7 +67,12 @@ open class CloseLoadExtractor : ExtractorApi() {
         }
 
         val rawHtml = response.text
-        var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        var cookies = try {
+            CookieManager.getInstance().getCookie(url) ?: ""
+        } catch (e: Exception) {
+            response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        }
+        
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         // 1. Try unpacking packer JS
@@ -133,12 +142,13 @@ open class CloseLoadExtractor : ExtractorApi() {
                     }
 
                     val ajaxText = ajaxRes.text
-                    val jsonMatch = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").find(ajaxText)
-                    if (jsonMatch != null) {
-                        val candidate = jsonMatch.groupValues[1].replace("\\/", "/")
+                    val jsonMatches = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").findAll(ajaxText)
+                    for (match in jsonMatches) {
+                        val candidate = match.groupValues[1].replace("\\/", "/")
                         if (isValidVideoUrl(candidate)) {
                             videoUrl = candidate
                             Log.d(name, "AJAX Response'dan video URL bulundu: $videoUrl")
+                            break
                         } else {
                             Log.w(name, "AJAX Response'daki URL geçersiz veya PlayMix: $candidate")
                         }

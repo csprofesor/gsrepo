@@ -2,6 +2,7 @@ package com.keyiflerolsun
 
 import android.util.Base64
 import android.util.Log
+import android.webkit.CookieManager
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
@@ -40,6 +41,14 @@ open class RapidExtractor : ExtractorApi() {
         }
     }
 
+    private fun isValidVideoUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        if (url.contains(".vtt", ignoreCase = true)) return false
+        if (url.contains(".srt", ignoreCase = true)) return false
+        if (url.contains(".jpg", ignoreCase = true) || url.contains(".png", ignoreCase = true)) return false
+        return true
+    }
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
@@ -57,7 +66,12 @@ open class RapidExtractor : ExtractorApi() {
         }
 
         val rawHtml = response.text
-        var cookies = response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        var cookies = try {
+            CookieManager.getInstance().getCookie(url) ?: ""
+        } catch (e: Exception) {
+            response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        }
+        
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         val unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
@@ -97,15 +111,24 @@ open class RapidExtractor : ExtractorApi() {
                 }
 
                 val ajaxText = ajaxRes.text
-                val jsonMatch = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").find(ajaxText)
-                if (jsonMatch != null) {
-                    videoUrl = jsonMatch.groupValues[1].replace("\\/", "/")
-                    Log.d(name, "AJAX Response'dan video URL bulundu: $videoUrl")
-                } else {
-                    val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(ajaxText)
-                    if (urlMatch != null) {
-                        videoUrl = urlMatch.groupValues[1].replace("\\/", "/")
-                        Log.d(name, "AJAX Response'dan direkt URL bulundu: $videoUrl")
+                val jsonMatches = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").findAll(ajaxText)
+                for (match in jsonMatches) {
+                    val candidate = match.groupValues[1].replace("\\/", "/")
+                    if (isValidVideoUrl(candidate)) {
+                        videoUrl = candidate
+                        Log.d(name, "AJAX Response'dan video URL bulundu: $videoUrl")
+                        break
+                    }
+                }
+                if (videoUrl == null) {
+                    val urlMatches = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").findAll(ajaxText)
+                    for (match in urlMatches) {
+                        val candidate = match.groupValues[1].replace("\\/", "/")
+                        if (isValidVideoUrl(candidate)) {
+                            videoUrl = candidate
+                            Log.d(name, "AJAX Response'dan direkt URL bulundu: $videoUrl")
+                            break
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -114,25 +137,33 @@ open class RapidExtractor : ExtractorApi() {
         }
 
         if (videoUrl.isNullOrBlank()) {
-            val directMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchHtml)
-                ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(rawHtml)
-            if (directMatch != null) {
-                videoUrl = directMatch.groupValues[1].replace("\\/", "/")
-                Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
+            val directMatches = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").findAll(searchHtml) +
+                Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").findAll(rawHtml)
+            for (match in directMatches) {
+                val candidate = match.groupValues[1].replace("\\/", "/")
+                if (isValidVideoUrl(candidate)) {
+                    videoUrl = candidate
+                    Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
+                    break
+                }
             }
         }
 
         if (videoUrl.isNullOrBlank()) {
-            val atobMatch = Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(searchHtml) ?: Regex("""aHR0[0-9a-zA-Z+\/=]+""").find(rawHtml)
-            if (atobMatch != null) {
+            val atobMatches = Regex("""aHR0[0-9a-zA-Z+\/=]+""").findAll(searchHtml) + Regex("""aHR0[0-9a-zA-Z+\/=]+""").findAll(rawHtml)
+            for (atobMatch in atobMatches) {
                 var atob = atobMatch.value
                 val padding = atob.length % 4
                 if (padding != 0) {
                     atob += "=".repeat(4 - padding)
                 }
                 try {
-                    videoUrl = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
-                    Log.d(name, "Atob decoded URL: $videoUrl")
+                    val candidate = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
+                    if (isValidVideoUrl(candidate)) {
+                        videoUrl = candidate
+                        Log.d(name, "Atob decoded URL: $videoUrl")
+                        break
+                    }
                 } catch (e: Exception) {
                     Log.w(name, "Atob decode hatası: ${e.message}")
                 }
@@ -140,10 +171,14 @@ open class RapidExtractor : ExtractorApi() {
         }
 
         if (videoUrl.isNullOrBlank()) {
-            val fileMatch = Regex(""""file"\s*:\s*"([^"]+)"""").find(searchHtml) ?: Regex(""""file"\s*:\s*"([^"]+)"""").find(rawHtml)
-            if (fileMatch != null) {
-                videoUrl = fileMatch.groupValues[1].replace("\\/", "/")
-                Log.d(name, "File match URL: $videoUrl")
+            val fileMatches = Regex(""""file"\s*:\s*"([^"]+)"""").findAll(searchHtml) + Regex(""""file"\s*:\s*"([^"]+)"""").findAll(rawHtml)
+            for (match in fileMatches) {
+                val candidate = match.groupValues[1].replace("\\/", "/")
+                if (isValidVideoUrl(candidate)) {
+                    videoUrl = candidate
+                    Log.d(name, "File match URL: $videoUrl")
+                    break
+                }
             }
         }
 
