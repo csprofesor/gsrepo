@@ -127,6 +127,7 @@ class DiziPal : MainAPI() {
                     val mapper = jacksonObjectMapper()
                     val rootNode = mapper.readTree(apiResponse.text)
 
+                    // A) HTML node parsing
                     val htmlNode = rootNode.at("/data/html")
                     if (!htmlNode.isMissingNode) {
                         val htmlContent = htmlNode.asText()
@@ -138,6 +139,19 @@ class DiziPal : MainAPI() {
                                 home.add(res)
                             }
                         }
+                    }
+
+                    // B) Result array node parsing
+                    val resultArrayNode = rootNode.at("/data/result")
+                    if (!resultArrayNode.isMissingNode && resultArrayNode.isArray) {
+                        try {
+                            val searchItems: List<SearchItem> = mapper.readValue(resultArrayNode.traverse())
+                            searchItems.mapNotNull { it.toPostSearchResult() }.forEach { res ->
+                                if (home.none { it.url == res.url }) {
+                                    home.add(res)
+                                }
+                            }
+                        } catch (_: Exception) {}
                     }
                 } catch (e: Exception) {
                     Log.e("DiziPal", "API Hatası: ${e.message}")
@@ -160,11 +174,11 @@ class DiziPal : MainAPI() {
             || href.endsWith("/yabanci-dizi-izle")
             || href.endsWith("/hd-film-izle")
             || href.endsWith("/anime")
-            || href.contains("/tur/")
-            || href.contains("/kategori/")
             || href == mainUrl
             || href == "$mainUrl/"
             || href.contains("javascript:")
+            || (href.contains("/tur/") && !href.contains("/dizi/") && !href.contains("/film/") && !href.contains("/series/") && !href.contains("/movies/"))
+            || (href.contains("/kategori/") && !href.contains("/dizi/") && !href.contains("/film/") && !href.contains("/series/") && !href.contains("/movies/"))
         ) return null
 
         val imgEl = this.selectFirst("img") ?: aTag.selectFirst("img")
@@ -395,7 +409,7 @@ class DiziPal : MainAPI() {
 
     private fun decryptDizipalData(rawJsonText: String): String {
         return try {
-            val passphrase = "3hPn4uCjTVtfYWcjIcoJQ4cL1WWk1qxXI39egLYOmNv6IblA7eKJz68uU3eLzux1biZLCms0quEjTYniGv5z1JcKbNIsDQFSeIZOBZJz4is6pD7UyWDggWWzTLBQbHcQFpBQdClnuQaMNUHtLHTpzCvZy33p6I7wFBvL4fnXBYH84aUIyWGTRvM2G5cfoNf4705tO2kv"
+            val passphrase = "3hPn4uCjTVtfYWcjIcoJQ4cL1WWk1qxXI39egLYOmNv6IblA7eKJz68uU3eLzux1biZLCms0quEjTYniGv5z1JcKbNIsDQFSeIZOBZJz4is6pD7UyWDggWWzTLBQbHcQFpBQdClnuQaMNUHTLHTpzCvZy33p6I7wFBvL4fnXBYH84aUIyWGTRvM2G5cfoNf4705tO2kv"
 
             val ctMatch = """"ciphertext"\s*:\s*"([^"]+)"""".toRegex().find(rawJsonText)?.groupValues?.get(1)
                 ?: return "".also { Log.e("DiziPal", "--> HATA: Regex 'ciphertext' değerini bulamadı!") }
