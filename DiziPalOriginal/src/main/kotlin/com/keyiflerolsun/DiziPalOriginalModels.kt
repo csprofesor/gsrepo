@@ -2,20 +2,23 @@
 
 package com.keyiflerolsun
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 
-
-data class DizipalSearchData(
-    @JsonProperty("success") val success: Boolean?,
-    @JsonProperty("results") val results: List<DizipalSearchResult>?
-)
-
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class DizipalSearchResult(
-    @JsonProperty("id") val id: Int?,
-    @JsonProperty("title") val title: String?,
-    @JsonProperty("year") val year: Int?,
-    @JsonProperty("type") val type: String?,
-    @JsonProperty("poster") val poster: String?,
-    @JsonProperty("url") val url: String?,
-    @JsonProperty("rating") val rating: String?
+    @JsonProperty("object_id")
+    val id: Int? = null,
+
+    @JsonProperty("object_name")
+    val title: String? = null,
+
+    @JsonProperty("object_poster_url")
+    val poster: String? = null,
+
+    @JsonProperty("used_type")
+    val type: String? = null,
+
+    @JsonProperty("used_slug")
+    val slug: String? = null
 )

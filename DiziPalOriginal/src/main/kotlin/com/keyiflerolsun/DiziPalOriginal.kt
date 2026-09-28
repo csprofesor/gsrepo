@@ -2,6 +2,8 @@ package com.keyiflerolsun
 
 import android.util.Base64
 import android.util.Log
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -16,7 +18,7 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 class DiziPalOriginal : MainAPI() {
-    override var mainUrl = "https://dizipal2223.com"
+    override var mainUrl = "https://dizipal1584.com"
     override var name = "DiziPalOriginal"
     override val hasMainPage = true
     override var lang = "tr"
@@ -45,47 +47,44 @@ class DiziPalOriginal : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/yeni-eklenen-bolumler"        to "Son Bölümler",
-        "$mainUrl/diziler"                      to "Diziler",
-        "$mainUrl/filmler"                      to "Filmler",
-        "$mainUrl/anime"                        to "Anime",
-        "$mainUrl/altyazili-filmler"            to "Altyazılı Filmler",
-        "$mainUrl/turkce-dublaj-filmler"        to "Türkçe Dublaj Filmler",
-        "$mainUrl/diziler/kategori/aksiyon"     to "Aksiyon",
-        "$mainUrl/diziler/kategori/bilim-kurgu" to "Bilim Kurgu",
-        "$mainUrl/diziler/kategori/komedi"     to "Komedi",
-        "$mainUrl/diziler/kategori/dram"       to "Dram",
-        "$mainUrl/diziler/kategori/fantastik"  to "Fantastik",
-        "$mainUrl/diziler/kategori/gerilim"    to "Gerilim",
-        "$mainUrl/diziler/kategori/gizem"      to "Gizem",
-        "$mainUrl/diziler/kategori/korku"      to "Korku",
-        "$mainUrl/diziler/kategori/macera"     to "Macera",
-        "$mainUrl/diziler/kategori/romantik"   to "Romantik"
+        "$mainUrl/yabanci-dizi-izle"        to "Yeni Diziler",
+        "$mainUrl/hd-film-izle"             to "Yeni Filmler",
+        "$mainUrl/kanal/netflix"            to "Netflix",
+        "$mainUrl/kanal/exxen"              to "Exxen",
+        "$mainUrl/kanal/max"                to "Max",
+        "$mainUrl/kanal/disney"             to "Disney+",
+        "$mainUrl/kanal/amazon"             to "Amazon Prime",
+        "$mainUrl/kanal/tod"                to "TOD (beIN)",
+        "$mainUrl/kanal/tabii"              to "Tabii",
+        "$mainUrl/kanal/hulu"               to "Hulu",
+        "$mainUrl/anime"                    to "Anime"
     )
 
-    private fun Element.parseEpisodeItem(): SearchResponse? {
-        val href = fixUrlNull(this.attr("href")) ?: return null
+    private fun Element.parseSonBolumler(): SearchResponse? {
+        val name = this.selectFirst("strong")?.text()?.trim()
+            ?: this.selectFirst("img")?.attr("alt")?.trim() ?: return null
+        val episode = (this.selectFirst("div.episode")?.text()
+            ?: this.selectFirst("span.dp-episode-copy span")?.text())?.trim()
+            ?.replace(". Sezon ", "x")?.replace(". Bölüm", "") ?: ""
+        val title = if (episode.isNotEmpty() && episode != name) "$name $episode" else name
+
+        val href = fixUrlNull(this.selectFirst("a")?.attr("href") ?: this.attr("href")) ?: return null
         val posterUrl = fixUrlNull(
             this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotEmpty() }
                 ?: this.selectFirst("img")?.attr("src")
         )
-        val name = this.selectFirst("strong")?.text()?.trim()
-            ?: this.selectFirst("img")?.attr("alt")?.trim() ?: return null
-        val episode = this.selectFirst("span.dp-episode-copy span, span")?.text()?.trim() ?: ""
-        val title = if (episode.isNotEmpty() && episode != name) "$name $episode" else name
 
-        val seriesHref = href.substringBefore("/sezon").substringBefore("/bolum")
-
-        return newTvSeriesSearchResponse(title, seriesHref, TvType.TvSeries) {
+        val cleanHref = href.substringBefore("/sezon").substringBefore("/bolum").substringBefore("/episode")
+        return newTvSeriesSearchResponse(title, cleanHref, TvType.TvSeries) {
             this.posterUrl = posterUrl
         }
     }
 
-    private fun Element.parseCardItem(): SearchResponse? {
+    private fun Element.diziler(): SearchResponse? {
         val title = (this.selectFirst("h3 a, h2 a, h3, h2")?.text()
             ?: this.selectFirst("img")?.attr("alt"))?.trim()?.takeIf { it.isNotEmpty() } ?: return null
 
-        val href = fixUrlNull(this.selectFirst("a")?.attr("href")) ?: return null
+        val href = fixUrlNull(this.selectFirst("a")?.attr("href") ?: this.attr("href")) ?: return null
         val posterUrl = fixUrlNull(
             this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotEmpty() }
                 ?: this.selectFirst("img")?.attr("src")
@@ -93,47 +92,125 @@ class DiziPalOriginal : MainAPI() {
 
         val isMovie = href.contains("/film/") || href.contains("/movies/")
         return if (isMovie) {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = posterUrl
-            }
+            newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
         } else {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                this.posterUrl = posterUrl
-            }
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl }
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page > 1) {
-            if (request.data.contains("?")) "${request.data}&page=$page" else "${request.data}?page=$page"
-        } else {
-            request.data
+        val home = mutableListOf<SearchResponse>()
+
+        try {
+            val url = if (page > 1 && !request.data.contains("/kanal/")) {
+                if (request.data.contains("?")) "${request.data}&sayfa=$page" else "${request.data}?sayfa=$page"
+            } else {
+                request.data
+            }
+
+            val document = app.get(
+                url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
+            ).document
+
+            if (!request.data.contains("/kanal/") || page == 1) {
+                if (request.data.contains("/yabanci-dizi-izle") || request.data.contains("/hd-film-izle") || request.data.contains("/yeni-eklenen-bolumler")) {
+                    home.addAll(document.select("div.new-added-list div.bg-\\[\\#22232a\\], a.dp-episode").mapNotNull { it.parseSonBolumler() })
+                }
+
+                home.addAll(document.select("div.bg-\\[\\#22232a\\], article.dp-card, div.dp-card").mapNotNull { it.diziler() })
+            }
+
+            if (request.data.contains("/kanal/")) {
+                val channelIdFromDoc = document.selectFirst("input[name=channelId]")?.attr("value")
+                    ?: Regex("""channelId\s*[:=]\s*(\d+)""").find(document.html())?.groupValues?.get(1)
+                val channelSlug = request.data.substringAfterLast("/")
+
+                try {
+                    val apiResponse = app.post(
+                        "${mainUrl}/bg/getserielistbychannel",
+                        headers = mapOf(
+                            "Accept" to "application/json, text/javascript, */*; q=0.01",
+                            "X-Requested-With" to "XMLHttpRequest"
+                        ),
+                        referer = request.data,
+                        data = mapOf(
+                            "cKey"       to "c61f91c5141d178450934fe81c0a2029",
+                            "cValue"     to "MTc4NDQwNzIwMDhkMzJhNTc1YzUwOGU1ZjQwMjdjMjIyOWVjOGVhMTcwNGQyM2FjODM2YTI4YTU0NjUyMjI2ZmVjMzFkYzBkMWQyMWY4YzdiNA==",
+                            "curPage"    to page.toString(),
+                            "channelId"  to (channelIdFromDoc ?: "1"),
+                            "languageId" to "2,3,4",
+                            "slug"       to channelSlug
+                        )
+                    )
+
+                    val mapper = jacksonObjectMapper()
+                    val rootNode = mapper.readTree(apiResponse.text)
+
+                    val htmlNode = rootNode.at("/data/html")
+                    if (!htmlNode.isMissingNode) {
+                        val htmlContent = htmlNode.asText()
+                        val parsedDoc = Jsoup.parse(htmlContent)
+                        val apiResults = parsedDoc.select("div.bg-\\[\\#22232a\\], article.dp-card, div.dp-card").mapNotNull { it.diziler() }
+
+                        apiResults.forEach { res ->
+                            if (home.none { it.url == res.url }) {
+                                home.add(res)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("DiziPalOriginal", "API Hatası: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("DiziPalOriginal", "getMainPage Hatası: ${e.message}")
         }
 
-        val document = app.get(
-            url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
-        ).document
-
-        val items = if (request.data.contains("/yeni-eklenen-bolumler")) {
-            document.select("a.dp-episode").mapNotNull { it.parseEpisodeItem() }
-        } else {
-            document.select("article.dp-card, div.dp-card, article, div.bg-\\[\\#22232a\\]").mapNotNull { it.parseCardItem() }
-        }.distinctBy { it.url }
-
+        val items = home.distinctBy { it.url }
         return newHomePageResponse(request.name, items, items.isNotEmpty())
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get(
-            "$mainUrl/diziler?kelime=$query",
-            timeout = 10000,
-            interceptor = interceptor,
-            headers = getHeaders(mainUrl)
-        ).document
+        return try {
+            val responseRaw = app.post(
+                "${mainUrl}/bg/searchcontent",
+                headers = mapOf(
+                    "Accept" to "application/json, text/javascript, */*; q=0.01",
+                    "X-Requested-With" to "XMLHttpRequest"
+                ),
+                referer = "${mainUrl}/",
+                data = mapOf(
+                    "cKey" to "c61f91c5141d178450934fe81c0a2029",
+                    "cValue" to "MTc4NDQwNzIwMDhkMzJhNTc1YzUwOGU1ZjQwMjdjMjIyOWVjOGVhMTcwNGQyM2FjODM2YTI4YTU0NjUyMjI2ZmVjMzFkYzBkMWQyMWY4YzdiNA==",
+                    "type" to "hepsi",
+                    "searchterm" to query
+                )
+            )
 
-        return document.select("article.dp-card, div.dp-card, article")
-            .mapNotNull { it.parseCardItem() }
-            .distinctBy { it.url }
+            val mapper = jacksonObjectMapper()
+            val rootNode = mapper.readTree(responseRaw.text)
+            val resultArrayNode = rootNode.at("/data/result")
+
+            if (resultArrayNode.isMissingNode || !resultArrayNode.isArray) {
+                return emptyList()
+            }
+
+            val searchItems: List<DizipalSearchResult> = mapper.readValue(resultArrayNode.traverse())
+            searchItems.mapNotNull { item ->
+                val title = item.title ?: return@mapNotNull null
+                val href = "$mainUrl/${item.slug}"
+                val posterUrl = item.poster
+
+                if (item.type == "series" || item.type == "Series") {
+                    newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl }
+                } else {
+                    newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("DiziPalOriginal", "Search hatası: ${e.message}")
+            emptyList()
+        }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
@@ -143,25 +220,25 @@ class DiziPalOriginal : MainAPI() {
             url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
         ).document
 
-        val title = document.selectFirst("h1")?.text()?.substringBefore(" İzle")?.substringBefore(" izle")?.trim()
+        val title = document.selectFirst("div.flex h2, h1")?.text()?.substringBefore(" İzle")?.substringBefore(" izle")?.trim()
             ?: document.selectFirst("meta[property='og:title']")?.attr("content")?.substringBefore(" İzle")?.substringBefore(" izle")?.trim()
             ?: return null
 
         val poster = fixUrlNull(
-            document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("data-src")?.takeIf { it.isNotEmpty() }
-                ?: document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("src")
+            document.selectFirst("div.page-top img[alt]")?.attr("src")
+                ?: document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("data-src")
                 ?: document.selectFirst("meta[property='og:image']")?.attr("content")
-                ?: document.selectFirst("div.page-top img[alt]")?.attr("src")
         )
 
         val year = document.selectXpath("//div[text()='Yıl']//following-sibling::div").text().trim().toIntOrNull()
             ?: Regex("""\((\d{4})\)""").find(document.title())?.groupValues?.get(1)?.toIntOrNull()
-        val description = document.selectFirst("div.summary p, p.description, meta[name='description']")?.attr("content")?.takeIf { it.isNotEmpty() }
-            ?: document.selectFirst("div.summary p")?.text()?.trim()
-        val tags = document.select("a[href*='/kategori/'], a[href*='/tur/']").map { it.text().trim() }.filter { it.isNotEmpty() }.distinct()
+        val description = document.selectFirst("div.summary p, meta[name='description']")?.text()?.trim()
+            ?: document.selectFirst("meta[name='description']")?.attr("content")
+        val tags = document.selectXpath("//div[text()='Kategoriler']//following-sibling::div").text().trim().split(" ").map { it.trim() }.filter { it.isNotEmpty() }
+            .ifEmpty { document.select("a[href*='/tur/'], a[href*='/kategori/']").map { it.text().trim() } }
         val duration = Regex("(\\d+)").find(document.selectXpath("//div[text()='Süre']//following-sibling::div").text())?.value?.toIntOrNull()
 
-        if (url.contains("/film/")) {
+        if (url.contains("/movies/") || url.contains("/film/")) {
             return newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
                 this.year      = year
@@ -171,22 +248,23 @@ class DiziPalOriginal : MainAPI() {
             }
         }
 
-        val episodes = document.select("a.dp-detail-episode, a[href*='/sezon/']").mapNotNull { element ->
-            val href = fixUrlNull(element.attr("href")) ?: return@mapNotNull null
-            val match = Regex("""(\d+)-sezon/(\d+)-bolum""").find(href)
-                ?: Regex("""(\d+)\.\s*Sezon\s*(\d+)\.\s*Bölüm""", RegexOption.IGNORE_CASE).find(element.text())
+        val episodeElements = document.select("div.relative.w-full.flex.items-start.gap-4, a.dp-detail-episode, a[href*='/episode/']")
+        val episodes = episodeElements.mapNotNull { element ->
+            val linkElement = if (element.tagName() == "a") element else element.selectFirst("a[data-dizipal-pageloader], a[href]") ?: return@mapNotNull null
+            val epHref = fixUrlNull(linkElement.attr("href")) ?: return@mapNotNull null
+            val epName = linkElement.selectFirst("h2, small, strong")?.text()?.trim() ?: "Bölüm"
 
-            val season = match?.groupValues?.get(1)?.toIntOrNull()
-            val episode = match?.groupValues?.get(2)?.toIntOrNull()
+            val infoText = linkElement.selectFirst("div.text-white.text-sm.opacity-80")?.text()?.trim() ?: element.text().trim()
 
-            val epName = element.selectFirst("small")?.text()?.trim()
-                ?: element.selectFirst("strong")?.text()?.trim()
-                ?: element.text().trim()
+            val epSeason = Regex("""(\d+)\.\s*Sezon""").find(infoText)?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("""(\d+)-sezon""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
+            val epEpisode = Regex("""(\d+)\.\s*Bölüm""").find(infoText)?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("""(\d+)-bolum""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
 
-            newEpisode(href) {
+            newEpisode(epHref) {
                 this.name    = epName
-                this.season  = season
-                this.episode = episode
+                this.episode = epEpisode
+                this.season  = epSeason
             }
         }.distinctBy { it.data }
 
