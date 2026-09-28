@@ -95,11 +95,8 @@ class DiziPal : MainAPI() {
 
             // 1. HTML içindeki mevcut dizileri / filmleri al
             if (!request.data.contains("/kanal/") || page == 1) {
-                if (request.data.contains("/yabanci-dizi-izle") || request.data.contains("/hd-film-izle") || request.data.contains("/yeni-eklenen-bolumler")) {
-                    home.addAll(document.select("div.new-added-list div.bg-\\[\\#22232a\\], a.dp-episode").mapNotNull { it.sonBolumler() })
-                }
-                
-                home.addAll(document.select("div.bg-\\[\\#22232a\\], article.dp-card, div.dp-card").mapNotNull { it.diziler() })
+                val cardElements = document.select("a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, div.dp-card, div.bg-\\[\\#22232a\\]")
+                home.addAll(cardElements.mapNotNull { it.diziler() })
             }
 
             // 2. Eğer bir kanal sayfasındaysak API'den verileri çek
@@ -133,7 +130,7 @@ class DiziPal : MainAPI() {
                     if (!htmlNode.isMissingNode) {
                         val htmlContent = htmlNode.asText()
                         val parsedDoc = Jsoup.parse(htmlContent)
-                        val apiResults = parsedDoc.select("div.bg-\\[\\#22232a\\], article.dp-card, div.dp-card").mapNotNull { it.diziler() }
+                        val apiResults = parsedDoc.select("a[data-dizipal-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, div.dp-card, div.bg-\\[\\#22232a\\]").mapNotNull { it.diziler() }
 
                         apiResults.forEach { res ->
                             if (home.none { it.url == res.url }) {
@@ -153,37 +150,27 @@ class DiziPal : MainAPI() {
         return newHomePageResponse(request.name, distinctHome, hasNext = distinctHome.isNotEmpty())
     }
 
-    private fun Element.sonBolumler(): SearchResponse? {
-        val name = this.selectFirst("strong")?.text()?.trim()
-            ?: this.selectFirst("img")?.attr("alt")?.trim() ?: return null
-        val episode = (this.selectFirst("div.episode")?.text()
-            ?: this.selectFirst("span.dp-episode-copy span")?.text())?.trim()
-            ?.replace(". Sezon ", "x")?.replace(". Bölüm", "") ?: ""
-        val title = if (episode.isNotEmpty() && episode != name) "$name $episode" else name
-
-        val href = fixUrlNull(this.selectFirst("a")?.attr("href") ?: this.attr("href")) ?: return null
-        val posterUrl = fixUrlNull(
-            this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotEmpty() }
-                ?: this.selectFirst("img")?.attr("src")
-        )
-
-        val cleanHref = href.substringBefore("/sezon").substringBefore("/bolum").substringBefore("/episode")
-        return newTvSeriesSearchResponse(title, cleanHref, TvType.TvSeries) {
-            this.posterUrl = posterUrl
-        }
-    }
-
     private fun Element.diziler(): SearchResponse? {
-        val title = (this.selectFirst("h3 a, h2 a, h3, h2")?.text()
-            ?: this.selectFirst("img")?.attr("alt"))?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val aTag = if (this.tagName() == "a") this else this.selectFirst("a[href]") ?: return null
+        val href = fixUrlNull(aTag.attr("href")) ?: return null
 
-        val href = fixUrlNull(this.selectFirst("a")?.attr("href") ?: this.attr("href")) ?: return null
+        if (href.isBlank() || href.endsWith("/kanal/") || href.endsWith("/yabanci-dizi-izle") || href.endsWith("/hd-film-izle")) return null
+
+        val imgEl = this.selectFirst("img") ?: aTag.selectFirst("img")
+        val rawTitle = (this.selectFirst("h2, h3, h4")?.text()
+            ?: imgEl?.attr("alt")
+            ?: aTag.attr("title")
+            ?: this.attr("title")).toString().trim()
+
+        val title = rawTitle.removeSuffix(" izle").removeSuffix(" İzle").trim()
+        if (title.isBlank()) return null
+
         val posterUrl = fixUrlNull(
-            this.selectFirst("img")?.attr("data-src")?.takeIf { it.isNotEmpty() }
-                ?: this.selectFirst("img")?.attr("src")
+            imgEl?.attr("data-src")?.takeIf { it.isNotEmpty() && !it.startsWith("data:image") }
+                ?: imgEl?.attr("src")?.takeIf { !it.startsWith("data:image") }
         )
 
-        val isMovie = href.contains("/film/") || href.contains("/movies/")
+        val isMovie = href.contains("/movies/") || href.contains("/film/")
         return if (isMovie) {
             newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
         } else {
@@ -268,7 +255,7 @@ class DiziPal : MainAPI() {
                 this.duration  = duration
             }
         } else {
-            val episodeElements = document.select("div.relative.w-full.flex.items-start.gap-4, a.dp-detail-episode, a[href*='/episode/']")
+            val episodeElements = document.select("div.relative.w-full.flex.items-start.gap-4, a.dp-detail-episode, a[href*='/episode/'], a[href*='/bolum/']")
             val episodes = episodeElements.mapNotNull { element ->
                 val linkElement = if (element.tagName() == "a") element else element.selectFirst("a[data-dizipal-pageloader], a[href]") ?: return@mapNotNull null
                 val epHref = fixUrlNull(linkElement.attr("href")) ?: return@mapNotNull null
@@ -278,8 +265,10 @@ class DiziPal : MainAPI() {
 
                 val epSeason = Regex("""(\d+)\.\s*Sezon""").find(infoText)?.groupValues?.get(1)?.toIntOrNull()
                     ?: Regex("""(\d+)-sezon""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""(\d+)x\d+""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
                 val epEpisode = Regex("""(\d+)\.\s*Bölüm""").find(infoText)?.groupValues?.get(1)?.toIntOrNull()
                     ?: Regex("""(\d+)-bolum""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""\d+x(\d+)""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
 
                 newEpisode(epHref) {
                     this.name    = epName
