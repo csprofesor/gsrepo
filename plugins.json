@@ -557,7 +557,7 @@
     "fileHash": "sha256-047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=251c192410f7ff933efcf0b2910454081bf4d380baf20c06001a5e1bc0b31f71",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=1a5fb05de10f52d1ed41baa57f267ef77f79a3219900cd6ff15c5989aeb661bf",
     "status": 1,
     "version": 21,
     "name": "WebteIzle",
@@ -566,7 +566,7 @@
       "csprofesor"
     ],
     "description": "Her türlü filmi ister dublaj ister altyazılı, en kaliteli bir şekilde izleyebileceğiniz arşivi en geniş gerçek film izleme siteniz.",
-    "fileSize": 24288,
+    "fileSize": 26695,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -574,7 +574,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=webteizle3.xyz&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-251c192410f7ff933efcf0b2910454081bf4d380baf20c06001a5e1bc0b31f71"
+    "fileHash": "sha256-1a5fb05de10f52d1ed41baa57f267ef77f79a3219900cd6ff15c5989aeb661bf"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/XPrime.cs3?v=e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a",
