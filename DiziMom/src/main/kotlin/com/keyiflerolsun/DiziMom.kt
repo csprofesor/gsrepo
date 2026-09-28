@@ -89,55 +89,61 @@ class DiziMom : MainAPI() {
         return newHomePageResponse(request.name, home)
     }
 
-    private suspend fun Element.sonBolumler(): SearchResponse? {
-        val titleEl = if (this.tagName() == "a") this else (this.selectFirst("div.episode-name a, div.title a, h2 a, h3 a, a") ?: this)
+    private fun Element.sonBolumler(): SearchResponse? {
+        val titleEl = this.select("div.episode-name a, div.title a, h2 a, h3 a, a")
+            .firstOrNull { it.text().substringBefore(" izle").trim().isNotBlank() }
+            ?: this
+
         val rawName = titleEl.text().substringBefore(" izle").trim()
             .ifBlank { titleEl.attr("title").substringBefore(" izle").trim() }
             .ifBlank { this.attr("title").substringBefore(" izle").trim() }
             .ifBlank { return null }
 
-        val title   = rawName.replace(Regex("""\s*\d+\.\s*Sezon\s*\d+\.\s*Bölüm""", RegexOption.IGNORE_CASE), "")
+        val title = rawName.replace(Regex("""\s*\d+\.\s*Sezon\s*\d+\.\s*Bölüm""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*\d+x\d+""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*\d+\.\s*Bölüm""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*\d+\.\s*Sezon""", RegexOption.IGNORE_CASE), "")
             .trim()
             .ifBlank { rawName }
 
-        val epHref    = fixUrlNull(titleEl.attr("href").takeIf { it.isNotBlank() } ?: this.attr("href")) ?: return null
-        val posterUrl = this.posterUrl() ?: titleEl.posterUrl()
+        val epHref = fixUrlNull(
+            this.selectFirst("div.episode-name a, a[href]")?.attr("href")
+                ?: titleEl.attr("href")
+        ) ?: return null
 
-        val href = try {
-            val epDoc = app.get(epHref, interceptor = interceptor).document
-            fixUrlNull(epDoc.selectFirst("div#benzerli a, div.benzerli a, a.series-link, div.series-title a, div.dizi-link a, .srelacionados a, .infox a")?.attr("href")) ?: epHref
-        } catch (_: Exception) {
-            epHref
-        }
+        val posterUrl = this.posterUrl() ?: titleEl.posterUrl()
 
         val ratingStr = this.selectFirst("span.imdb, div.imdb, span.puan, div.puan, span.score, .label-imdb")?.text()?.trim()
             ?: Regex("""(?i)(?:imdb|puan)\s*:?\s*([0-9]+(?:[.,][0-9]+)?)""").find(this.text())?.groupValues?.get(1)
 
-        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+        return newTvSeriesSearchResponse(title, epHref, TvType.TvSeries) {
             this.posterUrl = posterUrl
             this.score     = Score.from10(ratingStr)
         }
     }
 
     private fun Element.diziler(): SearchResponse? {
-        val titleEl = if (this.tagName() == "a") this else (this.selectFirst("div.categorytitle a, div.episode-name a, div.title a, h2 a, h3 a, a.title, header a, .entry-title a, a") ?: this)
-        val title = titleEl.text().substringBefore(" izle").trim()
-            .ifBlank { null }
-            ?: titleEl.attr("title").substringBefore(" izle").trim()
-            .ifBlank { null }
-            ?: this.selectFirst("img")?.attr("alt")?.substringBefore(" izle")?.trim()
-            ?.ifBlank { null }
-            ?: this.attr("title").substringBefore(" izle").trim()
-            .ifBlank { null }
-            ?: return null
+        val titleEl = this.select("div.categorytitle a, div.episode-name a, div.title a, h2 a, h3 a, a.title, header a, .entry-title a, h2, h3, a")
+            .firstOrNull { it.text().substringBefore(" izle").trim().isNotBlank() }
+            ?: this.selectFirst("a[title]")
+            ?: this
+
+        var title = titleEl.text().substringBefore(" izle").trim()
+        if (title.isBlank()) {
+            title = titleEl.attr("title").substringBefore(" izle").trim()
+        }
+        if (title.isBlank()) {
+            title = this.selectFirst("img")?.attr("alt")?.substringBefore(" izle")?.trim() ?: ""
+        }
+        if (title.isBlank()) {
+            title = this.attr("title").substringBefore(" izle").trim()
+        }
+        if (title.isBlank()) return null
 
         val href = fixUrlNull(
-            titleEl.attr("href").takeIf { it.isNotBlank() }
-                ?: this.attr("href").takeIf { it.isNotBlank() }
-                ?: this.selectFirst("a")?.attr("href")
+            this.selectFirst("div.categorytitle a, div.cat-img a, a[href]")?.attr("href")
+                ?: titleEl.attr("href").takeIf { it.isNotBlank() }
+                ?: this.attr("href")
         ) ?: return null
 
         val posterUrl = this.posterUrl() ?: titleEl.posterUrl()
@@ -160,9 +166,19 @@ class DiziMom : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url, interceptor = interceptor).document
+        var document = app.get(url, interceptor = interceptor).document
 
-        val title       = document.selectFirst("div.title h1, h1.entry-title, h1.title, h1, div.categorytitle")?.text()?.substringBefore(" izle")?.trim() ?: return null
+        val seriesLink = document.selectFirst("div#benzerli a, div.benzerli a, a.series-link, div.series-title a, div.dizi-link a")?.attr("href")
+        if (!seriesLink.isNullOrEmpty()) {
+            val seriesUrl = fixUrlNull(seriesLink)
+            if (seriesUrl != null && seriesUrl != url) {
+                try {
+                    document = app.get(seriesUrl, interceptor = interceptor).document
+                } catch (_: Exception) {}
+            }
+        }
+
+        val title       = document.selectFirst("div.title h1, h1.entry-title, h1.title, h1, div.categorytitle, h2.title")?.text()?.substringBefore(" izle")?.trim() ?: return null
         val poster      = document.selectFirst("div.category_image, div.poster, div.cat-img, div.featured-image, div.single-poster")?.posterUrl()
             ?: document.posterUrl()
         val year        = document.selectXpath("//div[span[contains(text(), 'Yapım Yılı')]]").text().substringAfter("Yapım Yılı : ").trim().toIntOrNull()
@@ -191,11 +207,16 @@ class DiziMom : MainAPI() {
             }
         }
 
-        val episodes    = document.select("div.bolumust, div.episode-item, li.bolum, div.episode-list a, div.bolumler a, table.episodes tr").mapNotNull {
-            val epName    = it.selectFirst("div.baslik, span.title, a, .episode-title")?.text()?.trim() ?: it.text().trim().takeIf { t -> t.isNotBlank() } ?: return@mapNotNull null
+        val episodes    = document.select("div.bolumust, div.episode-item, li.bolum, div.episode-list a, div.bolumler a, table.episodes tr, div.single-item, a[href*='-sezon-'][href*='-bolum']").mapNotNull {
+            val epName    = it.selectFirst("div.baslik, span.title, a, .episode-title")?.text()?.trim()
+                ?: it.text().trim().takeIf { t -> t.isNotBlank() }
+                ?: return@mapNotNull null
             val epHref    = fixUrlNull(it.selectFirst("a")?.attr("href") ?: it.attr("href")) ?: return@mapNotNull null
             val epEpisode = Regex("""(\d+)\.\s*Bölüm""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull()
-            val epSeason  = Regex("""(\d+)\.\s*Sezon""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                ?: Regex("""(\d+)x(\d+)""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(2)?.toIntOrNull()
+            val epSeason  = Regex("""(\d+)\.\s*Sezon""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("""(\d+)x(\d+)""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull()
+                ?: 1
 
             newEpisode(epHref) {
                 this.name    = epName.substringBefore(" izle").replace(title, "", ignoreCase = true).trim()
