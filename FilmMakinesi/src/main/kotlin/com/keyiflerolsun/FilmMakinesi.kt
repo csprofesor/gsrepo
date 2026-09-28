@@ -27,9 +27,18 @@ class FilmMakinesi : MainAPI() {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request  = chain.request()
             val response = chain.proceed(request)
-            val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
+            val body     = response.peekBody(1024 * 1024).string()
+            val doc      = Jsoup.parse(body)
 
-            if (doc.html().contains("Just a moment")) {
+            if (response.code == 403 || response.code == 503 ||
+                response.header("cf-mitigated") != null ||
+                body.contains("Just a moment", ignoreCase = true) ||
+                body.contains("Checking your browser", ignoreCase = true) ||
+                body.contains("cf-challenge", ignoreCase = true) ||
+                body.contains("turnstile", ignoreCase = true) ||
+                doc.title().contains("Just a moment", ignoreCase = true) ||
+                doc.title().contains("Attention Required", ignoreCase = true)
+            ) {
                 return cloudflareKiller.intercept(chain)
             }
 
@@ -38,21 +47,25 @@ class FilmMakinesi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
+        "${mainUrl}/" to "Ana Sayfa",
         "${mainUrl}/filmler-1/" to "Son Eklenen Filmler",
-        "${mainUrl}/tur/aksiyon-fmy54y/film/" to "Aksiyon Filmleri",
-        "${mainUrl}/yabanci-dizi-izle-1/" to "Diziler",
-        "${mainUrl}/yil/2026-fmfbkb/film/" to "2026 Filmleri"
+        "${mainUrl}/yabanci-dizi-izle-1/" to "Diziler"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) request.data else "${request.data.removeSuffix("/")}/sayfa/$page/"
-        val doc = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
-        val home = parseHomePage(doc)
-        return newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
+        return try {
+            val url = if (page <= 1) request.data else "${request.data.removeSuffix("/")}/sayfa/$page/"
+            val doc = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
+            val home = parseHomePage(doc)
+            newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
+        } catch (e: Exception) {
+            Log.e(name, "getMainPage failed: ${e.message}")
+            newHomePageResponse(request.name, emptyList(), hasNext = false)
+        }
     }
 
     private fun parseHomePage(doc: Document): List<SearchResponse> {
-        return doc.select("a.item, a.slide, div.item-relative a.item")
+        return doc.select("a.item, a.slide, div.item-relative a.item, div.movie-box a, .item-movie a, article a")
             .mapNotNull { parseSearchElement(it) }
             .distinctBy { it.url }
     }
@@ -61,18 +74,18 @@ class FilmMakinesi : MainAPI() {
         val link = if (element.tagName() == "a") element else element.selectFirst("a") ?: return null
         val href = fixUrlNull(link.attr("href")) ?: return null
         val title = element.attr("data-title").ifEmpty { null }
-            ?: element.selectFirst(".title, .item-title, h4")?.text()?.trim()
+            ?: element.selectFirst(".title, .item-title, h4, h3, .movie-title, .name")?.text()?.trim()
             ?: link.attr("title").ifEmpty { null }
             ?: element.selectFirst("img")?.attr("alt")?.trim()
             ?: return null
 
         val poster = element.selectFirst("img")?.let {
-            val src = it.attr("src").ifEmpty { it.attr("data-src") }
+            val src = it.attr("src").ifEmpty { it.attr("data-src") }.ifEmpty { it.attr("data-original") }
             fixUrlNull(src)
         }
 
         val score = element.attr("data-score").ifEmpty { null }
-            ?: element.selectFirst(".rating, .imdb-score span")?.text()?.trim()
+            ?: element.selectFirst(".rating, .imdb-score span, .imdb")?.text()?.trim()
 
         return if (href.contains("/dizi/")) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
@@ -90,7 +103,7 @@ class FilmMakinesi : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         return try {
             val doc = app.get("${mainUrl}/arama/?s=$query", referer = "${mainUrl}/", interceptor = interceptor).document
-            doc.select("a.item, div.item-relative a.item")
+            doc.select("a.item, div.item-relative a.item, div.movie-box a, .item-movie a, article a")
                 .mapNotNull { parseSearchElement(it) }
                 .distinctBy { it.url }
         } catch (_: Exception) {
@@ -108,14 +121,15 @@ class FilmMakinesi : MainAPI() {
         }?.replace(" - FilmMakinesi", "")?.replace(" izle", "")?.trim() ?: return null
 
         val poster = fixUrlNull(doc.selectFirst("meta[property='og:image']")?.attr("content"))
-        val description = doc.selectFirst("meta[property='og:description'], div.description, div.info-content .description")?.let {
+            ?: fixUrlNull(doc.selectFirst("div.poster img, .movie-poster img")?.attr("src"))
+        val description = doc.selectFirst("meta[property='og:description'], div.description, div.info-content .description, .plot")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text().trim()
         }
-        val year = doc.selectFirst("div.info span:first-child, span.year")?.text()?.filter { it.isDigit() }?.take(4)?.toIntOrNull()
-        val score = doc.selectFirst("div.imdb-score span, .rating")?.text()?.trim()
+        val year = doc.selectFirst("div.info span:first-child, span.year, .year")?.text()?.filter { it.isDigit() }?.take(4)?.toIntOrNull()
+        val score = doc.selectFirst("div.imdb-score span, .rating, .imdb")?.text()?.trim()
 
         if (url.contains("/dizi/")) {
-            val episodes = doc.select("a[href*='bolum'], div.episodes a").mapNotNull { a ->
+            val episodes = doc.select("a[href*='bolum'], div.episodes a, .episode-list a").mapNotNull { a ->
                 val epHref = fixUrlNull(a.attr("href")) ?: return@mapNotNull null
                 val epTitle = a.text().trim()
                 val season = Regex("""(\d+)\.\s*Sezon""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
@@ -152,12 +166,12 @@ class FilmMakinesi : MainAPI() {
     ): Boolean {
         val doc = app.get(data, referer = mainUrl, interceptor = interceptor).document
         val candidates = doc.select("iframe").mapNotNull {
-            val src = it.attr("data-src").ifEmpty { it.attr("src") }
+            val src = it.attr("data-src").ifEmpty { it.attr("src") }.ifEmpty { it.attr("data-lazy-src") }
             fixUrlNull(src)?.takeUnless { it.contains("youtube.com") || it.contains("youtu.be") }
         }.distinct().toMutableList()
 
-        doc.select(".video-parts a[data-video_url]").forEach {
-            val src = fixUrlNull(it.attr("data-video_url"))
+        doc.select(".video-parts a[data-video_url], .parts a[data-src], .player-option[data-url]").forEach {
+            val src = fixUrlNull(it.attr("data-video_url").ifEmpty { it.attr("data-src") }.ifEmpty { it.attr("data-url") })
             if (src != null && !candidates.contains(src)) candidates.add(0, src)
         }
 

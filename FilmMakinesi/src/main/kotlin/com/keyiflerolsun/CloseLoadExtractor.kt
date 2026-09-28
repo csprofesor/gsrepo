@@ -21,9 +21,18 @@ open class CloseLoadExtractor : ExtractorApi() {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request  = chain.request()
             val response = chain.proceed(request)
-            val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
+            val body     = response.peekBody(1024 * 1024).string()
+            val doc      = Jsoup.parse(body)
 
-            if (doc.html().contains("Just a moment")) {
+            if (response.code == 403 || response.code == 503 ||
+                response.header("cf-mitigated") != null ||
+                body.contains("Just a moment", ignoreCase = true) ||
+                body.contains("Checking your browser", ignoreCase = true) ||
+                body.contains("cf-challenge", ignoreCase = true) ||
+                body.contains("turnstile", ignoreCase = true) ||
+                doc.title().contains("Just a moment", ignoreCase = true) ||
+                doc.title().contains("Attention Required", ignoreCase = true)
+            ) {
                 return cloudflareKiller.intercept(chain)
             }
 
