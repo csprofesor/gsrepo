@@ -21,6 +21,7 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
@@ -266,17 +267,38 @@ class DiziGom : MainAPI() {
             val playerUrl = extractPlayerUrl(document)
             if (!playerUrl.isNullOrBlank()) {
                 Log.d("DiziGom", "Found player iframe URL: $playerUrl")
-                DiziGomPlugin.pluginContext?.let { ctx ->
-                    val webExtractor = DiziGomWebViewExtractor(ctx, name)
-                    runCatching {
-                        webExtractor.getUrl(playerUrl, data, subtitleCallback) { link ->
-                            callback(link)
-                            found = true
+                
+                val playerHtml = runCatching { app.get(playerUrl, referer = "$mainUrl/", interceptor = interceptor).text }.getOrNull()
+                val streamUrl = playerHtml?.let { extractPlayerStream(it) }
+                
+                if (!streamUrl.isNullOrBlank()) {
+                    Log.d("DiziGom", "Extracted stream from HTML: $streamUrl")
+                    callback(
+                        newExtractorLink(source = name, name = "DiziGom", url = streamUrl,
+                            type = if (streamUrl.contains(".m3u8", true) || streamUrl.contains("stream.php", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
+                            val domain = Regex("""(https?://[^/]+)""").find(playerUrl)?.groupValues?.get(1) ?: "https://play2.pilavyerplay.top"
+                            referer = playerUrl
+                            headers = mapOf(
+                                "Referer" to playerUrl,
+                                "Origin" to domain
+                            )
+                            quality = Qualities.P1080.value
+                        }
+                    )
+                    found = true
+                } else {
+                    DiziGomPlugin.pluginContext?.let { ctx ->
+                        val webExtractor = DiziGomWebViewExtractor(ctx, name)
+                        runCatching {
+                            webExtractor.getUrl(playerUrl, data, subtitleCallback) { link ->
+                                callback(link)
+                                found = true
+                            }
                         }
                     }
-                }
-                if (!found) {
-                    found = loadExtractor(playerUrl, data, subtitleCallback, callback)
+                    if (!found) {
+                        found = loadExtractor(playerUrl, data, subtitleCallback, callback)
+                    }
                 }
             }
 
