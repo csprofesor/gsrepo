@@ -224,7 +224,7 @@
     "fileHash": "sha256-56a7a34d7ab414da583a0cab8f44c77fe0110d0529b284b6e6c46db0cb8b32e1"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=68f6b9020f3edba3630a800c03ea4e7be4346ad4940970615599e74ed068b308",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=c58b747ccb56276e3cddf1c65601acb19bb107f6d2a5f4a6e691b18c24936e0b",
     "status": 1,
     "version": 109,
     "name": "DiziPal",
@@ -233,7 +233,7 @@
       "csprofesor"
     ],
     "description": "en yeni dizileri güvenli ve hızlı şekilde sunar.",
-    "fileSize": 29365,
+    "fileSize": 31834,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -242,10 +242,10 @@
     ],
     "iconUrl": "https://dizipal1563.com/assets/favicon/favicon-32x32.png?v=3",
     "apiVersion": 1,
-    "fileHash": "sha256-68f6b9020f3edba3630a800c03ea4e7be4346ad4940970615599e74ed068b308"
+    "fileHash": "sha256-c58b747ccb56276e3cddf1c65601acb19bb107f6d2a5f4a6e691b18c24936e0b"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=a4306749a2b9587b9c6c928b051126f9574e4b95e006b1f2b34840b7542fa795",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=34a0cb185aa9c0217b8239062554bfe38e80c5a9442014dc072be5c475fa4d43",
     "status": 1,
     "version": 92,
     "name": "DiziPalOriginal",
@@ -254,7 +254,7 @@
       "csprofesor"
     ],
     "description": "en yeni dizileri güvenli ve hızlı şekilde sunar.",
-    "fileSize": 27462,
+    "fileSize": 31231,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -263,7 +263,7 @@
     ],
     "iconUrl": "https://chessplyimages.cfd/uploads/site/favicon-32x32.png",
     "apiVersion": 1,
-    "fileHash": "sha256-a4306749a2b9587b9c6c928b051126f9574e4b95e006b1f2b34840b7542fa795"
+    "fileHash": "sha256-34a0cb185aa9c0217b8239062554bfe38e80c5a9442014dc072be5c475fa4d43"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=ca536a2771cf0576d11098f491756d771d56711eb8f13d8a6c7eb8c3f5a5cb2f",
