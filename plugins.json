@@ -597,7 +597,7 @@
     "fileHash": "sha256-e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3?v=04dad114d0a47829f880c292be64540bfdebe33ffae6f21533e27e8adb852bae",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3?v=8a10e48c7e73ca491edf3d4576719435944fe1a0a87266b813ede6f97c36015c",
     "status": 1,
     "version": 8,
     "name": "YabanciDizi",
@@ -606,7 +606,7 @@
       "csprofesor"
     ],
     "description": "Son çıkan yabancı dizi ve filmleri yabancidizi' de izle. En yeni yabancı film ve diziler, türkçe altyazılı yada dublaj olarak 1080p kalitesinde hd izle.",
-    "fileSize": 49744,
+    "fileSize": 49866,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -614,6 +614,6 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=yabancidizi.tv&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-04dad114d0a47829f880c292be64540bfdebe33ffae6f21533e27e8adb852bae"
+    "fileHash": "sha256-8a10e48c7e73ca491edf3d4576719435944fe1a0a87266b813ede6f97c36015c"
   }
 ]
