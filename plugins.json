@@ -599,7 +599,7 @@
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3",
     "status": 1,
-    "version": 8,
+    "version": 9,
     "name": "YabanciDizi",
     "internalName": "YabanciDizi",
     "authors": [
@@ -612,7 +612,7 @@
     "tvTypes": [
       "TvSeries"
     ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=yabancidizi.tv&sz=%size%",
+    "iconUrl": "https://www.google.com/s2/favicons?domain=yabancidizi.news&sz=%size%",
     "apiVersion": 1,
     "fileHash": "sha256-ff37203f3d0646e1f524b9359f3f07af047dbacc9b2a7cdba5381413e6f97494"
   }
