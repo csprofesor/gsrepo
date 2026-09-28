@@ -183,7 +183,7 @@
     "fileHash": "sha256-25a5164a8a92dece1f5993e4ddd7be8399f53c92ebf7448177712fa51b853827"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMag.cs3?v=171ff4d0b079214b2ec88ad8ead2c7d83cf4bbe34b181689c9ba238027756812",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMag.cs3?v=47f4d42bae661a83451e3632ed90030d7ff5ba4262b989948a59f04446ad9e7f",
     "status": 1,
     "version": 22,
     "name": "DiziMag",
@@ -192,7 +192,7 @@
       "csprofesor"
     ],
     "description": "En son çıkan yabancı dizi ve filmleri DiziMag farkıyla full hd 1080p kalitede izle. Dizimag Geniş ve güncel arşiviyle dizi ve filmlerin tadını çıkartın.",
-    "fileSize": 26617,
+    "fileSize": 27035,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -201,7 +201,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=dizimag.one&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-171ff4d0b079214b2ec88ad8ead2c7d83cf4bbe34b181689c9ba238027756812"
+    "fileHash": "sha256-47f4d42bae661a83451e3632ed90030d7ff5ba4262b989948a59f04446ad9e7f"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMom.cs3?v=56a7a34d7ab414da583a0cab8f44c77fe0110d0529b284b6e6c46db0cb8b32e1",
