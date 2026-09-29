@@ -32,12 +32,19 @@ class DiziBox : MainAPI() {
         "dbxu"          to "1744054959089"
     )
 
+    companion object {
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
     private val cloudflareKiller by lazy { CloudflareKiller() }
     private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
 
     class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
-            val request    = chain.request()
+            val request = chain.request().newBuilder()
+                .header("User-Agent", USER_AGENT)
+                .build()
+            
             val response   = chain.proceed(request)
             val bodySample = response.peekBody(1024 * 1024).string()
             if (
@@ -45,7 +52,7 @@ class DiziBox : MainAPI() {
                 || bodySample.contains("cf-browser-verification")
                 || bodySample.contains("Checking your browser")
                 || bodySample.contains("just a moment", ignoreCase = true)
-                || response.code in listOf(403, 503, 429)
+                || bodySample.contains("DDoS protection by Cloudflare")
             ) {
                 response.close()
                 return cloudflareKiller.intercept(chain)
