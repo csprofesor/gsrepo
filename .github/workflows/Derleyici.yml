@@ -62,50 +62,99 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import hashlib, json
-          root = Path.cwd()
-          manifest = root / 'plugins.json'
+
+          builds_dir = Path.cwd()
+          src_dir = Path.cwd().parent / 'src'
+          manifest = builds_dir / 'plugins.json'
+          src_manifest = src_dir / 'plugins.json'
+
+          data = []
           if manifest.exists():
               try:
                   data = json.loads(manifest.read_text(encoding='utf-8'))
               except Exception:
                   data = []
-              if not isinstance(data, list):
-                  data = []
-              built = {p.stem: p for p in root.glob('*.cs3')}
-              data = [item for item in data if isinstance(item, dict) and item.get('internalName') in built]
-              for item in data:
-                  name = item.get('internalName')
-                  target = built[name]
-                  digest = hashlib.sha256(target.read_bytes()).hexdigest()
-                  item['fileSize'] = target.stat().st_size
-                  item['fileHash'] = f'sha256-{digest}'
-                  item['url'] = f'https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}?v={digest}'
-              manifest.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          src_data = []
+          if src_manifest.exists():
+              try:
+                  src_data = json.loads(src_manifest.read_text(encoding='utf-8'))
+              except Exception:
+                  src_data = []
+
+          if not isinstance(data, list):
+              data = []
+          if not isinstance(src_data, list):
+              src_data = []
+
+          # Map existing entries by internalName
+          entries = {item['internalName']: item for item in data if isinstance(item, dict) and 'internalName' in item}
+
+          # Merge entries from src/plugins.json
+          for item in src_data:
+              if isinstance(item, dict) and 'internalName' in item:
+                  name = item['internalName']
+                  if name not in entries:
+                      entries[name] = item
+
+          built = {p.stem: p for p in builds_dir.glob('*.cs3')}
+
+          final_data = []
+          for name, target in built.items():
+              if name in entries:
+                  item = entries[name]
+              else:
+                  item = {
+                      "url": f"https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}",
+                      "status": 1,
+                      "version": 1,
+                      "name": name,
+                      "internalName": name,
+                      "authors": ["csprofesor"],
+                      "description": f"{name} eklentisi",
+                      "repositoryUrl": "https://github.com/csprofesor/gsrepo",
+                      "language": "tr",
+                      "tvTypes": ["Movie", "TvSeries"],
+                      "iconUrl": f"https://www.google.com/s2/favicons?domain=github.com&sz=%size%",
+                      "apiVersion": 1
+                  }
+              digest = hashlib.sha256(target.read_bytes()).hexdigest()
+              item['fileSize'] = target.stat().st_size
+              item['fileHash'] = f'sha256-{digest}'
+              item['url'] = f'https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}?v={digest}'
+              final_data.append(item)
+
+          final_data.sort(key=lambda x: x.get('name', '').lower())
+          manifest.write_text(json.dumps(final_data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
           PY
+
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
           git add -A
           if git diff --cached --quiet; then
             echo "Yüklenecek değişiklik yok, atlanıyor."
           else
-            git commit -m "Yeni SinemaTvAz derlemesi: $GITHUB_SHA"
+            git commit -m "Otomatik eklenti derlemesi: $GITHUB_SHA"
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
             for deneme in 1 2 3; do
-              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
               git fetch origin builds
-              git reset --hard HEAD
-              if ! git rebase origin/builds; then
-                echo "::error::origin/builds üzerine rebase başarısız oldu. Uzak dalda çakışan güncellemeler var; üzerine yazmamak için durduruluyor."
+              if git rebase origin/builds; then
+                if git push origin HEAD:builds; then
+                  echo "builds dalına başarıyla yüklendi."
+                  break
+                fi
+              else
+                echo "Rebase çakışması, origin/builds üzerine soft-reset ile yeniden deneniyor..."
                 git rebase --abort || true
-                exit 1
+                git fetch origin builds
+                git reset --soft origin/builds
+                git add -A
+                git commit -m "Otomatik eklenti derlemesi: $GITHUB_SHA" || true
+                if git push origin HEAD:builds; then
+                  echo "builds dalına soft-reset sonrası başarıyla yüklendi."
+                  break
+                fi
               fi
-              if git push origin HEAD:builds; then
-                break
-              fi
-              if [ "$deneme" -eq 3 ]; then
-                echo "::error::builds push, uzak dal sürekli güncellendiği için 3 denemede tamamlanamadı."
-                exit 1
-              fi
-              echo "builds push reddedildi (non-fast-forward), yeniden deneniyor ($deneme/3)..."
             done
           fi
 
