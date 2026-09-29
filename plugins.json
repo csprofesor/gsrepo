@@ -224,7 +224,7 @@
     "fileHash": "sha256-9ccb2b8fea28cd7b23947fb3c9379e9543bd74e4862ad2f2f9754b49126f0b05"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=85de620f6eab17032a17e556c84d07df00ba67832c468349e99981fa3d42318e",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=1e685e3bd6b22029a30c40d4a3a64f747466a12fff5985e5c7134c5edbddb4e7",
     "status": 1,
     "version": 109,
     "name": "DiziPal",
@@ -233,7 +233,7 @@
       "csprofesor"
     ],
     "description": "en yeni dizileri güvenli ve hızlı şekilde sunar.",
-    "fileSize": 34998,
+    "fileSize": 35007,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -242,7 +242,7 @@
     ],
     "iconUrl": "https://dizipal1563.com/assets/favicon/favicon-32x32.png?v=3",
     "apiVersion": 1,
-    "fileHash": "sha256-85de620f6eab17032a17e556c84d07df00ba67832c468349e99981fa3d42318e"
+    "fileHash": "sha256-1e685e3bd6b22029a30c40d4a3a64f747466a12fff5985e5c7134c5edbddb4e7"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=fa4e6f851f96b95b577de482910bc225ba108a050c11f201de5e8d759382c6e7",
