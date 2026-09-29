@@ -39,7 +39,7 @@ class DiziGom : MainAPI() {
     override val hasQuickSearch = false
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.TvSeries)
+    override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie, TvType.AsianDrama)
 
     private val cloudflareKiller by lazy { CloudflareKiller() }
     private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
@@ -81,6 +81,7 @@ class DiziGom : MainAPI() {
     private fun cleanUrl(value: String?): String? = value
         ?.replace("\\/", "/")
         ?.replace("\\u0026", "&")
+        ?.replace("&amp;", "&")
         ?.trim()
         ?.takeIf { it.isNotBlank() }
         ?.let { fixUrlNull(it) }
@@ -229,26 +230,51 @@ class DiziGom : MainAPI() {
         }
     }
 
-    private fun extractPlayerUrl(document: Document): String? {
-        return document.select("iframe[src], frame[src]")
-            .mapNotNull { cleanUrl(it.attr("src")) }
-            .firstOrNull { it.contains("s.php", true) || it.contains("pilayerplay", true) || it.contains("spidypro", true) || it.contains("embed", true) }
-            ?: document.select("iframe[src], frame[src]")
-                .mapNotNull { cleanUrl(it.attr("src")) }
-                .firstOrNull()
-            ?: Regex("https?://[^\\\"'\\s<>]+(?:/s\\.php\\?|/embed/|pilayerplay|spidypro)[^\\\"'\\s<>]+", RegexOption.IGNORE_CASE)
-                .find(document.html())?.value?.let { cleanUrl(it) }
+    private fun extractPlayerUrls(document: Document): List<String> {
+        val candidates = mutableListOf<String>()
+
+        document.select("iframe[src], iframe[data-src], iframe[data-lazy-src], frame[src]").forEach { element ->
+            val src = cleanUrl(
+                element.attr("src").takeIf { it.isNotBlank() }
+                    ?: element.attr("data-src").takeIf { it.isNotBlank() }
+                    ?: element.attr("data-lazy-src")
+            )
+            if (!src.isNullOrBlank()) {
+                candidates.add(src)
+            }
+        }
+
+        val htmlMatches = Regex(
+            """https?://[^\s"'<>]+(?:/s\.php|pilavyer|pilayer|spidypro|vidmoly|sibnet|fembed|dood|filemoon|vOE|streamtape)[^\s"'<>]*""",
+            RegexOption.IGNORE_CASE
+        ).findAll(document.html()).mapNotNull { cleanUrl(it.value) }
+
+        candidates.addAll(htmlMatches)
+
+        return candidates.distinct().filter { url ->
+            val lower = url.lowercase()
+            !lower.contains("youtube.com") &&
+            !lower.contains("youtu.be") &&
+            !lower.contains("google.com") &&
+            !lower.contains("facebook.com") &&
+            !lower.contains("disqus.com") &&
+            !lower.contains("wargamings.net") &&
+            !lower.endsWith(".js") &&
+            !lower.endsWith(".css") &&
+            !lower.endsWith(".png") &&
+            !lower.endsWith(".jpg")
+        }
     }
 
     private fun extractPlayerStream(html: String): String? {
         val stream = Regex(
-            "[\\\"']stream[\\\"']\\s*:\\s*[\\\"']([^\\\"']+)[\\\"']",
+            """["']stream["']\s*:\s*["']([^"']+)["']""",
             RegexOption.IGNORE_CASE
         ).find(html)?.groupValues?.getOrNull(1)
         if (!stream.isNullOrBlank()) return cleanUrl(stream)
 
         return Regex(
-            "https?://[^\\\"'\\s<>]+/api/stream\\.php(?:\\?[^\\\"'\\s<>]+)?",
+            """https?://[^\s"'<>]+/api/stream\.php[^\s"'<>]*""",
             RegexOption.IGNORE_CASE
         ).find(html)?.value?.let { cleanUrl(it) }
     }
@@ -264,23 +290,39 @@ class DiziGom : MainAPI() {
         val document = runCatching { app.get(data, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
 
         if (document != null) {
-            val playerUrl = extractPlayerUrl(document)
-            if (!playerUrl.isNullOrBlank()) {
-                Log.d("DiziGom", "Found player iframe URL: $playerUrl")
-                
+            val playerUrls = extractPlayerUrls(document)
+            Log.d("DiziGom", "Found player URLs (${playerUrls.size}): $playerUrls")
+
+            for (playerUrl in playerUrls) {
+                Log.d("DiziGom", "Processing player URL: $playerUrl")
+
+                if (playerUrl.contains("vidmoly", true) || playerUrl.contains("sibnet", true) ||
+                    playerUrl.contains("dood", true) || playerUrl.contains("filemoon", true) ||
+                    playerUrl.contains("fembed", true) || playerUrl.contains("streamtape", true)) {
+                    if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
+                        found = true
+                        continue
+                    }
+                }
+
                 val playerHtml = runCatching { app.get(playerUrl, referer = "$mainUrl/", interceptor = interceptor).text }.getOrNull()
                 val streamUrl = playerHtml?.let { extractPlayerStream(it) }
-                
+
                 if (!streamUrl.isNullOrBlank()) {
                     Log.d("DiziGom", "Extracted stream from HTML: $streamUrl")
+                    val domain = Regex("""(https?://[^/]+)""").find(playerUrl)?.groupValues?.get(1) ?: "https://play2.pilavyerplay.top"
                     callback(
-                        newExtractorLink(source = name, name = "DiziGom", url = streamUrl,
-                            type = if (streamUrl.contains(".m3u8", true) || streamUrl.contains("stream.php", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
-                            val domain = Regex("""(https?://[^/]+)""").find(playerUrl)?.groupValues?.get(1) ?: "https://play2.pilavyerplay.top"
+                        newExtractorLink(
+                            source = name,
+                            name = "DiziGom",
+                            url = streamUrl,
+                            type = if (streamUrl.contains(".m3u8", true) || streamUrl.contains("stream.php", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                        ) {
                             referer = playerUrl
                             headers = mapOf(
                                 "Referer" to playerUrl,
-                                "Origin" to domain
+                                "Origin" to domain,
+                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                             )
                             quality = Qualities.P1080.value
                         }
@@ -296,22 +338,33 @@ class DiziGom : MainAPI() {
                             }
                         }
                     }
+
                     if (!found) {
-                        found = loadExtractor(playerUrl, data, subtitleCallback, callback)
+                        if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
+                            found = true
+                        }
                     }
                 }
             }
 
             val directUrls = Regex(
-                "https?://[^\\\"'\\s<>]+(?:\\.m3u8(?:\\?[^\\\"'\\s<>]*)?|\\.mp4(?:\\?[^\\\"'\\s<>]*)?)",
+                """https?://[^\s"'<>]+(?:\.m3u8(?:\?[^\s"'<>]*)?|\.mp4(?:\?[^\s"'<>]*)?)""",
                 RegexOption.IGNORE_CASE
-            ).findAll(document.html()).map { cleanUrl(it.value) }.filterNotNull().distinct().toList()
+            ).findAll(document.html()).mapNotNull { cleanUrl(it.value) }.distinct().toList()
 
             for (stream in directUrls) {
                 callback(
-                    newExtractorLink(source = name, name = "DiziGom", url = stream,
-                        type = if (stream.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
+                    newExtractorLink(
+                        source = name,
+                        name = "DiziGom",
+                        url = stream,
+                        type = if (stream.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    ) {
                         referer = data
+                        headers = mapOf(
+                            "Referer" to data,
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                        )
                         quality = getQualityFromName(stream)
                     }
                 )

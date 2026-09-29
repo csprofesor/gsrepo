@@ -1,6 +1,6 @@
-version = 16
+version = 17
 
-// DiziGom v13 build
+// DiziGom v17 build
 
 cloudstream {
     authors = listOf("csprofesor")
@@ -15,7 +15,7 @@ cloudstream {
      * 3: Beta only
     **/
     status  = 1
-    tvTypes = listOf("TvSeries")
+    tvTypes = listOf("TvSeries", "Movie", "AsianDrama")
     iconUrl = "https://www.google.com/s2/favicons?domain=www.dizigom.love&sz=%size%"
 }
 
