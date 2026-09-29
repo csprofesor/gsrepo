@@ -1,7 +1,9 @@
 package com.gsrepo.hdfilmcehennemi
 
+import android.util.Base64
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -13,7 +15,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.ScriptableObject
-import java.util.Base64
 import java.util.regex.Pattern
 
 class RapidrameExtractor : ExtractorApi() {
@@ -80,7 +81,6 @@ class RapidrameExtractor : ExtractorApi() {
             val combinedJs = mockHeader + "\n" + scripts.joinToString("\n") + "\nextractedFile;"
 
             val rhino = Context.enter()
-            rhino.optimizationLevel = -1
             try {
                 val scope: ScriptableObject = rhino.initStandardObjects()
                 val result = rhino.evaluateString(scope, combinedJs, "JavaScript", 1, null)
@@ -122,7 +122,7 @@ class RapidrameExtractor : ExtractorApi() {
                     var padded = value
                     val missing = padded.length % 4
                     if (missing != 0) padded += "=".repeat(4 - missing)
-                    value = String(Base64.getDecoder().decode(padded), Charsets.ISO_8859_1)
+                    value = String(Base64.decode(padded, Base64.DEFAULT), Charsets.ISO_8859_1)
                 }
                 'v' -> value = value.reversed()
                 else -> {
@@ -224,7 +224,7 @@ class RapidrameExtractor : ExtractorApi() {
         Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]*?"label":"([^"]+)"""").findAll(html).forEach {
             val subUrl = it.groupValues[1].replace("""\/""", "/")
             val lang = it.groupValues[2]
-            subtitleCallback(SubtitleFile(lang, subUrl))
+            subtitleCallback(newSubtitleFile(lang, subUrl))
         }
     }
 }
