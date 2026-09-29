@@ -269,17 +269,30 @@ class HDFilmCehennemi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = app.get(data, referer = mainUrl, interceptor = interceptor).document
-        val iframes = doc.select("iframe").mapNotNull {
-            val src = it.attr("data-src").ifEmpty { it.attr("src") }
-            fixUrlNull(src)?.takeUnless { url -> url.contains("youtube.com") || url.contains("youtu.be") }
-        }.toMutableList()
+        val iframes = mutableListOf<String>()
 
-        // Check alternative video elements
-        doc.select("a.alternative-link[data-video], button[data-video]").forEach { btn ->
+        // 1. Extract direct iframe elements
+        doc.select("iframe").forEach { el ->
+            val src = el.attr("data-src").ifEmpty { el.attr("src") }
+            if (src.isNotEmpty() && !src.contains("youtube.com") && !src.contains("youtu.be")) {
+                fixUrlNull(src)?.let { iframes.add(it) }
+            }
+        }
+
+        // 2. Extract alternative player links/buttons with data-video or data-src
+        doc.select("a.alternative-link[data-video], button.alternative-link[data-video], [data-video]").forEach { btn ->
             val vid = btn.attr("data-video")
             if (vid.isNotEmpty()) {
-                val altUrl = "$mainUrl/video/$vid/"
-                iframes.add(altUrl)
+                val altEmbedUrl = "$mainUrl/video/$vid/"
+                iframes.add(altEmbedUrl)
+            }
+        }
+
+        // 3. Fallback: Search in script tags for embed player URLs
+        doc.select("script").forEach { s ->
+            val stext = s.data()
+            Regex("""https?://[^\s'"\\]+/(?:video/embed|embed|v)/[^\s'"\\]+""").findAll(stext).forEach { match ->
+                iframes.add(match.value)
             }
         }
 
@@ -288,7 +301,7 @@ class HDFilmCehennemi : MainAPI() {
 
         distinctIframes.forEach { iframe ->
             try {
-                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi") || iframe.contains("playmix")) {
+                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
                     RapidrameExtractor().getUrl(iframe, data, subtitleCallback) { link ->
                         found = true
                         callback(link)

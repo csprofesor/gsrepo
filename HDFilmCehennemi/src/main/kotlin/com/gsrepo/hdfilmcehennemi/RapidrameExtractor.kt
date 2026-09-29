@@ -2,11 +2,17 @@ package com.gsrepo.hdfilmcehennemi
 
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import okhttp3.Interceptor
+import okhttp3.Response
+import org.jsoup.Jsoup
+import org.mozilla.javascript.Context
+import org.mozilla.javascript.ScriptableObject
 import java.util.Base64
 import java.util.regex.Pattern
 
@@ -15,7 +21,79 @@ class RapidrameExtractor : ExtractorApi() {
     override val mainUrl = "https://hdfilmcehennemi.mobi"
     override val requiresReferer = true
 
-    private fun decode(jsCode: String, arrStr: String): String {
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    private class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val body = response.peekBody(1024 * 1024).string()
+            val doc = Jsoup.parse(body)
+
+            if (response.code == 403 || response.code == 503 ||
+                response.header("cf-mitigated") != null ||
+                body.contains("Just a moment", ignoreCase = true) ||
+                body.contains("Checking your browser", ignoreCase = true) ||
+                body.contains("cf-challenge", ignoreCase = true) ||
+                body.contains("turnstile", ignoreCase = true) ||
+                doc.title().contains("Just a moment", ignoreCase = true) ||
+                doc.title().contains("Attention Required", ignoreCase = true)
+            ) {
+                return cloudflareKiller.intercept(chain)
+            }
+
+            return response
+        }
+    }
+
+    private fun evaluateRhinoJs(html: String): String? {
+        return try {
+            val doc = Jsoup.parse(html)
+            val scripts = doc.select("script").mapNotNull { s ->
+                val text = s.data()
+                if (text.contains("jwplayer") || text.contains("function") || text.contains("var ")) text else null
+            }
+            if (scripts.isEmpty()) return null
+
+            val mockHeader = """
+                var window = globalThis;
+                var document = { getElementById: function() { return {}; }, cookie: "", addEventListener: function() {} };
+                var ${'$'} = function() { return { ready: function(){}, prepend: function(){}, on: function(){} }; };
+                ${'$'}.ajax = function(){};
+                var extractedFile = null;
+                function jwplayer() {
+                    return {
+                        setup: function(opts) {
+                            if (opts && opts.sources && opts.sources.length > 0) {
+                                extractedFile = opts.sources[0].file;
+                            }
+                        },
+                        on: function(){},
+                        once: function(){},
+                        addButton: function(){}
+                    };
+                }
+                jwplayer.key = "";
+            """.trimIndent()
+
+            val combinedJs = mockHeader + "\n" + scripts.joinToString("\n") + "\nextractedFile;"
+
+            val rhino = Context.enter()
+            rhino.optimizationLevel = -1
+            try {
+                val scope: ScriptableObject = rhino.initStandardObjects()
+                val result = rhino.evaluateString(scope, combinedJs, "JavaScript", 1, null)
+                result?.toString()?.takeIf { it.startsWith("http") && !it.equals("null", true) }
+            } finally {
+                Context.exit()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun decodeLegacy(jsCode: String, arrStr: String): String {
         val matcher = Pattern.compile("\"([^\"]+)\"").matcher(arrStr)
         val sb = StringBuilder()
         while (matcher.find()) sb.append(matcher.group(1))
@@ -90,31 +168,47 @@ class RapidrameExtractor : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val html = app.get(url, headers = mapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-            "Referer" to (referer ?: "https://www.hdfilmcehennemi.nl/")
-        )).text
+        val html = app.get(
+            url,
+            referer = referer ?: "https://www.hdfilmcehennemi.nl/",
+            headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            interceptor = interceptor
+        ).text
 
         var streamFound = false
 
-        // 1. Direct regex match for stream URL
-        val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(html)?.value
-        if (directMatch != null) {
-            val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/")
-            callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+        // 1. Evaluate JS code with Rhino
+        val rhinoStream = evaluateRhinoJs(html)
+        if (rhinoStream != null) {
+            val isM3u8 = rhinoStream.contains(".m3u8") || rhinoStream.contains("master.txt") || rhinoStream.contains("/hls/") || rhinoStream.contains("/txt/")
+            callback(newExtractorLink(name, name, rhinoStream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
                 this.referer = url
             })
             streamFound = true
         }
 
-        // 2. JS Array decode algorithm
+        // 2. Fallback: Direct regex match
+        if (!streamFound) {
+            val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(html)?.value
+            if (directMatch != null) {
+                val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/")
+                callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+                    this.referer = url
+                })
+                streamFound = true
+            }
+        }
+
+        // 3. Fallback: Legacy JS Array decode
         if (!streamFound) {
             val matcher = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]").matcher(html)
             while (matcher.find()) {
                 val arr = matcher.group(0) ?: continue
                 if (arr.contains(".jpg") || arr.contains(".png") || arr.contains(".webp")) continue
                 try {
-                    val stream = decode(html, arr)
+                    val stream = decodeLegacy(html, arr)
                     if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
                         val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/")
                         callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
@@ -126,7 +220,7 @@ class RapidrameExtractor : ExtractorApi() {
             }
         }
 
-        // 3. Extract subtitles
+        // Subtitles extraction
         Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]*?"label":"([^"]+)"""").findAll(html).forEach {
             val subUrl = it.groupValues[1].replace("""\/""", "/")
             val lang = it.groupValues[2]
