@@ -103,7 +103,7 @@
     "fileHash": "sha256-f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziBox.cs3?v=fc1d9f23e0364f5da23078056cc560e7c62a16bd0dfbe109fc1537e376e6797b",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziBox.cs3?v=556321b847ea83865f11effeebeaa17a2e3bbb394ae2910ac53205c7f6046235",
     "status": 1,
     "version": 23,
     "name": "DiziBox",
@@ -112,7 +112,7 @@
       "csprofesor"
     ],
     "description": "Yabancı Dizi izle, Tüm yabancı dizilerin yeni ve eski sezonlarını full hd izleyebileceğiniz elit site.",
-    "fileSize": 31105,
+    "fileSize": 31499,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -120,7 +120,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dizibox.live&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-fc1d9f23e0364f5da23078056cc560e7c62a16bd0dfbe109fc1537e376e6797b"
+    "fileHash": "sha256-556321b847ea83865f11effeebeaa17a2e3bbb394ae2910ac53205c7f6046235"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=3392ebe5ea1e44623339ea173fc1f9ec73190f94eab87a6f843f1ce98e044947",
