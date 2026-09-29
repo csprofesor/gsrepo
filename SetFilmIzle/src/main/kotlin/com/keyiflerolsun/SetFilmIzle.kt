@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.json.JSONObject
-import org.jsoup.Jsoup
 import okhttp3.*
 
 class SetFilmIzle : MainAPI() {
@@ -67,32 +66,26 @@ class SetFilmIzle : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val mainPage = app.get(mainUrl).document
-        val nonce    = Regex("""nonce: '(.*)'""").find(mainPage.html())?.groupValues?.get(1) ?: ""
-        val search   = app.post(
-            url     = "${mainUrl}/wp-admin/admin-ajax.php",
-            headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
-            data    = mapOf(
-                "action" to "ajax_search",
-                "nonce"  to nonce,
-                "search" to query
-            )
-        )
-        val document = Jsoup.parse(JSONObject(search.text).getString("html"))
+        val search = app.get("${mainUrl}/wp-admin/admin-ajax.php?action=stf_live_search&keyword=${query}").text
+        val results = mutableListOf<SearchResponse>()
+        try {
+            val json = JSONObject(search)
+            json.keys().forEach { id ->
+                val item = json.optJSONObject(id) ?: return@forEach
+                val title = item.optString("title")
+                val href = fixUrlNull(item.optString("url")) ?: return@forEach
+                val posterUrl = fixUrlNull(item.optString("img"))
 
-        return document.select("div.items article").mapNotNull { it.toSearchResult() }
-    }
-
-    private fun Element.toSearchResult(): SearchResponse? {
-        val title     = this.selectFirst("h2")?.text() ?: return null
-        val href      = fixUrlNull(this.selectFirst("a")?.attr("href")) ?: return null
-        val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("data-src"))
-
-        return if (href.contains("/dizi/")) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
+                if (href.contains("/dizi/")) {
+                    results.add(newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = posterUrl })
+                } else {
+                    results.add(newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl })
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("STF", "Search error: ${e.message}")
         }
+        return results
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
@@ -200,24 +193,44 @@ class SetFilmIzle : MainAPI() {
         Log.d("STF", "data » $data")
         val document = app.get(data).document
 
-        document.select("nav.player a").map { element ->
-            val sourceId = element.attr("data-post-id")
-            val name = element.attr("data-player-name")
-            val partKey = element.attr("data-part-key").takeIf { it.isNotEmpty() }
+        val nonce = Regex("""video:\s*"([^"]+)"""").find(document.html())?.groupValues?.get(1)
+            ?: document.selectFirst("div#playex")?.attr("data-nonce")
+            ?: ""
 
-            Triple(name, sourceId, partKey)
-        }.forEach { (name, sourceId, partKey) ->
+        val defaultPostId = document.selectFirst("div.fplayer")?.attr("data-post-id") ?: ""
+
+        val buttons = document.select(".fsrc-list button, button.fsrc, button[data-player-name], nav.player a")
+
+        val playerRequests = if (buttons.isNotEmpty()) {
+            buttons.map { element ->
+                val sourceId = element.attr("data-post-id").ifEmpty { defaultPostId }
+                val name = element.attr("data-player-name").ifEmpty { element.attr("data-name") }.ifEmpty { element.text().trim() }
+                val partKey = element.attr("data-part-key").takeIf { it.isNotEmpty() }
+                Triple(name, sourceId, partKey)
+            }.distinct()
+        } else if (defaultPostId.isNotEmpty()) {
+            listOf(Triple("SetPlay", defaultPostId, null))
+        } else {
+            emptyList()
+        }
+
+        playerRequests.forEach { (name, sourceId, partKey) ->
             if (sourceId.contains("event")) return@forEach
-            if (sourceId == "") return@forEach
+            if (sourceId.isEmpty()) return@forEach
 
-            val nonce = document.selectFirst("div#playex")?.attr("data-nonce") ?: ""
             val multiPart = sendMultipartRequest(nonce, sourceId, name, partKey ?: "", data)
             val sourceBody = multiPart.body.string()
-            val sourceIframe = JSONObject(sourceBody).optJSONObject("data")?.optString("url") ?: return@forEach
+
+            val json = try { JSONObject(sourceBody) } catch (_: Exception) { null }
+            val dataObj = json?.optJSONObject("data")
+            val streamObj = dataObj?.optJSONObject("stream")
+            val sourceIframe = streamObj?.optString("url")
+                ?: dataObj?.optString("url")
+                ?: return@forEach
 
             Log.d("STF", "iframe » $sourceIframe")
 
-            val finalUrl = if (sourceIframe.contains("setplay")) {
+            val finalUrl = if (sourceIframe.contains("setplay") || sourceIframe.contains("fastplay")) {
                 sourceIframe
             } else {
                 if (partKey != null) "$sourceIframe?partKey=$partKey" else sourceIframe
