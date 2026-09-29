@@ -279,12 +279,11 @@ class HDFilmCehennemi : MainAPI() {
             }
         }
 
-        // 2. Extract alternative player links/buttons with data-video or data-src
-        doc.select("a.alternative-link[data-video], button.alternative-link[data-video], [data-video]").forEach { btn ->
-            val vid = btn.attr("data-video")
-            if (vid.isNotEmpty()) {
-                val altEmbedUrl = "$mainUrl/video/$vid/"
-                iframes.add(altEmbedUrl)
+        // 2. Extract embed URLs from elements with data-src attributes
+        doc.select("[data-src]").forEach { el ->
+            val src = el.attr("data-src")
+            if (src.contains("hdfilmcehennemi.mobi") || src.contains("/video/embed/") || src.contains("rapidrame")) {
+                fixUrlNull(src)?.takeUnless { it.endsWith(".webp") || it.endsWith(".jpg") || it.endsWith(".png") }?.let { iframes.add(it) }
             }
         }
 
@@ -301,7 +300,7 @@ class HDFilmCehennemi : MainAPI() {
 
         distinctIframes.forEach { iframe ->
             try {
-                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
+                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed") || iframe.contains("hdfilmcehennemi")) {
                     RapidrameExtractor().getUrl(iframe, data, subtitleCallback) { link ->
                         found = true
                         callback(link)

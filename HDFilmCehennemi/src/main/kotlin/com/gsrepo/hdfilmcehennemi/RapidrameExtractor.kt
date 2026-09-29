@@ -52,13 +52,39 @@ class RapidrameExtractor : ExtractorApi() {
         return try {
             val doc = Jsoup.parse(html)
             val scripts = doc.select("script").mapNotNull { s ->
-                val text = s.data()
-                if (text.contains("jwplayer") || text.contains("function") || text.contains("var ")) text else null
+                val text = s.data().trim()
+                if (text.isEmpty() || text.startsWith("eval(")) return@mapNotNull null
+                if (text.contains("jwplayer") || text.contains("giz1m") || text.contains("pjv7") || text.contains("b1la5") || text.contains("sources:")) text else null
             }
             if (scripts.isEmpty()) return null
 
             val mockHeader = """
-                var window = globalThis;
+                var window = globalThis || this;
+                var b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+                function atob(input) {
+                    var str = String(input).replace(/=+$/, '');
+                    var output = '';
+                    if (str.length % 4 === 1) return '';
+                    for (var bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++);
+                        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+                    ) {
+                        buffer = b64chars.indexOf(buffer);
+                    }
+                    return output;
+                }
+                function btoa(input) {
+                    var str = String(input);
+                    var output = '';
+                    for (var block, charCode, idx = 0, map = b64chars;
+                        str.charAt(idx | 0) || (map = '=', idx % 1);
+                        output += map.charAt(63 & block >> 8 - idx % 1 * 8)
+                    ) {
+                        charCode = str.charCodeAt(idx += 3 / 4);
+                        if (charCode > 255) return '';
+                        block = block << 8 | charCode;
+                    }
+                    return output;
+                }
                 var document = { getElementById: function() { return {}; }, cookie: "", addEventListener: function() {} };
                 var ${'$'} = function() { return { ready: function(){}, prepend: function(){}, on: function(){} }; };
                 ${'$'}.ajax = function(){};
@@ -78,13 +104,15 @@ class RapidrameExtractor : ExtractorApi() {
                 jwplayer.key = "";
             """.trimIndent()
 
-            val combinedJs = mockHeader + "\n" + scripts.joinToString("\n") + "\nextractedFile;"
+            val combinedJs = mockHeader + "\n" + scripts.joinToString("\n") + "\nextractedFile || (typeof b1la5 !== 'undefined' ? b1la5 : null);"
 
             val rhino = Context.enter()
+            @Suppress("DEPRECATION")
+            rhino.optimizationLevel = -1
             try {
                 val scope: ScriptableObject = rhino.initStandardObjects()
                 val result = rhino.evaluateString(scope, combinedJs, "JavaScript", 1, null)
-                result?.toString()?.takeIf { it.startsWith("http") && !it.equals("null", true) }
+                result?.toString()?.takeIf { it.startsWith("http") && !it.equals("null", ignoreCase = true) }
             } finally {
                 Context.exit()
             }
@@ -177,31 +205,20 @@ class RapidrameExtractor : ExtractorApi() {
             interceptor = interceptor
         ).text
 
+        val targetReferer = if (url.contains("hdfilmcehennemi.mobi")) url else "https://hdfilmcehennemi.mobi/"
         var streamFound = false
 
-        // 1. Evaluate JS code with Rhino
+        // 1. Evaluate JS code with Rhino JS Engine
         val rhinoStream = evaluateRhinoJs(html)
         if (rhinoStream != null) {
             val isM3u8 = rhinoStream.contains(".m3u8") || rhinoStream.contains("master.txt") || rhinoStream.contains("/hls/") || rhinoStream.contains("/txt/")
             callback(newExtractorLink(name, name, rhinoStream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
-                this.referer = url
+                this.referer = targetReferer
             })
             streamFound = true
         }
 
-        // 2. Fallback: Direct regex match
-        if (!streamFound) {
-            val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(html)?.value
-            if (directMatch != null) {
-                val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/")
-                callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
-                    this.referer = url
-                })
-                streamFound = true
-            }
-        }
-
-        // 3. Fallback: Legacy JS Array decode
+        // 2. Fallback: Legacy JS Array decode
         if (!streamFound) {
             val matcher = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]").matcher(html)
             while (matcher.find()) {
@@ -210,13 +227,26 @@ class RapidrameExtractor : ExtractorApi() {
                 try {
                     val stream = decodeLegacy(html, arr)
                     if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
-                        val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/")
+                        val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/") || stream.contains("/txt/")
                         callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
-                            this.referer = url
+                            this.referer = targetReferer
                         })
+                        streamFound = true
                         break
                     }
                 } catch (_: Exception) {}
+            }
+        }
+
+        // 3. Fallback: Direct regex match (ignoring ld+json script tags)
+        if (!streamFound) {
+            val cleanHtml = html.replace(Regex("""<script type="application/ld\+json">.*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
+            val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(cleanHtml)?.value
+            if (directMatch != null) {
+                val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/") || directMatch.contains("/txt/")
+                callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+                    this.referer = targetReferer
+                })
             }
         }
 
