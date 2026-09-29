@@ -15,4 +15,5 @@ cloudstream {
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("Anime")
     iconUrl = "https://animecix.tv/favicon.ico"
+    requiresResources = false
 }
