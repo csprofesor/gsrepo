@@ -36,6 +36,11 @@ class DiziBox : MainAPI() {
         private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
+    private val baseHeaders = mapOf(
+        "User-Agent" to USER_AGENT,
+        "Referer"    to "$mainUrl/"
+    )
+
     private val cloudflareKiller by lazy { CloudflareKiller() }
     private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
 
@@ -91,12 +96,13 @@ class DiziBox : MainAPI() {
 
         val document = app.get(
             url,
+            headers     = baseHeaders,
             cookies     = baseCookies,
             interceptor = interceptor,
             cacheTime   = 60
         ).document
 
-        val home = document.select("article.detailed-article, article.article-episode-card a.figure-link")
+        val home = document.select("article.detailed-article, article.article-episode-card")
             .mapNotNull { it.toMainPageResult() }
 
         val isHorizontal = request.name.contains("Bölümler") || request.name.contains("Popüler")
@@ -104,21 +110,30 @@ class DiziBox : MainAPI() {
     }
 
     private fun Element.toMainPageResult(): SearchResponse? {
-        val titleEl = this.selectFirst("h3 a")
-        val title   = titleEl?.text() ?: this.selectFirst("img")?.attr("alt") ?: return null
-        val imgEl   = this.selectFirst("img")
-        val imgUrl  = fixUrlNull(
+        val titleEl = this.selectFirst("h3 a, a.episode-card-title, div.post-title a")
+        val title   = titleEl?.text()?.trim()
+            ?: this.selectFirst("img")?.attr("alt")?.trim()
+            ?: return null
+
+        val href = fixUrlNull(
+            titleEl?.attr("href")
+                ?: this.selectFirst("a[href]")?.attr("href")
+                ?: this.attr("href")
+        ) ?: return null
+
+        val imgEl  = this.selectFirst("img")
+        val imgUrl = fixUrlNull(
             imgEl?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
                 ?: imgEl?.attr("data-lazy-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
                 ?: imgEl?.attr("data-original")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
                 ?: imgEl?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
         )
-        val href    = fixUrlNull(titleEl?.attr("href") ?: this.attr("href")) ?: return null
-        val rating  = this.selectFirst("span.label-imdb b")?.text()?.trim()
+        val rating = this.selectFirst("span.label-imdb b")?.text()?.trim()
 
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-            this.posterUrl = imgUrl
-            this.score     = Score.from10(rating)
+            this.posterUrl     = imgUrl
+            this.posterHeaders = baseHeaders
+            this.score         = Score.from10(rating)
         }
     }
 
@@ -133,7 +148,7 @@ class DiziBox : MainAPI() {
         val url      = "$mainUrl/wp-admin/admin-ajax.php?s=$query&action=dwls_search"
         val response = app.get(
             url,
-            headers     = mapOf(
+            headers     = baseHeaders + mapOf(
                 "X-Requested-With" to "XMLHttpRequest",
                 "Referer"          to "$mainUrl/?s=$query"
             ),
@@ -146,7 +161,8 @@ class DiziBox : MainAPI() {
         return json.results.mapNotNull { result ->
             val thumbnail = result.attachmentThumbnail?.replace("50x50", "200x290")
             newTvSeriesSearchResponse(result.postTitle, result.permalink, TvType.TvSeries) {
-                this.posterUrl = fixUrlNull(thumbnail)
+                this.posterUrl     = fixUrlNull(thumbnail)
+                this.posterHeaders = baseHeaders
             }
         }
     }
@@ -156,6 +172,7 @@ class DiziBox : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         var document = app.get(
             url,
+            headers     = baseHeaders,
             cookies     = baseCookies,
             interceptor = interceptor
         ).document
@@ -165,6 +182,7 @@ class DiziBox : MainAPI() {
             val redirectUrl = fixUrlNull(archiveLink) ?: url
             document = app.get(
                 redirectUrl,
+                headers     = baseHeaders,
                 cookies     = baseCookies,
                 interceptor = interceptor
             ).document
@@ -193,6 +211,7 @@ class DiziBox : MainAPI() {
         seasonLinks.forEach { seasonUrl ->
             val seasonDoc = app.get(
                 seasonUrl,
+                headers     = baseHeaders,
                 cookies     = baseCookies,
                 interceptor = interceptor
             ).document
@@ -214,10 +233,10 @@ class DiziBox : MainAPI() {
                 val eNum = Regex("""(\d+)\.? ?Bölüm""").find(epRawTitle)?.groupValues?.get(1)?.toIntOrNull()
 
                 episodeList.add(newEpisode(epHref) {
-                    this.name      = "Bölüm"
-                    this.season    = sNum
-                    this.episode   = eNum
-                    this.posterUrl = poster
+                    this.name          = "Bölüm"
+                    this.season        = sNum
+                    this.episode       = eNum
+                    this.posterUrl     = poster
                     if (dateText != null) {
                         val parts = dateText.split(" ")
                         if (parts.size >= 3) {
@@ -232,11 +251,12 @@ class DiziBox : MainAPI() {
         val sortedEpisodes = episodeList.sortedWith(compareBy({ it.season }, { it.episode }))
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, sortedEpisodes) {
-            this.posterUrl = poster
-            this.plot      = plot
-            this.year      = year
-            this.tags      = tags
-            this.score     = Score.from10(rating)
+            this.posterUrl     = poster
+            this.posterHeaders = baseHeaders
+            this.plot          = plot
+            this.year          = year
+            this.tags          = tags
+            this.score         = Score.from10(rating)
             addActors(actors)
             addTrailer(trailer)
         }
@@ -250,6 +270,7 @@ class DiziBox : MainAPI() {
     ): Boolean {
         val document = app.get(
             data,
+            headers     = baseHeaders,
             cookies     = baseCookies,
             interceptor = interceptor
         ).document
@@ -268,6 +289,7 @@ class DiziBox : MainAPI() {
         sources.forEach { sourceUrl ->
             val sourceDoc = app.get(
                 sourceUrl,
+                headers     = baseHeaders,
                 cookies     = baseCookies,
                 interceptor = interceptor
             ).document
@@ -298,6 +320,7 @@ class DiziBox : MainAPI() {
                 val playerDoc = app.get(
                     playerUrl,
                     referer     = sourceUrl,
+                    headers     = baseHeaders,
                     cookies     = baseCookies,
                     interceptor = interceptor
                 ).document
@@ -313,6 +336,7 @@ class DiziBox : MainAPI() {
                     val m3u8Data = app.get(
                         sheila,
                         referer     = finalEmbed,
+                        headers     = baseHeaders,
                         interceptor = interceptor
                     ).text
                     val m3u8Url = m3u8Data.lineSequence().firstOrNull { it.startsWith("http") }
@@ -339,12 +363,13 @@ class DiziBox : MainAPI() {
                 val subDoc  = app.get(
                     kingUrl,
                     referer     = referer,
+                    headers     = baseHeaders,
                     cookies     = baseCookies,
                     interceptor = interceptor
                 ).document
                 val subFrame = subDoc.selectFirst("div#Player iframe")?.attr("src") ?: return
 
-                val iDoc      = app.get(subFrame, referer = "$mainUrl/").text
+                val iDoc      = app.get(subFrame, referer = "$mainUrl/", headers = baseHeaders).text
                 val cryptData = Regex("""CryptoJS\.AES\.decrypt\("(.*)","""""").find(iDoc)?.groupValues?.get(1) ?: return
                 val cryptPass = Regex(""""","(.*)"\);""").find(iDoc)?.groupValues?.get(1) ?: return
                 val decrypted = CryptoJS.decrypt(cryptPass, cryptData)
@@ -371,6 +396,7 @@ class DiziBox : MainAPI() {
                 var subDoc = app.get(
                     molyUrl,
                     referer     = referer,
+                    headers     = baseHeaders,
                     cookies     = baseCookies,
                     interceptor = interceptor
                 ).document
