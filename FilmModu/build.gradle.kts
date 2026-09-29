@@ -1,4 +1,4 @@
-version = 19
+version = 20
 
 cloudstream {
     authors = listOf("csprofesor")
@@ -15,4 +15,5 @@ cloudstream {
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("Movie")
     iconUrl = "https://www.filmmodu.one/icon/favicon.ico"
+    requiresResources = false
 }
