@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.util.Base64
@@ -15,12 +16,12 @@ class RapidrameExtractor : ExtractorApi() {
     override val requiresReferer = true
 
     private fun decode(jsCode: String, arrStr: String): String {
-        val matcher = Pattern.compile(""([^"]+)"").matcher(arrStr)
+        val matcher = Pattern.compile("\"([^\"]+)\"").matcher(arrStr)
         val sb = StringBuilder()
         while (matcher.find()) sb.append(matcher.group(1))
         var value = sb.toString()
 
-        val keys = Pattern.compile("var\\s+[a-zA-Z0-9_]+\\s*=\\s*"([^"]+)";\\s*var\\s+[a-zA-Z0-9_]+\\s*=\\s*"([^"]+)";").matcher(jsCode)
+        val keys = Pattern.compile("var\\s+[a-zA-Z0-9_]+\\s*=\\s*\"([^\"]+)\";\\s*var\\s+[a-zA-Z0-9_]+\\s*=\\s*\"([^\"]+)\";").matcher(jsCode)
         if (!keys.find()) return ""
         val key1 = keys.group(1) ?: return ""
         val key2 = keys.group(2) ?: return ""
@@ -94,23 +95,42 @@ class RapidrameExtractor : ExtractorApi() {
             "Referer" to (referer ?: "https://www.hdfilmcehennemi.nl/")
         )).text
 
-        val matcher = Pattern.compile("\\[\\s*"[^\\]]+"\\s*\\]").matcher(html)
-        while (matcher.find()) {
-            val arr = matcher.group(0) ?: continue
-            if (arr.contains(".jpg") || arr.contains(".png") || arr.contains(".webp")) continue
-            try {
-                val stream = decode(html, arr)
-                if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
-                    callback(newExtractorLink(name, name, stream, INFER_TYPE) {
-                        this.referer = url
-                    })
-                    break
-                }
-            } catch (_: Exception) {}
+        var streamFound = false
+
+        // 1. Direct regex match for stream URL
+        val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(html)?.value
+        if (directMatch != null) {
+            val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/")
+            callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+                this.referer = url
+            })
+            streamFound = true
         }
 
-        Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]+?"label":"([^"]+)"""").findAll(html).forEach {
-            subtitleCallback(SubtitleFile(it.groupValues[2], it.groupValues[1].replace("""\/""", "/")))
+        // 2. JS Array decode algorithm
+        if (!streamFound) {
+            val matcher = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]").matcher(html)
+            while (matcher.find()) {
+                val arr = matcher.group(0) ?: continue
+                if (arr.contains(".jpg") || arr.contains(".png") || arr.contains(".webp")) continue
+                try {
+                    val stream = decode(html, arr)
+                    if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
+                        val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/")
+                        callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+                            this.referer = url
+                        })
+                        break
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 3. Extract subtitles
+        Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]*?"label":"([^"]+)"""").findAll(html).forEach {
+            val subUrl = it.groupValues[1].replace("""\/""", "/")
+            val lang = it.groupValues[2]
+            subtitleCallback(SubtitleFile(lang, subUrl))
         }
     }
 }

@@ -1,7 +1,15 @@
 package com.gsrepo.hdfilmcehennemi
 
+import android.util.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.network.CloudflareKiller
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import okhttp3.Interceptor
+import okhttp3.Response
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
@@ -13,24 +21,70 @@ class HDFilmCehennemi : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request()
+            val response = chain.proceed(request)
+            val body = response.peekBody(1024 * 1024).string()
+            val doc = Jsoup.parse(body)
+
+            if (response.code == 403 || response.code == 503 ||
+                response.header("cf-mitigated") != null ||
+                body.contains("Just a moment", ignoreCase = true) ||
+                body.contains("Checking your browser", ignoreCase = true) ||
+                body.contains("cf-challenge", ignoreCase = true) ||
+                body.contains("turnstile", ignoreCase = true) ||
+                doc.title().contains("Just a moment", ignoreCase = true) ||
+                doc.title().contains("Attention Required", ignoreCase = true)
+            ) {
+                return cloudflareKiller.intercept(chain)
+            }
+
+            return response
+        }
+    }
+
     override val mainPage = mainPageOf(
         "${mainUrl}/" to "Son Eklenenler",
         "${mainUrl}/category/film-izle-2/" to "Filmler",
-        "${mainUrl}/yabancidiziizle-5/" to "Diziler",
+        "${mainUrl}/yabancidiziizle-5/" to "Yabancı Diziler",
         "${mainUrl}/dil/turkce-dublajli-film-izleyin-6/" to "Türkçe Dublaj",
-        "${mainUrl}/dil/turkce-altyazili-filmleri-izleme-sitesi-3/" to "Türkçe Altyazılı"
+        "${mainUrl}/dil/turkce-altyazili-filmleri-izleme-sitesi-3/" to "Türkçe Altyazılı",
+        "${mainUrl}/en-cok-izlenen-filmler-hd-1/" to "En Çok İzlenenler",
+        "${mainUrl}/category/tavsiye-filmler-izle3/" to "Tavsiye Filmler",
+        "${mainUrl}/top100-2/" to "IMDb Top 100",
+        "${mainUrl}/category/marvel-yapimlarini-izle-5/" to "Marvel Yapımları",
+        "${mainUrl}/category/dc-yapimlarini-izle-1/" to "DC Yapımları",
+        "${mainUrl}/tur/aksiyon-filmleri-izleyin-8/" to "Aksiyon",
+        "${mainUrl}/tur/animasyon-filmlerini-izleyin-5/" to "Animasyon",
+        "${mainUrl}/tur/bilim-kurgu-filmlerini-izleyin-5/" to "Bilim Kurgu",
+        "${mainUrl}/tur/dram-filmlerini-izle-2/" to "Dram",
+        "${mainUrl}/tur/fantastik-filmlerini-izleyin-4/" to "Fantastik",
+        "${mainUrl}/tur/gerilim-filmlerini-izle-4/" to "Gerilim",
+        "${mainUrl}/tur/komedi-filmlerini-izleyin-2/" to "Komedi",
+        "${mainUrl}/tur/korku-filmlerini-izle-9/" to "Korku",
+        "${mainUrl}/tur/macera-filmlerini-izleyin-5/" to "Macera",
+        "${mainUrl}/tur/romantik-filmleri-izle-3/" to "Romantik"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val base = request.data.removeSuffix("/")
-        val url = if (page <= 1) request.data else "$base/page/$page/"
-        val doc = app.get(url).document
-        val items = parseHomePage(doc)
-        return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
+        return try {
+            val base = request.data.removeSuffix("/")
+            val url = if (page <= 1) request.data else "$base/page/$page/"
+            val doc = app.get(url, referer = "$mainUrl/", interceptor = interceptor).document
+            val items = parseHomePage(doc)
+            newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
+        } catch (e: Exception) {
+            Log.e(name, "getMainPage error: ${e.message}")
+            newHomePageResponse(request.name, emptyList(), hasNext = false)
+        }
     }
 
     private fun parseHomePage(doc: Document): List<SearchResponse> {
-        return doc.select("a.poster, a.card, div.poster, div.card")
+        return doc.select("a.poster, a.card, div.poster, div.card, article, div.movie-box")
             .mapNotNull { parseSearchElement(it) }
             .distinctBy { it.url }
     }
@@ -38,21 +92,37 @@ class HDFilmCehennemi : MainAPI() {
     private fun parseSearchElement(element: Element): SearchResponse? {
         val link = if (element.tagName() == "a") element else element.selectFirst("a") ?: return null
         val href = fixUrlNull(link.attr("href")) ?: return null
-        val title = element.selectFirst("h2.title, h3.title, h4.title, div.title, .poster-title")?.text()?.trim()
+        if (href.contains("/oyuncu/") || href.contains("/yonetmen/") || href.contains("/kategori/") || href.contains("/tur/")) {
+            return null
+        }
+
+        val title = element.attr("data-title").ifEmpty { null }
+            ?: element.selectFirst("h2.title, h3.title, h4.title, div.title, .poster-title, strong")?.text()?.trim()
             ?: link.attr("title").ifEmpty { null }
-            ?: element.selectFirst("img")?.attr("alt")?.trim()
+            ?: element.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
             ?: return null
-        val poster = fixUrlNull(element.selectFirst("img")?.let {
-            it.attr("data-src").ifEmpty { null }
-                ?: it.attr("srcset").split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                ?: it.attr("src")
-        })
+
+        val img = element.selectFirst("img")
+        val poster = fixUrlNull(
+            img?.attr("data-src")?.ifEmpty { null }
+                ?: img?.attr("data-srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
+                ?: img?.attr("srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
+                ?: img?.attr("src")?.takeUnless { it.startsWith("data:") }
+        )
+
+        val score = element.selectFirst(".imdb, .score, span.rating, div.rating")?.text()?.trim()
         val type = if (href.contains("/dizi/")) TvType.TvSeries else TvType.Movie
 
         return if (type == TvType.TvSeries) {
-            newTvSeriesSearchResponse(title, href, type) { posterUrl = poster }
+            newTvSeriesSearchResponse(title, href, type) {
+                posterUrl = poster
+                this.score = Score.from10(score)
+            }
         } else {
-            newMovieSearchResponse(title, href, type) { posterUrl = poster }
+            newMovieSearchResponse(title, href, type) {
+                posterUrl = poster
+                this.score = Score.from10(score)
+            }
         }
     }
 
@@ -60,28 +130,37 @@ class HDFilmCehennemi : MainAPI() {
         return try {
             val response = app.get(
                 "${mainUrl}/search?q=$query",
+                referer = "$mainUrl/",
                 headers = mapOf(
                     "X-Requested-With" to "fetch",
                     "Content-Type" to "application/json"
-                )
-            ).parsed<SearchApiResponse>()
+                ),
+                interceptor = interceptor
+            )
 
-            response.results.orEmpty().mapNotNull { html ->
-                val doc = org.jsoup.Jsoup.parse(html)
-                val a = doc.selectFirst("a.search-result") ?: return@mapNotNull null
-                val url = fixUrlNull(a.attr("href")) ?: return@mapNotNull null
-                val title = a.selectFirst("h4.title, .title")?.text()?.trim()
-                    ?: a.attr("aria-label").ifEmpty { return@mapNotNull null }
-                val poster = fixUrlNull(a.selectFirst("img")?.let {
-                    it.attr("src").ifEmpty { null }
-                        ?: it.attr("srcset").split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                })
-                if (url.contains("/dizi/")) {
-                    newTvSeriesSearchResponse(title, url, TvType.TvSeries) { posterUrl = poster }
-                } else {
-                    newMovieSearchResponse(title, url, TvType.Movie) { posterUrl = poster }
-                }
-            }.distinctBy { it.url }
+            val searchData = tryParseJson<SearchApiResponse>(response.text)
+            if (searchData?.results != null && searchData.results.isNotEmpty()) {
+                searchData.results.mapNotNull { html ->
+                    val doc = Jsoup.parse(html)
+                    val a = doc.selectFirst("a.search-result, a.poster, a") ?: return@mapNotNull null
+                    val url = fixUrlNull(a.attr("href")) ?: return@mapNotNull null
+                    val title = a.selectFirst("h4.title, .title, strong")?.text()?.trim()
+                        ?: a.attr("aria-label").ifEmpty { a.attr("title") }
+                    val img = a.selectFirst("img")
+                    val poster = fixUrlNull(
+                        img?.attr("data-src")?.ifEmpty { null }
+                            ?: img?.attr("src")?.takeUnless { it.startsWith("data:") }
+                    )
+                    if (url.contains("/dizi/")) {
+                        newTvSeriesSearchResponse(title, url, TvType.TvSeries) { posterUrl = poster }
+                    } else {
+                        newMovieSearchResponse(title, url, TvType.Movie) { posterUrl = poster }
+                    }
+                }.distinctBy { it.url }
+            } else {
+                val doc = app.get("${mainUrl}/arama/?s=$query", referer = "$mainUrl/", interceptor = interceptor).document
+                parseHomePage(doc)
+            }
         } catch (_: Exception) {
             emptyList()
         }
@@ -92,25 +171,63 @@ class HDFilmCehennemi : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = app.get(url).document
-        val title = doc.selectFirst("h1.section-title, h1, meta[property='og:title']")?.let {
-            if (it.tagName() == "meta") it.attr("content") else it.text().trim()
-        }?.replace(" - HDFilmCehennemi", "")?.replace(" Full HD izle", "")?.trim() ?: return null
+        val doc = app.get(url, referer = "$mainUrl/", interceptor = interceptor).document
 
-        val poster = fixUrlNull(doc.selectFirst("meta[property='og:image']")?.attr("content"))
-        val description = doc.selectFirst("meta[property='og:description'], div.description, article.text-white")?.let {
+        val title = doc.selectFirst("h1, meta[property='og:title']")?.let {
+            if (it.tagName() == "meta") it.attr("content") else it.text().trim()
+        }?.replace(" - HDFilmCehennemi", "")
+            ?.replace(" izle", "")
+            ?.replace(" Full HD izle", "")
+            ?.trim() ?: return null
+
+        val poster = fixUrlNull(
+            doc.selectFirst("aside.post-info-poster img")?.attr("data-src")?.ifEmpty { null }
+                ?: doc.selectFirst("aside.post-info-poster img")?.attr("src")?.takeUnless { it.startsWith("data:") }
+                ?: doc.selectFirst("meta[property='og:image']")?.attr("content")
+        )
+
+        val description = doc.selectFirst("article.post-info-content p, div.description, article, meta[property='og:description']")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text().trim()
         }
-        val year = doc.selectFirst("span.year, div.year")?.text()?.trim()?.toIntOrNull()
-        val score = doc.selectFirst("span.imdb")?.text()?.trim()
-        val isTv = url.contains("/dizi/") || doc.select(".seasons, .seasons-tabs-wrapper").isNotEmpty()
+
+        val year = doc.selectFirst("div.post-info-year-country a[href*='/yil/'], span.year")?.text()
+            ?.filter { it.isDigit() }?.take(4)?.toIntOrNull()
+
+        val score = doc.selectFirst(".post-info-imdb-rating span, span.imdb")?.text()?.trim()
+
+        val durationStr = doc.selectFirst(".post-info-duration")?.text()?.trim()
+        val durationMinutes = durationStr?.filter { it.isDigit() }?.toIntOrNull()
+
+        val tags = doc.select(".post-info-genres a, .post-info-cats a").map { it.text().trim() }.distinct()
+
+        // Extract Actors with Photos
+        val actorElements = doc.select(".post-info-cast a[href*='/oyuncu/'], div.cast a[href*='/oyuncu/']")
+        val actorList = actorElements.mapNotNull { a ->
+            val actorName = a.selectFirst("strong")?.text()?.trim()
+                ?: a.attr("title").ifEmpty { null }
+                ?: return@mapNotNull null
+            val img = a.selectFirst("img")
+            val photoUrl = fixUrlNull(
+                img?.attr("data-src")?.ifEmpty { null }
+                    ?: img?.attr("src")?.takeUnless { it.startsWith("data:") }
+            )
+            Actor(actorName, photoUrl)
+        }
+
+        val recommendations = doc.select(".similar-movies a, .related-movies a, .poster-slider a, div.similar a")
+            .mapNotNull { parseSearchElement(it) }
+            .distinctBy { it.url }
+
+        val isTv = url.contains("/dizi/") || doc.select(".seasons, .seasons-wrapper, a[href*='bolum']").isNotEmpty()
 
         if (isTv) {
-            val episodes = doc.select("div.seasons-tab-content a.mini-poster, div.seasons a[href*='bolum']")
+            val episodes = doc.select("a[href*='bolum'], div.seasons-tab-content a.mini-poster, div.seasons a[href*='bolum']")
                 .mapNotNull { a ->
                     val epHref = fixUrlNull(a.attr("href")) ?: return@mapNotNull null
                     val epTitle = a.selectFirst(".mini-poster-title")?.text()?.trim() ?: a.text().trim()
-                    val season = Regex("""(\d+)\.\s*Sezon""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                    val season = Regex("""(\d+)\.\s*Sezon""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: Regex("""/sezon-(\d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: 1
                     val episode = Regex("""(\d+)\.\s*B[öo]l[üu]m""").find(epTitle)?.groupValues?.get(1)?.toIntOrNull()
                         ?: Regex("""/bolum-(\d+)/""").find(epHref)?.groupValues?.get(1)?.toIntOrNull()
                         ?: return@mapNotNull null
@@ -119,12 +236,17 @@ class HDFilmCehennemi : MainAPI() {
                         this.season = season
                         this.episode = episode
                     }
-                }
+                }.distinctBy { it.data }
+
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 posterUrl = poster
                 plot = description
                 this.year = year
                 this.score = Score.from10(score)
+                this.duration = durationMinutes
+                this.tags = tags
+                addActors(actorList)
+                this.recommendations = recommendations
             }
         }
 
@@ -133,6 +255,10 @@ class HDFilmCehennemi : MainAPI() {
             plot = description
             this.year = year
             this.score = Score.from10(score)
+            this.duration = durationMinutes
+            this.tags = tags
+            addActors(actorList)
+            this.recommendations = recommendations
         }
     }
 
@@ -142,24 +268,37 @@ class HDFilmCehennemi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data, referer = mainUrl).document
+        val doc = app.get(data, referer = mainUrl, interceptor = interceptor).document
         val iframes = doc.select("iframe").mapNotNull {
             val src = it.attr("data-src").ifEmpty { it.attr("src") }
-            fixUrlNull(src)?.takeUnless { it.contains("youtube.com") || it.contains("youtu.be") }
-        }.distinct()
+            fixUrlNull(src)?.takeUnless { url -> url.contains("youtube.com") || url.contains("youtu.be") }
+        }.toMutableList()
 
+        // Check alternative video elements
+        doc.select("a.alternative-link[data-video], button[data-video]").forEach { btn ->
+            val vid = btn.attr("data-video")
+            if (vid.isNotEmpty()) {
+                val altUrl = "$mainUrl/video/$vid/"
+                iframes.add(altUrl)
+            }
+        }
+
+        val distinctIframes = iframes.distinct()
         var found = false
-        iframes.forEach { iframe ->
+
+        distinctIframes.forEach { iframe ->
             try {
-                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi")) {
-                    RapidrameExtractor().getUrl(iframe, data, subtitleCallback) {
+                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi") || iframe.contains("playmix")) {
+                    RapidrameExtractor().getUrl(iframe, data, subtitleCallback) { link ->
                         found = true
-                        callback(it)
+                        callback(link)
                     }
                 } else {
-                    loadExtractor(iframe, data, subtitleCallback) {
+                    if (loadExtractor(iframe, data, subtitleCallback) { link ->
                         found = true
-                        callback(it)
+                        callback(link)
+                    }) {
+                        found = true
                     }
                 }
             } catch (_: Exception) {}
