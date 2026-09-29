@@ -28,6 +28,12 @@ class DiziMom : MainAPI() {
     private val cloudflareKiller by lazy { CloudflareKiller() }
     private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
 
+    private val baseHeaders = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+    )
+
     class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request  = chain.request()
@@ -77,7 +83,13 @@ class DiziMom : MainAPI() {
         } else {
             "${request.data.trimEnd('/')}/page/$page/"
         }
-        val document = app.get(url, interceptor = interceptor).document
+        
+        val document = try {
+            app.get(url, headers = baseHeaders, interceptor = interceptor).document
+        } catch (e: Exception) {
+            Log.d("DZM", "Error loading main page: ${e.message}")
+            return newHomePageResponse(request.name, emptyList())
+        }
         
         val items = document.select("div.items article, div.result-item article, div.single-item, div.episode-box, div.cat-item, div.dizi-box, article, div.post-item, div.box, div.poster, div.item, div.movie, div.card, div.flix-item, div.movie-box, div.movies-list-item, a.poster")
         val home = if (request.data.contains("/tum-bolumler")) {
@@ -158,7 +170,11 @@ class DiziMom : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("${mainUrl}/?s=${query}", interceptor = interceptor).document
+        val document = try {
+            app.get("${mainUrl}/?s=${query}", headers = baseHeaders, interceptor = interceptor).document
+        } catch (_: Exception) {
+            return emptyList()
+        }
 
         return document.select("div.items article, div.result-item article, div.single-item, div.episode-box, div.cat-item, div.dizi-box, article, div.post-item, div.box, div.poster, div.item, div.movie, div.card, div.flix-item, div.movie-box, div.movies-list-item, a.poster").mapNotNull { it.diziler() }
     }
@@ -166,14 +182,18 @@ class DiziMom : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        var document = app.get(url, interceptor = interceptor).document
+        var document = try {
+            app.get(url, headers = baseHeaders, interceptor = interceptor).document
+        } catch (e: Exception) {
+            return null
+        }
 
         val seriesLink = document.selectFirst("div#benzerli a, div.benzerli a, a.series-link, div.series-title a, div.dizi-link a")?.attr("href")
         if (!seriesLink.isNullOrEmpty()) {
             val seriesUrl = fixUrlNull(seriesLink)
             if (seriesUrl != null && seriesUrl != url) {
                 try {
-                    document = app.get(seriesUrl, interceptor = interceptor).document
+                    document = app.get(seriesUrl, headers = baseHeaders, interceptor = interceptor).document
                 } catch (_: Exception) {}
             }
         }
@@ -238,12 +258,10 @@ class DiziMom : MainAPI() {
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         Log.d("DZM", "data » $data")
 
-        val ua = mapOf("User-Agent" to "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
-
         try {
             app.post(
                 "${mainUrl}/wp-login.php",
-                headers = ua,
+                headers = baseHeaders,
                 referer = "${mainUrl}/",
                 data    = mapOf(
                     "log"         to "keyiflerolsun",
@@ -255,7 +273,7 @@ class DiziMom : MainAPI() {
         } catch (_: Exception) {}
 
         val document = try {
-            app.get(data, headers = ua, interceptor = interceptor).document
+            app.get(data, headers = baseHeaders, interceptor = interceptor).document
         } catch (e: Exception) {
             Log.d("DZM", "Error getting page: ${e.message}")
             return false
@@ -274,7 +292,7 @@ class DiziMom : MainAPI() {
             val href = it.attr("href")
             if (href.isNotBlank() && href != "#") {
                 try {
-                    val subDocument = app.get(href, headers = ua, interceptor = interceptor).document
+                    val subDocument = app.get(href, headers = baseHeaders, interceptor = interceptor).document
                     subDocument.select("div.video iframe, div.video p iframe, iframe").forEach { iframe ->
                         val subSrc = iframe.attr("data-src").takeIf { it.isNotBlank() && it != "about:blank" }
                             ?: iframe.attr("src").takeIf { it.isNotBlank() && it != "about:blank" }
