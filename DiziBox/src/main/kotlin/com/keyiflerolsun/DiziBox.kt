@@ -111,7 +111,8 @@ class DiziBox : MainAPI() {
 
     private fun Element.toMainPageResult(): SearchResponse? {
         val titleEl = this.selectFirst("h3 a, a.episode-card-title, div.post-title a")
-        val title   = titleEl?.text()?.trim()
+        val title   = titleEl?.attr("title")?.takeIf { it.isNotBlank() }
+            ?: titleEl?.text()?.trim()
             ?: this.selectFirst("img")?.attr("alt")?.trim()
             ?: return null
 
@@ -121,7 +122,16 @@ class DiziBox : MainAPI() {
                 ?: this.attr("href")
         ) ?: return null
 
-        val imgEl  = this.selectFirst("img")
+        val imgEl  = this.selectFirst("img.afis, img.main-cover")
+            ?: this.selectFirst("a.figure-link img, figure img")
+            ?: this.select("img").firstOrNull { 
+                !it.hasClass("language-flag") && 
+                !it.attr("src").contains("tr.png") && 
+                !it.attr("src").contains("altyazi") && 
+                !it.attr("src").contains("dublaj") 
+            }
+            ?: this.selectFirst("img")
+
         val imgUrl = fixUrlNull(
             imgEl?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
                 ?: imgEl?.attr("data-lazy-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
