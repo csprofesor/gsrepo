@@ -98,9 +98,30 @@ class DiziPalOriginal : MainAPI() {
 
         val imgEl = this.selectFirst("img") ?: aTag.selectFirst("img")
 
+        val titleSelectors = "h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name"
         val rawTitle = (
-            this.selectFirst("h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name")?.text()
-            ?: aTag.selectFirst("h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name")?.text()
+            this.select(titleSelectors).firstOrNull {
+                val t = it.text().trim()
+                val cls = it.className().lowercase()
+                t.isNotBlank()
+                && !t.matches(Regex("""^[\d.,\s/]+$"""))
+                && !t.contains("imdb", ignoreCase = true)
+                && !cls.contains("imdb")
+                && !cls.contains("score")
+                && !cls.contains("rating")
+                && !cls.contains("point")
+            }?.text()
+            ?: aTag.select(titleSelectors).firstOrNull {
+                val t = it.text().trim()
+                val cls = it.className().lowercase()
+                t.isNotBlank()
+                && !t.matches(Regex("""^[\d.,\s/]+$"""))
+                && !t.contains("imdb", ignoreCase = true)
+                && !cls.contains("imdb")
+                && !cls.contains("score")
+                && !cls.contains("rating")
+                && !cls.contains("point")
+            }?.text()
             ?: imgEl?.attr("alt")
             ?: imgEl?.attr("title")
             ?: aTag.attr("title")
