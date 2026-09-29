@@ -107,7 +107,12 @@ class DiziBox : MainAPI() {
         val titleEl = this.selectFirst("h3 a")
         val title   = titleEl?.text() ?: this.selectFirst("img")?.attr("alt") ?: return null
         val imgEl   = this.selectFirst("img")
-        val imgUrl  = fixUrlNull(imgEl?.attr("data-src")?.takeIf { it.isNotBlank() } ?: imgEl?.attr("src"))
+        val imgUrl  = fixUrlNull(
+            imgEl?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("data-lazy-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("data-original")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: imgEl?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+        )
         val href    = fixUrlNull(titleEl?.attr("href") ?: this.attr("href")) ?: return null
         val rating  = this.selectFirst("span.label-imdb b")?.text()?.trim()
 
@@ -166,7 +171,13 @@ class DiziBox : MainAPI() {
         }
 
         val title    = document.selectFirst("div.tv-overview h1 a")?.text()?.trim() ?: return null
-        val poster   = fixUrlNull(document.selectFirst("div.tv-overview figure img")?.attr("src"))
+        val posterImg = document.selectFirst("div.tv-overview figure img")
+        val poster   = fixUrlNull(
+            posterImg?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: posterImg?.attr("data-lazy-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: posterImg?.attr("data-original")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                ?: posterImg?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+        )
         val plot     = document.selectFirst("div.tv-story p")?.text()?.trim()
         val year     = document.selectFirst("a[href*='/yil/']")?.text()?.trim()?.toIntOrNull()
         val tags     = document.select("a[href*='/tur/']").map { it.text() }
