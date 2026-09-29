@@ -387,7 +387,9 @@ class DiziPal : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         Log.d("DiziPal", "--> loadLinks ÇAĞRILDI. Gelen URL: $data")
-        val doc = app.get(data).document
+        val doc = app.get(
+            data, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
+        ).document
 
         // Şifreli div'i bul
         val encryptedText = doc.selectFirst("div[data-rm-k=true]")?.text() ?: ""
@@ -430,7 +432,7 @@ class DiziPal : MainAPI() {
 
     private fun decryptDizipalData(rawJsonText: String): String {
         return try {
-            val passphrase = "3hPn4uCjTVtfYWcjIcoJQ4cL1WWk1qxXI39egLYOmNv6IblA7eKJz68uU3eLzux1biZLCms0quEjTYniGv5z1JcKbNIsDQFSeIZOBZJz4is6pD7UyWDggWWzTLBQbHcQFpBQdClnuQaMNUHTLHTpzCvZy33p6I7wFBvL4fnXBYH84aUIyWGTRvM2G5cfoNf4705tO2kv"
+            val passphrase = "3hPn4uCjTVtfYWcjIcoJQ4cL1WWk1qxXI39egLYOmNv6IblA7eKJz68uU3eLzux1biZLCms0quEjTYniGv5z1JcKbNIsDQFSeIZOBZJz4is6pD7UyWDggWWzTLBQbHcQFpBQdClnuQaMNUHtLHTpzCvZy33p6I7wFBvL4fnXBYH84aUIyWGTRvM2G5cfoNf4705tO2kv"
 
             val ctMatch = """"ciphertext"\s*:\s*"([^"]+)"""".toRegex().find(rawJsonText)?.groupValues?.get(1)
                 ?: return "".also { Log.e("DiziPal", "--> HATA: Regex 'ciphertext' değerini bulamadı!") }
