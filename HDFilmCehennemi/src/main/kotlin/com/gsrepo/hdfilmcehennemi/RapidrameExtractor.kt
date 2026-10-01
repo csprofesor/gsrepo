@@ -67,7 +67,7 @@ class RapidrameExtractor : ExtractorApi() {
                     var output = '';
                     if (str.length % 4 === 1) return '';
                     for (var bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++);
-                        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+                        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
                     ) {
                         buffer = b64chars.indexOf(buffer);
                     }
