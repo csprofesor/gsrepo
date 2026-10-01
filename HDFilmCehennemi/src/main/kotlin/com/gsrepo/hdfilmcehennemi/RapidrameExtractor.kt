@@ -214,6 +214,10 @@ class RapidrameExtractor : ExtractorApi() {
             val isM3u8 = rhinoStream.contains(".m3u8") || rhinoStream.contains("master.txt") || rhinoStream.contains("/hls/") || rhinoStream.contains("/txt/")
             callback(newExtractorLink(name, name, rhinoStream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
                 this.referer = targetReferer
+                this.headers = mapOf(
+                    "Referer" to targetReferer,
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
             })
             streamFound = true
         }
@@ -230,6 +234,10 @@ class RapidrameExtractor : ExtractorApi() {
                         val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/") || stream.contains("/txt/")
                         callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
                             this.referer = targetReferer
+                            this.headers = mapOf(
+                                "Referer" to targetReferer,
+                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                            )
                         })
                         streamFound = true
                         break
@@ -246,7 +254,12 @@ class RapidrameExtractor : ExtractorApi() {
                 val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/") || directMatch.contains("/txt/")
                 callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
                     this.referer = targetReferer
+                    this.headers = mapOf(
+                        "Referer" to targetReferer,
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    )
                 })
+                streamFound = true
             }
         }
 
