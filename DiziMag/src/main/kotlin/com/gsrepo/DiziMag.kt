@@ -1,5 +1,7 @@
 package com.gsrepo
 
+import com.lagradost.cloudstream3.Actor
+import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -16,6 +18,7 @@ import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
+import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -39,25 +42,8 @@ class DiziMag : MainAPI() {
     override var sequentialMainPageScrollDelay = 250L
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/tum-bolumler/" to "Son Eklenen Bölümler",
-        "${mainUrl}/asya-dizileri/" to "Asya Dizileri",
-        "${mainUrl}/dizi-arsivi/?filtrele=trend&sirala=DESC" to "Trend Diziler",
-        "${mainUrl}/dizi-arsivi/?filtrele=imdb&sirala=DESC" to "En Yüksek IMDb",
-        "${mainUrl}/dizi-arsivi/?filtrele=tarih&sirala=DESC" to "Son Eklenen Diziler",
-
-        "${mainUrl}/tur/aksiyon/" to "Aksiyon",
-        "${mainUrl}/tur/animasyon/" to "Animasyon",
-        "${mainUrl}/tur/belgesel/" to "Belgesel",
-        "${mainUrl}/tur/bilim-kurgu/" to "Bilim Kurgu",
-        "${mainUrl}/tur/dram/" to "Dram",
-        "${mainUrl}/tur/fantezi/" to "Fantastik",
-        "${mainUrl}/tur/gizem/" to "Gizem",
-        "${mainUrl}/tur/komedi/" to "Komedi",
-        "${mainUrl}/tur/korku/" to "Korku",
-        "${mainUrl}/tur/macera/" to "Macera",
-        "${mainUrl}/tur/romantik/" to "Romantik",
-        "${mainUrl}/tur/savas/" to "Savaş",
-        "${mainUrl}/tur/suc/" to "Suç",
+        "${mainUrl}/" to "Son Eklenenler",
+        "${mainUrl}/tum-bolumler/" to "Tüm Bölümler"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -88,9 +74,9 @@ class DiziMag : MainAPI() {
                 ?: aTag.text().trim().takeIf { it.isNotBlank() }
                 ?: return@forEach
 
-            val posterUrl = fixUrlNull(imgTag?.attr("src"))
+            val posterUrl = fixUrlNull(imgTag?.attr("data-src")?.takeIf { it.isNotBlank() } ?: imgTag?.attr("src"))
 
-            val isTvSeries = href.contains("/dizi/") || !href.contains("/film/")
+            val isTvSeries = href.contains("/dizi/") || (!href.contains("/film/") && !href.contains("-bolum-"))
             if (isTvSeries) {
                 home.add(newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                     this.posterUrl = posterUrl
@@ -141,9 +127,9 @@ class DiziMag : MainAPI() {
                 ?: aTag.text().trim().takeIf { it.isNotBlank() }
                 ?: return@forEach
 
-            val posterUrl = fixUrlNull(imgTag?.attr("src"))
+            val posterUrl = fixUrlNull(imgTag?.attr("data-src")?.takeIf { it.isNotBlank() } ?: imgTag?.attr("src"))
 
-            val isTvSeries = href.contains("/dizi/")
+            val isTvSeries = href.contains("/dizi/") || !href.contains("-bolum-")
             if (isTvSeries) {
                 results.add(newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                     this.posterUrl = posterUrl
@@ -161,7 +147,14 @@ class DiziMag : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url, referer = "$mainUrl/").document
+        val originalDocument = app.get(url, referer = "$mainUrl/").document
+        
+        // If an episode URL is passed (from search), try to find its parent series URL to load all episodes
+        val isEpisodeUrl = url.contains("-bolum-")
+        val seriesUrl = if (isEpisodeUrl) originalDocument.selectFirst("a[rel='category tag']")?.attr("href") else null
+        
+        val targetUrl = fixUrlNull(seriesUrl) ?: url
+        val document = if (targetUrl != url) app.get(targetUrl, referer = "$mainUrl/").document else originalDocument
 
         val titleRaw = document.selectFirst("h1")?.text()?.trim()
             ?: document.selectFirst("meta[property='og:title']")?.attr("content")
@@ -171,16 +164,24 @@ class DiziMag : MainAPI() {
 
         val poster = fixUrlNull(
             document.selectFirst("meta[property='og:image']")?.attr("content")
+                ?: document.selectFirst("img")?.attr("data-src")
                 ?: document.selectFirst("img")?.attr("src")
         )
 
         val description = document.selectFirst("meta[name='description']")?.attr("content")
             ?: document.selectFirst("meta[property='og:description']")?.attr("content")
 
-        val rating = document.select("div.episode-date, div.imdb").text()
-            .let { Regex("""\b(\d+(?:\.\d+)?)\b""").find(it)?.value }
+        val ratingText = document.selectFirst("div:contains(IMDB :)")?.text() 
+            ?: document.select("div.episode-date, div.imdb").text()
+        val rating = Regex("""\b(\d+(?:\.\d+)?)\b""").find(ratingText ?: "")?.value
 
-        val isTvSeries = url.contains("/dizi/")
+        val actorsText = document.select("div:contains(Oyuncular :)").lastOrNull()?.ownText()?.trim()
+        val actors = actorsText?.split(",")?.mapNotNull {
+            val name = it.trim()
+            if (name.isNotEmpty()) ActorData(Actor(name, null)) else null
+        }
+
+        val isTvSeries = targetUrl.contains("/dizi/")
 
         if (isTvSeries) {
             val episodes = mutableListOf<Episode>()
@@ -205,16 +206,18 @@ class DiziMag : MainAPI() {
                 )
             }
 
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.distinctBy { it.data }) {
+            return newTvSeriesLoadResponse(title, targetUrl, TvType.TvSeries, episodes.distinctBy { it.data }) {
                 this.posterUrl = poster
                 this.plot = description
                 this.score = Score.from10(rating)
+                this.actors = actors
             }
         } else {
-            return newMovieLoadResponse(title, url, TvType.Movie, url) {
+            return newMovieLoadResponse(title, targetUrl, TvType.Movie, targetUrl) {
                 this.posterUrl = poster
                 this.plot = description
                 this.score = Score.from10(rating)
+                this.actors = actors
             }
         }
     }
@@ -248,6 +251,12 @@ class DiziMag : MainAPI() {
                         }
                     )
                     foundLinks = true
+                }
+                
+                Regex("""\{"file":"([^"]+)","label":"([^"]+)"""").findAll(iframeHtml).forEach { match ->
+                    val file = match.groupValues[1]
+                    val label = match.groupValues[2]
+                    subtitleCallback(newSubtitleFile(label, file))
                 }
             } catch (_: Exception) { }
 
