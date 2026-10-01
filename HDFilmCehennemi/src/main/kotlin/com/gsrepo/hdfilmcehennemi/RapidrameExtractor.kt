@@ -9,6 +9,7 @@ import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -205,11 +206,13 @@ class RapidrameExtractor : ExtractorApi() {
             interceptor = interceptor
         ).text
 
+        val unpackedHtml = getAndUnpack(html)
         val targetReferer = if (url.contains("hdfilmcehennemi.mobi")) url else "https://hdfilmcehennemi.mobi/"
         var streamFound = false
 
-        // 1. Evaluate JS code with Rhino JS Engine
-        val rhinoStream = evaluateRhinoJs(html)
+        // The current CloseLoad player packs the script that initializes its JWPlayer source.
+        val rhinoStream = evaluateRhinoJs(unpackedHtml)
+            ?: if (unpackedHtml != html) evaluateRhinoJs(html) else null
         if (rhinoStream != null) {
             val isM3u8 = rhinoStream.contains(".m3u8") || rhinoStream.contains("master.txt") || rhinoStream.contains("/hls/") || rhinoStream.contains("/txt/")
             callback(newExtractorLink(name, name, rhinoStream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
@@ -224,32 +227,36 @@ class RapidrameExtractor : ExtractorApi() {
 
         // 2. Fallback: Legacy JS Array decode
         if (!streamFound) {
-            val matcher = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]").matcher(html)
-            while (matcher.find()) {
-                val arr = matcher.group(0) ?: continue
-                if (arr.contains(".jpg") || arr.contains(".png") || arr.contains(".webp")) continue
-                try {
-                    val stream = decodeLegacy(html, arr)
-                    if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
-                        val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/") || stream.contains("/txt/")
-                        callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
-                            this.referer = targetReferer
-                            this.headers = mapOf(
-                                "Referer" to targetReferer,
-                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                            )
-                        })
-                        streamFound = true
-                        break
-                    }
-                } catch (_: Exception) {}
+            for (pageHtml in listOf(unpackedHtml, html).distinct()) {
+                val matcher = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]").matcher(pageHtml)
+                while (matcher.find()) {
+                    val arr = matcher.group(0) ?: continue
+                    if (arr.contains(".jpg") || arr.contains(".png") || arr.contains(".webp")) continue
+                    try {
+                        val stream = decodeLegacy(pageHtml, arr)
+                        if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
+                            val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/") || stream.contains("/txt/")
+                            callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+                                this.referer = targetReferer
+                                this.headers = mapOf(
+                                    "Referer" to targetReferer,
+                                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                )
+                            })
+                            streamFound = true
+                            break
+                        }
+                    } catch (_: Exception) {}
+                }
+                if (streamFound) break
             }
         }
 
         // 3. Fallback: Direct regex match (ignoring ld+json script tags)
         if (!streamFound) {
-            val cleanHtml = html.replace(Regex("""<script type="application/ld\+json">.*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
+            val cleanHtml = unpackedHtml.replace(Regex("""<script type="application/ld\+json">.*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
             val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(cleanHtml)?.value
+                ?: Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(html)?.value
             if (directMatch != null) {
                 val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/") || directMatch.contains("/txt/")
                 callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
@@ -264,10 +271,12 @@ class RapidrameExtractor : ExtractorApi() {
         }
 
         // Subtitles extraction
-        Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]*?"label":"([^"]+)"""").findAll(html).forEach {
-            val subUrl = it.groupValues[1].replace("""\/""", "/")
-            val lang = it.groupValues[2]
-            subtitleCallback(newSubtitleFile(lang, subUrl))
+        for (pageHtml in listOf(unpackedHtml, html).distinct()) {
+            Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]*?"label":"([^"]+)"""").findAll(pageHtml).forEach {
+                val subUrl = it.groupValues[1].replace("""\/""", "/")
+                val lang = it.groupValues[2]
+                subtitleCallback(newSubtitleFile(lang, subUrl))
+            }
         }
     }
 }
