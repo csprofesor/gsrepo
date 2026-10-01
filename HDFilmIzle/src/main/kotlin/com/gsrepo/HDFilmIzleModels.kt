@@ -1,3 +1,5 @@
+package com.gsrepo
+
 import com.fasterxml.jackson.annotation.JsonProperty
 
 data class Video(
