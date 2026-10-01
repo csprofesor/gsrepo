@@ -349,7 +349,7 @@
     "fileHash": "sha256-295655a5ff5d69267f60fe7600f35f7c63ad73c68e33adc5696e23b6ff5dc8a7"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=4c82d46ddcd05a94a8d0baf0c4f5c841bbffef557a704974579f57578da28012",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=2d737ad6ef8ae6ef6054e75aff8e949fa699c9057dd3973a48f9b8e03fd06aff",
     "status": 1,
     "version": 8,
     "name": "HDFilmIzle",
@@ -358,7 +358,7 @@
       "csprofesor"
     ],
     "description": "HDFilmizle ile Full HD izle, 1080p kalitede Yerli ve Yabancı filmlerle Türkçe dublaj veya Altyazı olarak kesintisiz film izlemenin tadını çıkarın.",
-    "fileSize": 32203,
+    "fileSize": 32354,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -367,7 +367,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmizle.to&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-4c82d46ddcd05a94a8d0baf0c4f5c841bbffef557a704974579f57578da28012"
+    "fileHash": "sha256-2d737ad6ef8ae6ef6054e75aff8e949fa699c9057dd3973a48f9b8e03fd06aff"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HintFilmIzle.cs3?v=33c74eab31cb6edbcadc507238e4ff3f14070bca2f54c9f01651af3f3c03a05f",
@@ -619,7 +619,7 @@
     "fileHash": "sha256-e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3?v=d02325144100e1385b26d2219e3cd0ca59c991a7b92405d460b76782744de5e2",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3?v=fd1b62aa2a30ee22f64f8c822c24dc2e48fd0389e3cf25a3520d1fa70c1285c7",
     "status": 1,
     "version": 10,
     "name": "YabanciDizi",
@@ -628,7 +628,7 @@
       "csprofesor"
     ],
     "description": "Son çıkan yabancı dizi ve filmleri yabancidizi' de izle. En yeni yabancı film ve diziler, türkçe altyazılı yada dublaj olarak 1080p kalitesinde hd izle.",
-    "fileSize": 49965,
+    "fileSize": 49997,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -636,6 +636,6 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=yabancidizi.news&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-d02325144100e1385b26d2219e3cd0ca59c991a7b92405d460b76782744de5e2"
+    "fileHash": "sha256-fd1b62aa2a30ee22f64f8c822c24dc2e48fd0389e3cf25a3520d1fa70c1285c7"
   }
 ]
