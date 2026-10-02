@@ -328,7 +328,7 @@
     "fileHash": "sha256-f96a5da7e613f706ecb57a43347315615e612343a2fa08dc2d31f81e6114f78c"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi.cs3?v=8cfe75965c3ccf3930b9c3f524a37f37a06bd65cf2cc7f0f19eb5b2b8ee0119a",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi.cs3?v=47292c22007feea126f9354ebe7d3049007e8d67e846d1e15ebba66534cf0ea0",
     "status": 1,
     "version": 3,
     "name": "HDFilmCehennemi",
@@ -337,7 +337,7 @@
       "csprofesor"
     ],
     "description": "HDFilmCehennemi film ve dizi sağlayıcısı",
-    "fileSize": 39805,
+    "fileSize": 39089,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -346,7 +346,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.nl&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-8cfe75965c3ccf3930b9c3f524a37f37a06bd65cf2cc7f0f19eb5b2b8ee0119a"
+    "fileHash": "sha256-47292c22007feea126f9354ebe7d3049007e8d67e846d1e15ebba66534cf0ea0"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=2d737ad6ef8ae6ef6054e75aff8e949fa699c9057dd3973a48f9b8e03fd06aff",
