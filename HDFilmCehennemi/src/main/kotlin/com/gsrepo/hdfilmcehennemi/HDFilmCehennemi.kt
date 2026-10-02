@@ -270,42 +270,59 @@ class HDFilmCehennemi : MainAPI() {
     ): Boolean {
         Log.d("HDCH", "loadLinks data » $data")
         val doc = app.get(data, referer = "$mainUrl/", interceptor = interceptor).document
+        val iframes = mutableListOf<Pair<String, String>>()
 
-        // 1. Primary video container iframes
-        doc.select("div.video-container iframe[data-src], div.video-container iframe[src]").forEach { frame ->
-            val iframe = frame.attr("data-src").ifEmpty { frame.attr("src") }
-            if (iframe.isNotBlank()) {
-                processIframe("Ana Kaynak", iframe, subtitleCallback, callback)
-            }
+        fun addIframeUrl(name: String, rawUrl: String?) {
+            if (rawUrl.isNullOrBlank()) return
+            val fixed = fixUrlNull(rawUrl) ?: return
+            val lower = fixed.lowercase()
+            if (lower.endsWith(".webp") || lower.endsWith(".jpg") || lower.endsWith(".png") || lower.endsWith(".jpeg") || lower.endsWith(".svg") || lower.endsWith(".gif") || lower.endsWith(".css") || lower.endsWith(".js")) return
+            if (lower.contains("youtube.com") || lower.contains("youtu.be")) return
+            if (lower.contains("google") || lower.contains("analytics") || lower.contains("yandex") || lower.contains("facebook") || lower.contains("doubleclick")) return
+            iframes.add(name to fixed)
         }
 
-        // 2. Card navigation buttons/links
-        doc.select("nav.card-nav a, a.card-nav-link, button.card-nav-link, .card-video a").forEach { a ->
+        // 1. Direct player iframes anywhere on page
+        doc.select("iframe[data-src], iframe[src]").forEach { frame ->
+            val src = frame.attr("data-src").ifEmpty { frame.attr("src") }
+            addIframeUrl("Ana Kaynak", src)
+        }
+
+        // 2. Player navigation tabs / buttons
+        doc.select("nav.card-nav a, a.card-nav-link, button.card-nav-link, .card-video a, [data-video], [data-url]").forEach { a ->
             val playerUrl = a.attr("data-video").ifEmpty { a.attr("data-url") }.ifEmpty { a.attr("href") }
             val name = a.selectFirst("span")?.text()?.trim() ?: a.text().trim()
-            if (playerUrl.isNotBlank() && !playerUrl.startsWith("#")) {
+            if (playerUrl.isNotBlank() && !playerUrl.startsWith("#") && !playerUrl.startsWith("javascript:")) {
                 val fullUrl = if (playerUrl.startsWith("/")) {
                     if (playerUrl.startsWith("/video/")) "https://hdfilmcehennemi.mobi$playerUrl" else "$mainUrl$playerUrl"
                 } else playerUrl
-                processIframe(name.ifEmpty { "Kaynak" }, fullUrl, subtitleCallback, callback)
+                addIframeUrl(name.ifEmpty { "Kaynak" }, fullUrl)
             }
         }
 
-        return true
-    }
+        val distinctIframes = iframes.distinctBy { it.second }
+        var found = false
 
-    private suspend fun processIframe(
-        source: String,
-        rawIframe: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val iframe = fixUrlNull(rawIframe) ?: return
-        if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
-            invokeLocalSource(source, iframe, subtitleCallback, callback)
-        } else {
-            loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
+        distinctIframes.forEach { (name, iframe) ->
+            try {
+                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
+                    invokeLocalSource(name, iframe, subtitleCallback) { link ->
+                        found = true
+                        callback(link)
+                    }
+                }
+
+                if (!found) {
+                    if (loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
+                        found = true
+                        callback(link)
+                    }) {
+                        found = true
+                    }
+                }
+            } catch (_: Exception) {}
         }
+        return found
     }
 
     private suspend fun invokeLocalSource(
@@ -319,26 +336,31 @@ class HDFilmCehennemi : MainAPI() {
             val pageText = response.text
             val doc = Jsoup.parse(pageText)
 
-            val scriptElement = doc.select("script").firstOrNull { s ->
-                val data = s.data()
-                data.contains("sources:") || data.contains("eval(function(p,a,c,k,e,d)")
-            }
+            // Extract contentUrl from schema.org json-ld if present
+            val schemaContentUrl = Regex("""(?i)"contentUrl"\s*:\s*"([^"]+)"""").find(pageText)?.groupValues?.get(1)?.replace("\\/", "/")
 
-            val scriptText = scriptElement?.data() ?: ""
-            val decrypted = if (scriptText.isNotBlank()) decryptWithRhino(scriptText) else emptyList()
+            // Combine all script tags
+            val allScripts = doc.select("script").map { it.data() }.filter { it.isNotBlank() }.joinToString("\n;\n")
+            val decrypted = if (allScripts.isNotBlank()) decryptWithRhino(allScripts) else emptyList()
 
-            val streamUrls = if (decrypted.isNotEmpty()) {
-                decrypted
-            } else {
-                Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").findAll(pageText).map { it.value }.distinct().toList()
-            }
+            // Regex fallback for .m3u8 and .txt HLS playlists
+            val regexUrls = Regex("""https?://[^\s"'<>]+\.(?:m3u8|txt)[^\s"'<>]*""").findAll(pageText)
+                .map { it.value.replace("\\/", "/") }
+                .filter { it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") }
+                .toList()
+
+            val streamUrls = (listOfNotNull(schemaContentUrl) + decrypted + regexUrls)
+                .map { it.replace("\\/", "/") }
+                .filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) }
+                .distinct()
 
             if (streamUrls.isEmpty()) {
                 Log.w("HDCH", "No stream URLs decrypted from $url")
                 return
             }
 
-            val tracksStr = scriptText.substringAfter("tracks: [", "").substringBefore("]", "")
+            // Extract subtitles
+            val tracksStr = pageText.substringAfter("tracks: [", "").substringBefore("]", "")
             if (tracksStr.isNotBlank()) {
                 try {
                     val jsonStr = "[$tracksStr]"
@@ -416,8 +438,8 @@ class HDFilmCehennemi : MainAPI() {
             for (var k in this) {
                 try {
                     var v = this[k];
-                    if (typeof v === 'string' && (v.indexOf('.m3u8') !== -1 || v.indexOf('master') !== -1)) {
-                        if (__found_links__.indexOf(v) === -1) __found_links__.push(v);
+                    if (typeof v === 'string' && (v.indexOf('.m3u8') !== -1 || v.indexOf('.txt') !== -1 || v.indexOf('master') !== -1 || v.indexOf('/hls/') !== -1)) {
+                        if (v.indexOf('http') === 0 && __found_links__.indexOf(v) === -1) __found_links__.push(v);
                     }
                 } catch(e){}
             }
@@ -433,7 +455,7 @@ class HDFilmCehennemi : MainAPI() {
             cx.evaluateString(scope, packedScript, "unpacked", 1, null)
             val res = cx.evaluateString(scope, collector, "collector", 1, null)
             val rawLinks = res?.toString()?.split("|||") ?: emptyList()
-            return rawLinks.map { it.trim() }.filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains("master")) }
+            return rawLinks.map { it.trim() }.filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) }
         } catch (e: Exception) {
             Log.e("HDCH", "Rhino decrypt error: ${e.message}")
             return emptyList()
