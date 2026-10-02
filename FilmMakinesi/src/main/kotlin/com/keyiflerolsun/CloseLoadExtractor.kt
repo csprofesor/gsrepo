@@ -43,99 +43,103 @@ open class CloseLoadExtractor : ExtractorApi() {
 
     private fun decryptNative(html: String): String? {
         return try {
+            val scriptRegex = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
             val regexKey = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z0-9]{15,35})["']""")
             val regexOps = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z]{2,8})["']""")
             val regexArr = Regex("""\(\[((?:["'][^"']+["'],?\s*)+)\]\)""")
 
-            val matchKey = regexKey.find(html)
-            val matchOps = regexOps.find(html)
-            val matchArr = regexArr.find(html)
+            val scriptMatches = scriptRegex.findAll(html)
+            for (scriptMatch in scriptMatches) {
+                val scriptContent = scriptMatch.groupValues[1]
 
-            if (matchKey == null || matchOps == null || matchArr == null) {
-                Log.w("Kekik_$name", "Regex eşleşmedi: ahk=${matchKey != null}, uwkd=${matchOps != null}, arr=${matchArr != null}")
-                return null
-            }
+                val matchKey = regexKey.find(scriptContent) ?: continue
+                val matchOps = regexOps.find(scriptContent) ?: continue
+                val matchArr = regexArr.find(scriptContent) ?: continue
 
-            val key = matchKey.groupValues[1]
-            val ops = matchOps.groupValues[1]
-            val rawArrStr = matchArr.groupValues[1]
+                val key = matchKey.groupValues[1]
+                val ops = matchOps.groupValues[1]
+                val rawArrStr = matchArr.groupValues[1]
 
-            val arrList = rawArrStr.split(",")
-                .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
+                val arrList = rawArrStr.split(",")
+                    .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
 
-            var str = arrList.joinToString("")
+                var str = arrList.joinToString("")
 
-            var h1 = 0
-            var h2 = 0
-            for (i in 0 until key.length) {
-                val charCode = key[i].code
-                h1 = (h1 * 31 + charCode) % 251
-                h2 = ((charCode + i) xor h2) and 255
-            }
+                var h1 = 0
+                var h2 = 0
+                for (i in 0 until key.length) {
+                    val charCode = key[i].code
+                    h1 = (h1 * 31 + charCode) % 251
+                    h2 = ((charCode + i) xor h2) and 255
+                }
 
-            val seed = (h1 + h2) % 256
-            val shift = (h1 % 13) + 3
-            var currentNum = (h1 * 256 + h2) % 65521 + 1
+                val seed = (h1 + h2) % 256
+                val shift = (h1 % 13) + 3
+                var currentNum = (h1 * 256 + h2) % 65521 + 1
 
-            for (i in ops.length - 1 downTo 0) {
-                when (val op = ops[i]) {
-                    'v' -> {
-                        str = str.reversed()
-                    }
-                    'b' -> {
-                        val mod = str.length % 4
-                        if (mod != 0) {
-                            str += "=".repeat(4 - mod)
+                for (i in ops.length - 1 downTo 0) {
+                    when (val op = ops[i]) {
+                        'v' -> {
+                            str = str.reversed()
                         }
-                        val decodedBytes = Base64.decode(str, Base64.DEFAULT)
-                        str = String(decodedBytes, Charsets.ISO_8859_1)
-                    }
-                    else -> {
-                        val rot = (26 - ((op.code - 64) % 26)) % 26
-                        val sb = StringBuilder(str.length)
-                        for (j in 0 until str.length) {
-                            val c = str[j]
-                            when (c) {
-                                in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
-                                in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
-                                else -> sb.append(c)
+                        'b' -> {
+                            val mod = str.length % 4
+                            if (mod != 0) {
+                                str += "=".repeat(4 - mod)
                             }
+                            val decodedBytes = Base64.decode(str, Base64.DEFAULT)
+                            str = String(decodedBytes, Charsets.ISO_8859_1)
                         }
-                        str = sb.toString()
+                        else -> {
+                            val rot = (26 - ((op.code - 64) % 26)) % 26
+                            val sb = StringBuilder(str.length)
+                            for (j in 0 until str.length) {
+                                val c = str[j]
+                                when (c) {
+                                    in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
+                                    in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
+                                    else -> sb.append(c)
+                                }
+                            }
+                            str = sb.toString()
+                        }
                     }
                 }
+
+                val len = str.length
+                val perm = IntArray(len)
+                for (i in len - 1 downTo 1) {
+                    currentNum = (currentNum * 75 + 74) % 65537
+                    perm[i] = currentNum % (i + 1)
+                }
+
+                val charArray = str.toCharArray()
+                for (i in 1 until len) {
+                    val idx = perm[i]
+                    val tmp = charArray[i]
+                    charArray[i] = charArray[idx]
+                    charArray[idx] = tmp
+                }
+
+                val strPermuted = String(charArray)
+
+                val result = StringBuilder(strPermuted.length)
+                var k = seed
+                for (i in 0 until strPermuted.length) {
+                    val c = strPermuted[i].code
+                    val nextK = (k + shift) % 256
+                    val decChar = (c xor nextK).toChar()
+                    result.append(decChar)
+                    k = (nextK + c) % 256
+                }
+
+                val decodedUrl = result.toString()
+                if (decodedUrl.startsWith("http")) {
+                    Log.d("Kekik_$name", "Decoded URL: $decodedUrl")
+                    return decodedUrl
+                }
             }
-
-            val len = str.length
-            val perm = IntArray(len)
-            for (i in len - 1 downTo 1) {
-                currentNum = (currentNum * 75 + 74) % 65537
-                perm[i] = currentNum % (i + 1)
-            }
-
-            val charArray = str.toCharArray()
-            for (i in 1 until len) {
-                val idx = perm[i]
-                val tmp = charArray[i]
-                charArray[i] = charArray[idx]
-                charArray[idx] = tmp
-            }
-
-            val strPermuted = String(charArray)
-
-            val result = StringBuilder(strPermuted.length)
-            var k = seed
-            for (i in 0 until strPermuted.length) {
-                val c = strPermuted[i].code
-                val nextK = (k + shift) % 256
-                val decChar = (c xor nextK).toChar()
-                result.append(decChar)
-                k = (nextK + c) % 256
-            }
-
-            val decodedUrl = result.toString()
-            Log.d("Kekik_$name", "Decoded URL: $decodedUrl")
-            decodedUrl
+            null
         } catch (e: Exception) {
             Log.e("Kekik_$name", "Deşifre hatası: ${e.message}")
             null

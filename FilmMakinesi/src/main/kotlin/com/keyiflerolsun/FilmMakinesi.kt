@@ -47,14 +47,27 @@ class FilmMakinesi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/" to "Ana Sayfa",
-        "${mainUrl}/filmler-1/" to "Son Eklenen Filmler",
-        "${mainUrl}/yabanci-dizi-izle-1/" to "Diziler"
+        "${mainUrl}/filmler-1/sayfa/" to "Son Filmler",
+        "${mainUrl}/film-izle/olmeden-izlenmesi-gerekenler-fm1/sayfa/" to "Ölmeden İzle",
+        "${mainUrl}/tur/aksiyon-fm1/film/sayfa/" to "Aksiyon",
+        "${mainUrl}/tur/bilim-kurgu-fm2/film/sayfa/" to "Bilim Kurgu",
+        "${mainUrl}/tur/macera-fm1/film/sayfa/" to "Macera",
+        "${mainUrl}/tur/komedi-fm1/film/sayfa/" to "Komedi",
+        "${mainUrl}/tur/romantik-fm1/film/sayfa/" to "Romantik",
+        "${mainUrl}/tur/belgesel/film/sayfa/" to "Belgesel",
+        "${mainUrl}/tur/fantastik-fm1/film/sayfa/" to "Fantastik",
+        "${mainUrl}/tur/polisiye/film/sayfa/" to "Polisiye Suç",
+        "${mainUrl}/tur/korku-fm1/film/sayfa/" to "Korku"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         return try {
-            val url = if (page <= 1) request.data else "${request.data.removeSuffix("/")}/sayfa/$page/"
+            val cleanData = request.data.removeSuffix("/")
+            val url = if (page <= 1) {
+                cleanData.substringBeforeLast("/sayfa") + "/"
+            } else {
+                "$cleanData/$page/"
+            }
             val doc = app.get(
                 url, 
                 headers = mapOf(
