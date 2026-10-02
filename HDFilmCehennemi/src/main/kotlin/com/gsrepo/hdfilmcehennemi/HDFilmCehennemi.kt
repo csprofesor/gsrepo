@@ -40,35 +40,20 @@ class HDFilmCehennemi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/" to "Son Eklenenler",
-        "${mainUrl}/category/film-izle-2/" to "Filmler",
-        "${mainUrl}/yabancidiziizle-5/" to "Yabancı Diziler",
-        "${mainUrl}/dil/turkce-dublajli-film-izleyin-6/" to "Türkçe Dublaj",
-        "${mainUrl}/dil/turkce-altyazili-filmleri-izleme-sitesi-3/" to "Türkçe Altyazılı",
-        "${mainUrl}/en-cok-izlenen-filmler-hd-1/" to "En Çok İzlenenler",
-        "${mainUrl}/category/tavsiye-filmler-izle3/" to "Tavsiye Filmler",
-        "${mainUrl}/top100-2/" to "IMDb Top 100",
-        "${mainUrl}/category/marvel-yapimlarini-izle-5/" to "Marvel Yapımları",
-        "${mainUrl}/category/dc-yapimlarini-izle-1/" to "DC Yapımları",
-        "${mainUrl}/tur/aksiyon-filmleri-izleyin-8/" to "Aksiyon",
-        "${mainUrl}/tur/animasyon-filmlerini-izleyin-5/" to "Animasyon",
-        "${mainUrl}/tur/bilim-kurgu-filmlerini-izleyin-5/" to "Bilim Kurgu",
-        "${mainUrl}/tur/dram-filmlerini-izle-2/" to "Dram",
-        "${mainUrl}/tur/fantastik-filmlerini-izleyin-4/" to "Fantastik",
-        "${mainUrl}/tur/gerilim-filmlerini-izle-4/" to "Gerilim",
-        "${mainUrl}/tur/komedi-filmlerini-izleyin-2/" to "Komedi",
-        "${mainUrl}/tur/korku-filmlerini-izle-9/" to "Korku",
-        "${mainUrl}/tur/macera-filmlerini-izleyin-5/" to "Macera",
-        "${mainUrl}/tur/romantik-filmleri-izle-3/" to "Romantik"
+        "${mainUrl}/load/page/sayfano/home/" to "Yeni Eklenen Filmler",
+        "${mainUrl}/load/page/sayfano/home-series/" to "Yeni Eklenen Diziler",
+        "${mainUrl}/load/page/sayfano/categories/tavsiye-filmler-izle3/" to "Tavsiye Filmler",
+        "${mainUrl}/load/page/sayfano/imdb7/" to "IMDB 7+ Filmler",
+        "${mainUrl}/load/page/sayfano/mostCommented/" to "En Çok Yorumlananlar",
+        "${mainUrl}/load/page/sayfano/mostLiked/" to "En Çok Beğenilenler"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         return try {
-            val base = request.data.removeSuffix("/")
-            val url = if (page <= 1) request.data else "$base/page/$page/"
+            val url = request.data.replace("sayfano", page.toString())
             val doc = app.get(url, referer = "$mainUrl/", interceptor = interceptor).document
-            val items = parseHomePage(doc)
-            newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
+            val home = doc.select("a.poster, div.poster, a.card, div.card, div.slider-slide").mapNotNull { it.toSearchResult() }.distinctBy { it.url }
+            newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
         } catch (e: Exception) {
             Log.e(name, "getMainPage error: ${e.message}")
             newHomePageResponse(request.name, emptyList(), hasNext = false)
@@ -76,43 +61,43 @@ class HDFilmCehennemi : MainAPI() {
     }
 
     private fun parseHomePage(doc: Document): List<SearchResponse> {
-        return doc.select("a.poster, div.poster, a.card, div.card, article, div.movie-box, div.slider-slide, div.poster-wrapper")
-            .mapNotNull { parseSearchElement(it) }
+        return doc.select("a.poster, div.poster, a.card, div.card, div.slider-slide, article, div.movie-box")
+            .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
     }
 
-    private fun parseSearchElement(element: Element): SearchResponse? {
-        val link = if (element.tagName() == "a") element else element.selectFirst("a") ?: return null
-        val href = fixUrlNull(link.attr("href")) ?: return null
-        if (href.contains("/oyuncu/") || href.contains("/yonetmen/") || href.contains("/kategori/") || href.contains("/tur/")) {
-            return null
-        }
+    private fun parseSearchElement(element: Element): SearchResponse? = element.toSearchResult()
 
-        val title = element.attr("data-title").ifEmpty { null }
-            ?: element.selectFirst("h2.title, h3.title, h4.title, div.title, .poster-title, strong")?.text()?.trim()
+    private fun Element.toSearchResult(): SearchResponse? {
+        val link = if (this.tagName() == "a") this else this.selectFirst("a") ?: return null
+        val href = fixUrlNull(link.attr("href")) ?: return null
+        if (href.contains("/oyuncu/") || href.contains("/yonetmen/") || href.contains("/kategori/")) return null
+
+        val title = this.attr("title").ifEmpty { null }
+            ?: this.attr("data-title").ifEmpty { null }
+            ?: this.selectFirst("strong.poster-title, strong, h2.title, h3.title, h4.title, div.title, .poster-title")?.text()?.trim()
             ?: link.attr("title").ifEmpty { null }
-            ?: element.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
+            ?: this.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
             ?: return null
 
-        val img = element.selectFirst("img")
-        val poster = fixUrlNull(
+        val img = this.selectFirst("img")
+        val posterUrl = fixUrlNull(
             img?.attr("data-src")?.ifEmpty { null }
                 ?: img?.attr("data-srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
                 ?: img?.attr("srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
                 ?: img?.attr("src")?.takeUnless { it.startsWith("data:") }
         )
 
-        val score = element.selectFirst(".imdb, .score, span.rating, div.rating")?.text()?.trim()
-        val type = if (href.contains("/dizi/")) TvType.TvSeries else TvType.Movie
-
-        return if (type == TvType.TvSeries) {
-            newTvSeriesSearchResponse(title, href, type) {
-                posterUrl = poster
+        val score = this.selectFirst(".imdb, .score, span.rating, div.rating")?.text()?.trim()
+        val isTv = href.contains("/dizi/")
+        return if (isTv) {
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                this.posterUrl = posterUrl
                 this.score = Score.from10(score)
             }
         } else {
-            newMovieSearchResponse(title, href, type) {
-                posterUrl = poster
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                this.posterUrl = posterUrl
                 this.score = Score.from10(score)
             }
         }
