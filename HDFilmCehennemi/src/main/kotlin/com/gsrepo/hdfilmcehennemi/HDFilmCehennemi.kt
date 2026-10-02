@@ -104,12 +104,18 @@ class HDFilmCehennemi : MainAPI() {
             ?: return null
 
         val img = this.selectFirst("img")
-        val posterUrl = fixUrlNull(
-            img?.attr("data-src")?.ifEmpty { null }
-                ?: img?.attr("data-srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                ?: img?.attr("srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                ?: img?.attr("src")?.takeUnless { it.startsWith("data:") }
-        )
+        val src = img?.attr("src")?.takeUnless { it.isBlank() || it.startsWith("data:") }
+        val dataSrc = img?.attr("data-src")?.takeUnless { it.isBlank() || it.startsWith("data:") }
+        val dataOriginal = img?.attr("data-original")?.takeUnless { it.isBlank() || it.startsWith("data:") }
+        val srcset = img?.attr("srcset")?.takeUnless { it.isBlank() }
+            ?.split(",")?.firstOrNull()?.trim()
+            ?.split(Regex("""\s+"""))?.firstOrNull()?.takeUnless { it.startsWith("data:") }
+        val dataSrcset = img?.attr("data-srcset")?.takeUnless { it.isBlank() }
+            ?.split(",")?.firstOrNull()?.trim()
+            ?.split(Regex("""\s+"""))?.firstOrNull()?.takeUnless { it.startsWith("data:") }
+
+        val rawPoster = dataSrc ?: src ?: srcset ?: dataSrcset ?: dataOriginal
+        val posterUrl = fixUrlNull(rawPoster)
 
         val score = this.selectFirst(".imdb, .score, span.rating, div.rating")?.text()?.trim()
         val isTv = href.contains("/dizi/")
