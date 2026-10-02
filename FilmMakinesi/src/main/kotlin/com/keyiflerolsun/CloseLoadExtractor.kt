@@ -50,6 +50,24 @@ open class CloseLoadExtractor : ExtractorApi() {
         return true
     }
 
+    private fun safeBase64Decode(input: String): String {
+        val clean = input.replace("\n", "").replace("\r", "").replace(" ", "").trim()
+        val formatted = clean.replace("-", "+").replace("_", "/")
+        val mod = formatted.length % 4
+        val padded = if (mod != 0) formatted + "=".repeat(4 - mod) else formatted
+
+        val bytes = try {
+            Base64.decode(padded, Base64.DEFAULT)
+        } catch (_: Exception) {
+            try {
+                Base64.decode(padded, Base64.URL_SAFE)
+            } catch (_: Exception) {
+                Base64.decode(padded, Base64.NO_WRAP)
+            }
+        }
+        return String(bytes, Charsets.ISO_8859_1)
+    }
+
     private fun decryptNative(html: String): String? {
         return try {
             val regexKey = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z0-9]{15,35})["']""")
@@ -115,12 +133,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                                             str = str.reversed()
                                         }
                                         'b' -> {
-                                            val mod = str.length % 4
-                                            if (mod != 0) {
-                                                str += "=".repeat(4 - mod)
-                                            }
-                                            val decodedBytes = Base64.decode(str, Base64.DEFAULT)
-                                            str = String(decodedBytes, Charsets.ISO_8859_1)
+                                            str = safeBase64Decode(str)
                                         }
                                         else -> {
                                             val rot = (26 - ((op.code - 64) % 26)) % 26
