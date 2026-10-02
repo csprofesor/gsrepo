@@ -47,110 +47,119 @@ open class CloseLoadExtractor : ExtractorApi() {
             val regexOps = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z]{2,8})["']""")
             val regexArr = Regex("""\(\[((?:["'][^"']+["'],?\s*)+)\]\)""")
 
-            val unpackedJs = try { getAndUnpack(html) } catch (_: Exception) { null }
-            val candidates = mutableListOf<String>()
-            if (!unpackedJs.isNullOrBlank()) {
-                candidates.add(unpackedJs)
-            }
+            // 1. Unpack any packer scripts in HTML and concatenate all scripts into a single search scope!
             val doc = Jsoup.parse(html)
-            doc.select("script").forEach {
-                val data = it.data().ifEmpty { it.html() }
-                if (data.isNotBlank()) candidates.add(data)
+            val scriptTexts = mutableListOf<String>()
+
+            doc.select("script").forEach { script ->
+                val text = script.data().ifEmpty { script.html() }
+                if (text.isNotBlank()) {
+                    scriptTexts.add(text)
+                    if (text.contains("eval(function(p,a,c,k,e,d)")) {
+                        try {
+                            getAndUnpack(text)?.let { unpacked ->
+                                scriptTexts.add(unpacked)
+                                Log.d("CLOSELOAD_UNPACKED", unpacked.take(500))
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
             }
 
-            for ((scriptIdx, scriptContent) in candidates.withIndex()) {
-                val matchKeys = regexKey.findAll(scriptContent).toList()
-                val matchOpss = regexOps.findAll(scriptContent).toList()
-                val matchArrs = regexArr.findAll(scriptContent).toList()
+            // Combine all scripts so key/ops from one script and array from another can be matched!
+            val combinedJs = scriptTexts.joinToString("\n;\n")
 
-                Log.d("CLOSELOAD_INSPECT", "Script #$scriptIdx: keys=${matchKeys.size}, ops=${matchOpss.size}, arrs=${matchArrs.size}")
+            val matchKeys = regexKey.findAll(combinedJs).toList()
+            val matchOpss = regexOps.findAll(combinedJs).toList()
+            val matchArrs = regexArr.findAll(combinedJs).toList()
 
-                for (matchKey in matchKeys) {
-                    for (matchOps in matchOpss) {
-                        for (matchArr in matchArrs) {
-                            val key = matchKey.groupValues[1]
-                            val ops = matchOps.groupValues[1]
-                            val rawArrStr = matchArr.groupValues[1]
+            Log.d("CLOSELOAD_COMBINED", "Combined JS: keys=${matchKeys.size}, ops=${matchOpss.size}, arrs=${matchArrs.size}")
 
-                            val arrList = rawArrStr.split(",")
-                                .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
+            for (matchKey in matchKeys) {
+                for (matchOps in matchOpss) {
+                    for (matchArr in matchArrs) {
+                        val key = matchKey.groupValues[1]
+                        val ops = matchOps.groupValues[1]
+                        val rawArrStr = matchArr.groupValues[1]
 
-                            var str = arrList.joinToString("")
+                        val arrList = rawArrStr.split(",")
+                            .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
 
-                            var h1 = 0
-                            var h2 = 0
-                            for (i in 0 until key.length) {
-                                val charCode = key[i].code
-                                h1 = (h1 * 31 + charCode) % 251
-                                h2 = ((charCode + i) xor h2) and 255
-                            }
+                        var str = arrList.joinToString("")
 
-                            val seed = (h1 + h2) % 256
-                            val shift = (h1 % 13) + 3
-                            var currentNum = (h1 * 256 + h2) % 65521 + 1
+                        var h1 = 0
+                        var h2 = 0
+                        for (i in 0 until key.length) {
+                            val charCode = key[i].code
+                            h1 = (h1 * 31 + charCode) % 251
+                            h2 = ((charCode + i) xor h2) and 255
+                        }
 
-                            for (i in ops.length - 1 downTo 0) {
-                                when (val op = ops[i]) {
-                                    'v' -> {
-                                        str = str.reversed()
+                        val seed = (h1 + h2) % 256
+                        val shift = (h1 % 13) + 3
+                        var currentNum = (h1 * 256 + h2) % 65521 + 1
+
+                        for (i in ops.length - 1 downTo 0) {
+                            when (val op = ops[i]) {
+                                'v' -> {
+                                    str = str.reversed()
+                                }
+                                'b' -> {
+                                    val mod = str.length % 4
+                                    if (mod != 0) {
+                                        str += "=".repeat(4 - mod)
                                     }
-                                    'b' -> {
-                                        val mod = str.length % 4
-                                        if (mod != 0) {
-                                            str += "=".repeat(4 - mod)
+                                    val decodedBytes = Base64.decode(str, Base64.DEFAULT)
+                                    str = String(decodedBytes, Charsets.ISO_8859_1)
+                                }
+                                else -> {
+                                    val rot = (26 - ((op.code - 64) % 26)) % 26
+                                    val sb = StringBuilder(str.length)
+                                    for (j in 0 until str.length) {
+                                        val c = str[j]
+                                        when (c) {
+                                            in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
+                                            in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
+                                            else -> sb.append(c)
                                         }
-                                        val decodedBytes = Base64.decode(str, Base64.DEFAULT)
-                                        str = String(decodedBytes, Charsets.ISO_8859_1)
                                     }
-                                    else -> {
-                                        val rot = (26 - ((op.code - 64) % 26)) % 26
-                                        val sb = StringBuilder(str.length)
-                                        for (j in 0 until str.length) {
-                                            val c = str[j]
-                                            when (c) {
-                                                in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
-                                                in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
-                                                else -> sb.append(c)
-                                            }
-                                        }
-                                        str = sb.toString()
-                                    }
+                                    str = sb.toString()
                                 }
                             }
+                        }
 
-                            val len = str.length
-                            val perm = IntArray(len)
-                            for (i in len - 1 downTo 1) {
-                                currentNum = (currentNum * 75 + 74) % 65537
-                                perm[i] = currentNum % (i + 1)
-                            }
+                        val len = str.length
+                        val perm = IntArray(len)
+                        for (i in len - 1 downTo 1) {
+                            currentNum = (currentNum * 75 + 74) % 65537
+                            perm[i] = currentNum % (i + 1)
+                        }
 
-                            val charArray = str.toCharArray()
-                            for (i in 1 until len) {
-                                val idx = perm[i]
-                                val tmp = charArray[i]
-                                charArray[i] = charArray[idx]
-                                charArray[idx] = tmp
-                            }
+                        val charArray = str.toCharArray()
+                        for (i in 1 until len) {
+                            val idx = perm[i]
+                            val tmp = charArray[i]
+                            charArray[i] = charArray[idx]
+                            charArray[idx] = tmp
+                        }
 
-                            val strPermuted = String(charArray)
+                        val strPermuted = String(charArray)
 
-                            val result = StringBuilder(strPermuted.length)
-                            var k = seed
-                            for (i in 0 until strPermuted.length) {
-                                val c = strPermuted[i].code
-                                val nextK = (k + shift) % 256
-                                val decChar = (c xor nextK).toChar()
-                                result.append(decChar)
-                                k = (nextK + c) % 256
-                            }
+                        val result = StringBuilder(strPermuted.length)
+                        var k = seed
+                        for (i in 0 until strPermuted.length) {
+                            val c = strPermuted[i].code
+                            val nextK = (k + shift) % 256
+                            val decChar = (c xor nextK).toChar()
+                            result.append(decChar)
+                            k = (nextK + c) % 256
+                        }
 
-                            val decodedUrl = result.toString()
-                            Log.d("Kekik_$name", "Candidate decoded: $decodedUrl")
-                            if (decodedUrl.startsWith("http") && !decodedUrl.contains("playmix.uno", ignoreCase = true)) {
-                                Log.d("Kekik_$name", "Decoded REAL URL: $decodedUrl")
-                                return decodedUrl
-                            }
+                        val decodedUrl = result.toString()
+                        Log.d("Kekik_$name", "Candidate decoded: $decodedUrl")
+                        if (decodedUrl.startsWith("http") && !decodedUrl.contains("playmix.uno", ignoreCase = true)) {
+                            Log.d("Kekik_$name", "Decoded REAL URL: $decodedUrl")
+                            return decodedUrl
                         }
                     }
                 }
@@ -216,14 +225,6 @@ open class CloseLoadExtractor : ExtractorApi() {
         } catch (_: Exception) { "" }
 
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
-
-        val doc = Jsoup.parse(rawHtml)
-        doc.select("script").forEachIndexed { i, script ->
-            val content = script.data().ifEmpty { script.html() }
-            if (content.length > 20) {
-                Log.d("CLOSELOAD_SCRIPT_$i", content.take(300))
-            }
-        }
 
         var videoUrl = decryptNative(rawHtml)
 
