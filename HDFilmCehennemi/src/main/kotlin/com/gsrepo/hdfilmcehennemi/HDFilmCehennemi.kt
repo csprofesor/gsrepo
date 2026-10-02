@@ -336,10 +336,10 @@ class HDFilmCehennemi : MainAPI() {
             val pageText = response.text
             val doc = Jsoup.parse(pageText)
 
-            // Extract contentUrl from schema.org json-ld if present
+            // Extract contentUrl from schema.org json-ld if present as last fallback
             val schemaContentUrl = Regex("""(?i)"contentUrl"\s*:\s*"([^"]+)"""").find(pageText)?.groupValues?.get(1)?.replace("\\/", "/")
 
-            // Combine all script tags
+            // Combine all script tags for Rhino decryption
             val allScripts = doc.select("script").map { it.data() }.filter { it.isNotBlank() }.joinToString("\n;\n")
             val decrypted = if (allScripts.isNotBlank()) decryptWithRhino(allScripts) else emptyList()
 
@@ -349,7 +349,8 @@ class HDFilmCehennemi : MainAPI() {
                 .filter { it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") }
                 .toList()
 
-            val streamUrls = (listOfNotNull(schemaContentUrl) + decrypted + regexUrls)
+            // Prioritize Rhino decrypted links over schema.org (schema.org often contains fake filmakinesi 404 links)
+            val streamUrls = (decrypted.ifEmpty { listOfNotNull(schemaContentUrl) } + regexUrls)
                 .map { it.replace("\\/", "/") }
                 .filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) }
                 .distinct()
@@ -375,6 +376,8 @@ class HDFilmCehennemi : MainAPI() {
                 } catch (_: Exception) {}
             }
 
+            val embedDomain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: "https://hdfilmcehennemi.mobi"
+
             streamUrls.forEachIndexed { index, streamUrl ->
                 val linkName = if (streamUrls.size > 1) "$source ${index + 1}" else source
                 callback(
@@ -384,9 +387,9 @@ class HDFilmCehennemi : MainAPI() {
                         url = streamUrl,
                         type = ExtractorLinkType.M3U8
                     ) {
-                        this.referer = "$mainUrl/"
+                        this.referer = "$embedDomain/"
                         this.headers = mapOf(
-                            "Referer" to "$mainUrl/",
+                            "Referer" to "$embedDomain/",
                             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                         )
                     }
