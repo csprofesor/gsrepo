@@ -51,21 +51,29 @@ open class CloseLoadExtractor : ExtractorApi() {
     }
 
     private fun safeBase64Decode(input: String): String {
-        val clean = input.replace("\n", "").replace("\r", "").replace(" ", "").trim()
-        val formatted = clean.replace("-", "+").replace("_", "/")
-        val mod = formatted.length % 4
-        val padded = if (mod != 0) formatted + "=".repeat(4 - mod) else formatted
+        return try {
+            val clean = input.replace("\n", "").replace("\r", "").replace(" ", "").trim()
+            val formatted = clean.replace("-", "+").replace("_", "/")
+            val mod = formatted.length % 4
+            val padded = if (mod != 0) formatted + "=".repeat(4 - mod) else formatted
 
-        val bytes = try {
-            Base64.decode(padded, Base64.DEFAULT)
-        } catch (_: Exception) {
-            try {
-                Base64.decode(padded, Base64.URL_SAFE)
+            val bytes = try {
+                Base64.decode(padded, Base64.DEFAULT)
             } catch (_: Exception) {
-                Base64.decode(padded, Base64.NO_WRAP)
+                try {
+                    Base64.decode(padded, Base64.URL_SAFE)
+                } catch (_: Exception) {
+                    try {
+                        Base64.decode(padded, Base64.NO_WRAP)
+                    } catch (_: Exception) {
+                        Base64.decode(padded, Base64.CRLF)
+                    }
+                }
             }
+            String(bytes, Charsets.ISO_8859_1)
+        } catch (_: Exception) {
+            input
         }
-        return String(bytes, Charsets.ISO_8859_1)
     }
 
     private fun decryptNative(html: String): String? {
@@ -115,6 +123,10 @@ open class CloseLoadExtractor : ExtractorApi() {
 
                                 var str = arrList.joinToString("")
 
+                                if (str.length > 100000 || rawArrStr.length > 100000) {
+                                    str = safeBase64Decode(str)
+                                }
+
                                 var h1 = 0
                                 var h2 = 0
                                 for (i in 0 until key.length) {
@@ -128,26 +140,15 @@ open class CloseLoadExtractor : ExtractorApi() {
                                 var currentNum = (h1 * 256 + h2) % 65521 + 1
 
                                 for (i in ops.length - 1 downTo 0) {
-                                    when (val op = ops[i]) {
-                                        'v' -> {
+                                    when (ops[i]) {
+                                        'v', 'V' -> {
                                             str = str.reversed()
                                         }
-                                        'b' -> {
+                                        'b', 'B' -> {
                                             str = safeBase64Decode(str)
                                         }
-                                        else -> {
-                                            val rot = (26 - ((op.code - 64) % 26)) % 26
-                                            val sb = StringBuilder(str.length)
-                                            for (j in 0 until str.length) {
-                                                val c = str[j]
-                                                when (c) {
-                                                    in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
-                                                    in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
-                                                    else -> sb.append(c)
-                                                }
-                                            }
-                                            str = sb.toString()
-                                        }
+                                        // Non-'b'/non-'v' characters in ops (e.g. 'I', 'T', 'R', 'N', 'G', 'K', 'X')
+                                        // are obfuscation dummy noise in JS and must be ignored.
                                     }
                                 }
 
