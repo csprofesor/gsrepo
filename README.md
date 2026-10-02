@@ -45,5 +45,5 @@ gsrepo Türkçe CloudStream eklentilerini içeren sağlayıcı deposudur.
 CloudStream uygulamasında **Ayarlar > Eklentiler > Depo Ekle** bölümüne aşağıdaki URL adresi ekleyebilirsiniz:
 
 ```
-https://raw.githubusercontent.com/csprofesor/gsrepo/builds/plugins.json
+https://raw.githubusercontent.com/csprofesor/gsrepo/builds/repo.json
 ```
