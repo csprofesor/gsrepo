@@ -2,6 +2,7 @@ package com.keyiflerolsun
 
 import android.util.Base64
 import android.util.Log
+import android.webkit.CookieManager
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
@@ -176,22 +177,24 @@ open class CloseLoadExtractor : ExtractorApi() {
     ) {
         Log.d(name, "getUrl çağrıldı, url: $url")
 
-        val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
         val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
-        val headers = mapOf(
+        val requestHeaders = mapOf(
             "User-Agent" to userAgent,
-            "Referer" to "${mainUrl}/",
-            "Origin" to mainUrl
+            "Referer" to "${mainUrl}/"
         )
 
         val response = try {
-            app.get(url, headers = headers, interceptor = interceptor)
+            app.get(url, headers = requestHeaders, interceptor = interceptor)
         } catch (e: Exception) {
             Log.e(name, "Embed GET hatası: ${e.message}")
             return
         }
 
         val rawHtml = response.text
+        val cookies = try {
+            CookieManager.getInstance().getCookie(url) ?: ""
+        } catch (_: Exception) { "" }
+
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
         val videoUrl = decryptNative(rawHtml)
@@ -209,6 +212,12 @@ open class CloseLoadExtractor : ExtractorApi() {
                 INFER_TYPE
             }
 
+            val linkHeaders = mapOf(
+                "Referer" to "${mainUrl}/",
+                "User-Agent" to userAgent,
+                if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+            ).filter { it.key.isNotBlank() }
+
             callback.invoke(
                 newExtractorLink(
                     source = name,
@@ -216,12 +225,9 @@ open class CloseLoadExtractor : ExtractorApi() {
                     url = videoUrl,
                     type = linkType
                 ) {
-                    this.referer = url
-                    this.headers = mapOf(
-                        "User-Agent" to userAgent,
-                        "Referer" to url,
-                        "Origin" to domain
-                    )
+                    this.referer = "${mainUrl}/"
+                    this.quality = Qualities.P1080.value
+                    this.headers = linkHeaders
                 }
             )
             Log.d(name, "ExtractorLink eklendi: $videoUrl")
