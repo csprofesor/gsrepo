@@ -186,11 +186,12 @@ class RapidrameExtractor : ExtractorApi() {
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val lower = url.lowercase()
-        if (lower.contains("playmix.uno") && !lower.contains(".m3u8") && !lower.contains(".mp4")) return false
+        if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<!doctype") || lower.contains("<html")) return false
+        if (lower.contains("playmix.uno") && !lower.contains(".m3u8") && !lower.contains(".mp4") && !lower.contains(".txt") && !lower.contains("/hls/")) return false
         if (lower.contains(".vtt") || lower.contains(".srt")) return false
         if (lower.contains(".jpg") || lower.contains(".png") || lower.contains(".webp") || lower.contains(".jpeg") || lower.contains(".svg") || lower.contains(".gif")) return false
         if (lower.contains("intro") || lower.contains("fragman") || lower.contains("promo") || lower.contains("sample") || lower.contains("trailer") || lower.contains("preview") || lower.contains("advert") || lower.contains("preroll") || lower.contains("reklam") || lower.contains("credit") || lower.contains("card") || lower.contains("demo") || lower.contains("dummy")) return false
-        return true
+        return lower.contains(".m3u8") || lower.contains(".txt") || lower.contains("/hls/") || lower.contains(".mp4") || lower.contains(".mpd") || lower.contains(".m3u")
     }
 
     override suspend fun getUrl(

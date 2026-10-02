@@ -278,21 +278,29 @@ class HDFilmCehennemi : MainAPI() {
         val distinctIframes = iframes.distinct()
         var found = false
 
+        fun isRealMediaLink(url: String): Boolean {
+            val lower = url.lowercase()
+            if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<html")) return false
+            return lower.contains(".m3u8") || lower.contains(".txt") || lower.contains("/hls/") || lower.contains(".mp4") || lower.contains(".mpd") || lower.contains(".m3u")
+        }
+
         distinctIframes.forEach { iframe ->
             try {
                 if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
                     RapidrameExtractor().getUrl(iframe, "$mainUrl/", subtitleCallback) { link ->
-                        found = true
-                        callback(link)
+                        if (isRealMediaLink(link.url)) {
+                            found = true
+                            callback(link)
+                        }
                     }
                 }
 
                 if (!found) {
-                    if (loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
-                        found = true
-                        callback(link)
-                    }) {
-                        found = true
+                    loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
+                        if (isRealMediaLink(link.url)) {
+                            found = true
+                            callback(link)
+                        }
                     }
                 }
             } catch (_: Exception) {}
