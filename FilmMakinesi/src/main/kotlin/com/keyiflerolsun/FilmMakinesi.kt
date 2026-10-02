@@ -55,7 +55,14 @@ class FilmMakinesi : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         return try {
             val url = if (page <= 1) request.data else "${request.data.removeSuffix("/")}/sayfa/$page/"
-            val doc = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
+            val doc = app.get(
+                url, 
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+                    "Referer" to "${mainUrl}/"
+                ),
+                interceptor = interceptor
+            ).document
             val home = parseHomePage(doc)
             newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
         } catch (e: Exception) {
@@ -102,7 +109,14 @@ class FilmMakinesi : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         return try {
-            val doc = app.get("${mainUrl}/arama/?s=$query", referer = "${mainUrl}/", interceptor = interceptor).document
+            val doc = app.get(
+                "${mainUrl}/arama/?s=$query", 
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+                    "Referer" to "${mainUrl}/"
+                ),
+                interceptor = interceptor
+            ).document
             doc.select("a.item, div.item-relative a.item, div.movie-box a, .item-movie a, article a")
                 .mapNotNull { parseSearchElement(it) }
                 .distinctBy { it.url }
@@ -114,7 +128,14 @@ class FilmMakinesi : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val doc = app.get(url, referer = "${mainUrl}/", interceptor = interceptor).document
+        val doc = app.get(
+            url, 
+            headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+                "Referer" to "${mainUrl}/"
+            ),
+            interceptor = interceptor
+        ).document
 
         val title = doc.selectFirst("h1, meta[property='og:title']")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text().trim()
@@ -165,7 +186,14 @@ class FilmMakinesi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = try {
-            app.get(data, referer = mainUrl, interceptor = interceptor).document
+            app.get(
+                data, 
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+                    "Referer" to "${mainUrl}/"
+                ),
+                interceptor = interceptor
+            ).document
         } catch (e: Exception) {
             Log.e(name, "loadLinks app.get failed: ${e.message}")
             return false

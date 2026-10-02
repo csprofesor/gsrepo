@@ -99,7 +99,7 @@ open class RapidExtractor : ExtractorApi() {
                         "Referer" to url,
                         "Origin" to domain,
                         "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
                         if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
                     ).filter { it.key.isNotBlank() },
                     interceptor = interceptor
