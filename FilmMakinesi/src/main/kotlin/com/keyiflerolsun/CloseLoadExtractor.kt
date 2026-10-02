@@ -44,9 +44,19 @@ open class CloseLoadExtractor : ExtractorApi() {
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank() || !url.startsWith("http", ignoreCase = true)) return false
         val lower = url.lowercase()
+        if (lower.contains("f9gx1m12bwc")) return false
         if (lower.contains(".vtt") || lower.contains(".srt") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".webp")) return false
         if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<!doctype")) return false
         return true
+    }
+
+    private fun findBase64VideoUrl(text: String): String? {
+        val encodedUrls = Regex("""aHR0(?:cHM6Ly|cDovL)[A-Za-z0-9+/_=-]+""")
+        return encodedUrls.findAll(text).firstNotNullOfOrNull { match ->
+            safeBase64Decode(match.value)
+                .trim()
+                .takeIf { isValidVideoUrl(it) }
+        }
     }
 
     private fun safeBase64Decode(input: String): String {
@@ -263,6 +273,7 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         val unpackedJs = try { getAndUnpack(rawHtml) } catch (_: Exception) { null }
         val searchScope = (unpackedJs ?: "") + "\n" + rawHtml
+        var authResponseText = ""
 
         // Send CloseLoad authentication POST request (/ah/) if present to activate the stream token on server
         val ahPath = Regex("""url\s*:\s*["']([^"']*/ah/?)["']""").find(searchScope)?.groupValues?.get(1)
@@ -272,7 +283,7 @@ open class CloseLoadExtractor : ExtractorApi() {
         if (!ahPath.isNullOrBlank() && !hashVal.isNullOrBlank()) {
             try {
                 val ahUrl = if (ahPath.startsWith("http")) ahPath else mainUrl.trimEnd('/') + (if (ahPath.startsWith("/")) "" else "/") + ahPath
-                app.post(
+                authResponseText = app.post(
                     ahUrl,
                     headers = mapOf(
                         "User-Agent" to userAgent,
@@ -283,7 +294,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                     ).filter { it.key.isNotBlank() },
                     data = mapOf("hash" to hashVal),
                     interceptor = interceptor
-                )
+                ).text
                 Log.d(name, "CloseLoad ah auth POST sent: $ahUrl, hash=$hashVal")
             } catch (e: Exception) {
                 Log.e(name, "CloseLoad ah auth POST error: ${e.message}")
@@ -291,10 +302,11 @@ open class CloseLoadExtractor : ExtractorApi() {
         }
 
         var videoUrl = decryptNative(rawHtml)
+        val sourceScope = "$searchScope\n$authResponseText"
 
         if (!isValidVideoUrl(videoUrl)) {
             val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
-                .find(searchScope)
+                .find(sourceScope)
 
             if (directFileMatch != null) {
                 val candidate = directFileMatch.groupValues[1].replace("\\/", "/")
@@ -304,13 +316,17 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
 
             if (!isValidVideoUrl(videoUrl)) {
-                val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchScope)
+                val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(sourceScope)
                 if (urlMatch != null) {
                     val candidate = urlMatch.groupValues[1].replace("\\/", "/")
                     if (isValidVideoUrl(candidate)) {
                         videoUrl = candidate
                     }
                 }
+            }
+
+            if (!isValidVideoUrl(videoUrl)) {
+                videoUrl = findBase64VideoUrl(sourceScope)
             }
         }
 
