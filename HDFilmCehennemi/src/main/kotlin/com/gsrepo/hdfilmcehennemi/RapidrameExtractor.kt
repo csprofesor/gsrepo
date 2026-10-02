@@ -188,8 +188,8 @@ class RapidrameExtractor : ExtractorApi() {
         val lower = url.lowercase()
         if (lower.contains("playmix.uno") && !lower.contains(".m3u8") && !lower.contains(".mp4")) return false
         if (lower.contains(".vtt") || lower.contains(".srt")) return false
-        if (lower.contains(".jpg") || lower.contains(".png") || lower.contains(".webp") || lower.contains(".jpeg") || lower.contains(".svg")) return false
-        if (lower.contains("intro") || lower.contains("fragman") || lower.contains("promo") || lower.contains("sample") || lower.contains("trailer") || lower.contains("preview") || lower.contains("advert") || lower.contains("preroll")) return false
+        if (lower.contains(".jpg") || lower.contains(".png") || lower.contains(".webp") || lower.contains(".jpeg") || lower.contains(".svg") || lower.contains(".gif")) return false
+        if (lower.contains("intro") || lower.contains("fragman") || lower.contains("promo") || lower.contains("sample") || lower.contains("trailer") || lower.contains("preview") || lower.contains("advert") || lower.contains("preroll") || lower.contains("reklam") || lower.contains("credit") || lower.contains("card") || lower.contains("demo") || lower.contains("dummy")) return false
         return true
     }
 
@@ -200,7 +200,6 @@ class RapidrameExtractor : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
-        val targetReferer = if (url.contains("http")) url else "$domain/"
 
         val response = try {
             app.get(
@@ -226,9 +225,9 @@ class RapidrameExtractor : ExtractorApi() {
         val searchHtml = unpackedHtml ?: rawHtml
         var videoUrl: String? = null
 
-        // 1. Direct JWPlayer/JSON source match in unpacked JS or raw HTML
-        val directMatch = Regex("""(?i)(?:["']?file["']?|["']?url["']?|["']?source["']?|["']?contentUrl["']?)\s*:\s*["'](https?://[^"']+)["']""")
-            .find(searchHtml) ?: Regex("""(?i)(?:["']?file["']?|["']?url["']?|["']?source["']?|["']?contentUrl["']?)\s*:\s*["'](https?://[^"']+)["']""")
+        // 1. Direct JWPlayer/JSON source match for M3U8/HLS in unpacked JS or raw HTML
+        val directMatch = Regex("""(?i)(?:["']?file["']?|["']?url["']?|["']?source["']?|["']?contentUrl["']?)\s*:\s*["'](https?://[^"']+\.(?:m3u8|txt)[^"']*)["']""")
+            .find(searchHtml) ?: Regex("""(?i)(?:["']?file["']?|["']?url["']?|["']?source["']?|["']?contentUrl["']?)\s*:\s*["'](https?://[^"']+\.(?:m3u8|txt)[^"']*)["']""")
             .find(rawHtml)
 
         if (directMatch != null) {
@@ -358,7 +357,7 @@ class RapidrameExtractor : ExtractorApi() {
             val isMp4 = lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".webm")
             val isM3u8 = !isMp4
 
-            val embedDomain = Regex("""(https?://[^/]+)""").find(targetReferer)?.groupValues?.get(1) ?: domain
+            val mainSiteReferer = referer?.takeIf { it.startsWith("http") } ?: "https://www.hdfilmcehennemi.nl/"
 
             callback(
                 newExtractorLink(
@@ -367,12 +366,10 @@ class RapidrameExtractor : ExtractorApi() {
                     url = finalUrl,
                     type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
-                    this.referer = "$embedDomain/"
+                    this.referer = mainSiteReferer
                     this.headers = mapOf(
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Referer" to "$embedDomain/",
-                        "Origin" to embedDomain,
-                        "Accept" to "*/*"
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                        "Referer" to mainSiteReferer
                     )
                 }
             )
