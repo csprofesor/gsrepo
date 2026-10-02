@@ -336,23 +336,17 @@ class HDFilmCehennemi : MainAPI() {
             val pageText = response.text
             val doc = Jsoup.parse(pageText)
 
-            // Extract contentUrl from schema.org json-ld if present as last fallback
-            val schemaContentUrl = Regex("""(?i)"contentUrl"\s*:\s*"([^"]+)"""").find(pageText)?.groupValues?.get(1)?.replace("\\/", "/")
+            val decrypted = decryptWithRhino(doc)
 
-            // Combine all script tags for Rhino decryption
-            val allScripts = doc.select("script").map { it.data() }.filter { it.isNotBlank() }.joinToString("\n;\n")
-            val decrypted = if (allScripts.isNotBlank()) decryptWithRhino(allScripts) else emptyList()
-
-            // Regex fallback for .m3u8 and .txt HLS playlists
+            // Regex fallback for .m3u8 and .txt HLS playlists (filtering out fake filmakinesi links)
             val regexUrls = Regex("""https?://[^\s"'<>]+\.(?:m3u8|txt)[^\s"'<>]*""").findAll(pageText)
                 .map { it.value.replace("\\/", "/") }
-                .filter { it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") }
+                .filter { (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/")) && !it.contains("filmakinesi") }
                 .toList()
 
-            // Prioritize Rhino decrypted links over schema.org (schema.org often contains fake filmakinesi 404 links)
-            val streamUrls = (decrypted.ifEmpty { listOfNotNull(schemaContentUrl) } + regexUrls)
+            val streamUrls = (decrypted + regexUrls)
                 .map { it.replace("\\/", "/") }
-                .filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) }
+                .filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) && !it.contains("filmakinesi") }
                 .distinct()
 
             if (streamUrls.isEmpty()) {
@@ -401,9 +395,30 @@ class HDFilmCehennemi : MainAPI() {
     }
 
     @Suppress("DEPRECATION")
-    private fun decryptWithRhino(packedScript: String): List<String> {
+    private fun decryptWithRhino(doc: Document): List<String> {
         val polyfill = """
-            var console = { log: function() {} };
+            var window = globalThis || this;
+            var global = window;
+            var document = { 
+                getElementById: function() { return { style: {}, addEventListener: function() {} }; }, 
+                querySelector: function() { return { style: {}, addEventListener: function() {} }; }, 
+                querySelectorAll: function() { return []; }, 
+                createElement: function() { return { style: {}, setAttribute: function() {}, addEventListener: function() {} }; }, 
+                cookie: "", 
+                addEventListener: function() {}, 
+                removeEventListener: function() {}, 
+                body: { appendChild: function() {}, removeChild: function() {} }, 
+                head: { appendChild: function() {}, removeChild: function() {} }, 
+                location: { href: "https://hdfilmcehennemi.mobi/", hostname: "hdfilmcehennemi.mobi" }
+            };
+            var location = document.location;
+            var navigator = { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", language: "tr-TR" };
+            var screen = { width: 1920, height: 1080 };
+            var $ = function() { return { ready: function(){}, prepend: function(){}, append: function(){}, on: function(){}, css: function(){}, attr: function(){}, hide: function(){}, show: function(){} }; };
+            $.ajax = function(){};
+            var jwplayer = function() { return { setup: function(){}, on: function(){}, once: function(){}, addButton: function(){} }; };
+            jwplayer.key = "";
+            var console = { log: function() {}, error: function() {}, warn: function() {} };
             var _b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
             if (typeof btoa === 'undefined') {
                 btoa = function(input) {
@@ -442,7 +457,7 @@ class HDFilmCehennemi : MainAPI() {
                 try {
                     var v = this[k];
                     if (typeof v === 'string' && (v.indexOf('.m3u8') !== -1 || v.indexOf('.txt') !== -1 || v.indexOf('master') !== -1 || v.indexOf('/hls/') !== -1)) {
-                        if (v.indexOf('http') === 0 && __found_links__.indexOf(v) === -1) __found_links__.push(v);
+                        if (v.indexOf('http') === 0 && __found_links__.indexOf(v) === -1 && v.indexOf('filmakinesi') === -1) __found_links__.push(v);
                     }
                 } catch(e){}
             }
@@ -455,10 +470,19 @@ class HDFilmCehennemi : MainAPI() {
         try {
             val scope: ScriptableObject = cx.initStandardObjects()
             cx.evaluateString(scope, polyfill, "polyfill", 1, null)
-            cx.evaluateString(scope, packedScript, "unpacked", 1, null)
+
+            doc.select("script").forEach { s ->
+                val code = s.data().trim()
+                if (code.isNotBlank() && !code.contains("google") && !code.contains("analytics") && !code.contains("cast_sender") && !code.contains("application/ld+json")) {
+                    try {
+                        cx.evaluateString(scope, code, "script", 1, null)
+                    } catch (_: Exception) {}
+                }
+            }
+
             val res = cx.evaluateString(scope, collector, "collector", 1, null)
             val rawLinks = res?.toString()?.split("|||") ?: emptyList()
-            return rawLinks.map { it.trim() }.filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) }
+            return rawLinks.map { it.trim() }.filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains(".txt") || it.contains("/hls/") || it.contains("master")) && !it.contains("filmakinesi") }
         } catch (e: Exception) {
             Log.e("HDCH", "Rhino decrypt error: ${e.message}")
             return emptyList()
