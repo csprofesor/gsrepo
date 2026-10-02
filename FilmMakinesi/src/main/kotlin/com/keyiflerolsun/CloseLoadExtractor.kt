@@ -132,10 +132,6 @@ open class CloseLoadExtractor : ExtractorApi() {
 
                                 var str = arrList.joinToString("")
 
-                                if (str.length > 100000 || rawArrStr.length > 100000) {
-                                    str = safeBase64Decode(str)
-                                }
-
                                 var h1 = 0
                                 var h2 = 0
                                 for (i in 0 until key.length) {
