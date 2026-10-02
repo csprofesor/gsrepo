@@ -94,7 +94,9 @@ jobs:
           for item in src_data:
               if isinstance(item, dict) and 'internalName' in item:
                   name = item['internalName']
-                  if name not in entries:
+                  if name in entries:
+                      entries[name]['version'] = item.get('version', entries[name].get('version', 1))
+                  else:
                       entries[name] = item
 
           built = {p.stem: p for p in builds_dir.glob('*.cs3')}
