@@ -58,10 +58,12 @@ open class CloseLoadExtractor : ExtractorApi() {
                 if (data.isNotBlank()) candidates.add(data)
             }
 
-            for (scriptContent in candidates) {
+            for ((scriptIdx, scriptContent) in candidates.withIndex()) {
                 val matchKeys = regexKey.findAll(scriptContent).toList()
                 val matchOpss = regexOps.findAll(scriptContent).toList()
                 val matchArrs = regexArr.findAll(scriptContent).toList()
+
+                Log.d("CLOSELOAD_INSPECT", "Script #$scriptIdx: keys=${matchKeys.size}, ops=${matchOpss.size}, arrs=${matchArrs.size}")
 
                 for (matchKey in matchKeys) {
                     for (matchOps in matchOpss) {
@@ -144,6 +146,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                             }
 
                             val decodedUrl = result.toString()
+                            Log.d("Kekik_$name", "Candidate decoded: $decodedUrl")
                             if (decodedUrl.startsWith("http") && !decodedUrl.contains("playmix.uno", ignoreCase = true)) {
                                 Log.d("Kekik_$name", "Decoded REAL URL: $decodedUrl")
                                 return decodedUrl
@@ -213,6 +216,14 @@ open class CloseLoadExtractor : ExtractorApi() {
         } catch (_: Exception) { "" }
 
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
+
+        val doc = Jsoup.parse(rawHtml)
+        doc.select("script").forEachIndexed { i, script ->
+            val content = script.data().ifEmpty { script.html() }
+            if (content.length > 20) {
+                Log.d("CLOSELOAD_SCRIPT_$i", content.take(300))
+            }
+        }
 
         var videoUrl = decryptNative(rawHtml)
 
