@@ -2,7 +2,6 @@ package com.keyiflerolsun
 
 import android.util.Base64
 import android.util.Log
-import android.webkit.CookieManager
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
@@ -41,13 +40,132 @@ open class CloseLoadExtractor : ExtractorApi() {
         }
     }
 
-    private fun isValidVideoUrl(url: String?): Boolean {
-        if (url.isNullOrBlank()) return false
-        if (url.contains("playmix.uno", ignoreCase = true)) return false
-        if (url.contains(".vtt", ignoreCase = true)) return false
-        if (url.contains(".srt", ignoreCase = true)) return false
-        if (url.contains(".jpg", ignoreCase = true) || url.contains(".png", ignoreCase = true)) return false
-        return true
+    private fun decryptNative(html: String): String? {
+        return try {
+            val regexKey = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z0-9]{15,35})["']""")
+            val regexOps = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z]{2,8})["']""")
+            val regexArr = Regex("""\(\[((?:["'][^"']+["'],?\s*)+)\]\)""")
+
+            val matchKey = regexKey.find(html)
+            val matchOps = regexOps.find(html)
+            val matchArr = regexArr.find(html)
+
+            if (matchKey == null || matchOps == null || matchArr == null) {
+                Log.w("Kekik_$name", "Regex eşleşmedi: ahk=${matchKey != null}, uwkd=${matchOps != null}, arr=${matchArr != null}")
+                return null
+            }
+
+            val key = matchKey.groupValues[1]
+            val ops = matchOps.groupValues[1]
+            val rawArrStr = matchArr.groupValues[1]
+
+            val arrList = rawArrStr.split(",")
+                .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
+
+            var str = arrList.joinToString("")
+
+            var h1 = 0
+            var h2 = 0
+            for (i in 0 until key.length) {
+                val charCode = key[i].code
+                h1 = (h1 * 31 + charCode) % 251
+                h2 = ((charCode + i) xor h2) and 255
+            }
+
+            val seed = (h1 + h2) % 256
+            val shift = (h1 % 13) + 3
+            var currentNum = (h1 * 256 + h2) % 65521 + 1
+
+            for (i in ops.length - 1 downTo 0) {
+                when (val op = ops[i]) {
+                    'v' -> {
+                        str = str.reversed()
+                    }
+                    'b' -> {
+                        val mod = str.length % 4
+                        if (mod != 0) {
+                            str += "=".repeat(4 - mod)
+                        }
+                        val decodedBytes = Base64.decode(str, Base64.DEFAULT)
+                        str = String(decodedBytes, Charsets.ISO_8859_1)
+                    }
+                    else -> {
+                        val rot = (26 - ((op.code - 64) % 26)) % 26
+                        val sb = StringBuilder(str.length)
+                        for (j in 0 until str.length) {
+                            val c = str[j]
+                            when (c) {
+                                in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
+                                in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
+                                else -> sb.append(c)
+                            }
+                        }
+                        str = sb.toString()
+                    }
+                }
+            }
+
+            val len = str.length
+            val perm = IntArray(len)
+            for (i in len - 1 downTo 1) {
+                currentNum = (currentNum * 75 + 74) % 65537
+                perm[i] = currentNum % (i + 1)
+            }
+
+            val charArray = str.toCharArray()
+            for (i in 1 until len) {
+                val idx = perm[i]
+                val tmp = charArray[i]
+                charArray[i] = charArray[idx]
+                charArray[idx] = tmp
+            }
+
+            val strPermuted = String(charArray)
+
+            val result = StringBuilder(strPermuted.length)
+            var k = seed
+            for (i in 0 until strPermuted.length) {
+                val c = strPermuted[i].code
+                val nextK = (k + shift) % 256
+                val decChar = (c xor nextK).toChar()
+                result.append(decChar)
+                k = (nextK + c) % 256
+            }
+
+            val decodedUrl = result.toString()
+            Log.d("Kekik_$name", "Decoded URL: $decodedUrl")
+            decodedUrl
+        } catch (e: Exception) {
+            Log.e("Kekik_$name", "Deşifre hatası: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun processSubtitles(
+        rawHtml: String,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ) {
+        try {
+            val tracksMatch = Regex("""tracks\s*:\s*(\[.*?\])""", RegexOption.DOT_MATCHES_ALL).find(rawHtml)
+            tracksMatch?.groupValues?.get(1)?.let { tracksStr ->
+                val jsonObjects = Regex("""\{[^}]*\}""").findAll(tracksStr)
+                jsonObjects.forEach { objMatch ->
+                    val objStr = objMatch.value
+                    val fileMatch = Regex(""""file"\s*:\s*"([^"]+)"""").find(objStr)
+                    val labelMatch = Regex(""""label"\s*:\s*"([^"]+)"""").find(objStr)
+
+                    val subUrl = fileMatch?.groupValues?.get(1)?.replace("\\/", "/")
+                    val subLabel = labelMatch?.groupValues?.get(1) ?: "Altyazı"
+
+                    if (!subUrl.isNullOrBlank()) {
+                        val fullSubUrl = if (subUrl.startsWith("http")) subUrl else mainUrl.trimEnd('/') + (if (subUrl.startsWith("/")) "" else "/") + subUrl
+                        subtitleCallback.invoke(newSubtitleFile(subLabel, fullSubUrl))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("Kekik_$name", "Altyazı hatası: ${e.message}")
+        }
     }
 
     override suspend fun getUrl(
@@ -59,227 +177,57 @@ open class CloseLoadExtractor : ExtractorApi() {
         Log.d(name, "getUrl çağrıldı, url: $url")
 
         val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
+        val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+        val headers = mapOf(
+            "User-Agent" to userAgent,
+            "Referer" to "${mainUrl}/",
+            "Origin" to mainUrl
+        )
+
         val response = try {
-            app.get(url, referer = referer ?: domain, interceptor = interceptor)
+            app.get(url, headers = headers, interceptor = interceptor)
         } catch (e: Exception) {
             Log.e(name, "Embed GET hatası: ${e.message}")
             return
         }
 
         val rawHtml = response.text
-        var cookies = try {
-            CookieManager.getInstance().getCookie(url) ?: ""
-        } catch (e: Exception) {
-            response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        }
-        
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
-        // 1. Try unpacking packer JS
-        val unpackedJs = try { getAndUnpack(rawHtml) } catch (e: Exception) { null }
-        val searchHtml = unpackedJs ?: rawHtml
+        val videoUrl = decryptNative(rawHtml)
 
-        var videoUrl: String? = null
-
-        // 2. CloseLoad exposes the current stream directly in the embed HTML.
-        val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
-            .find(searchHtml)
-            ?: Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
-                .find(rawHtml)
-
-        if (directFileMatch != null) {
-            val candidate = directFileMatch.groupValues[1].replace("\\/", "/")
-            if (isValidVideoUrl(candidate)) {
-                videoUrl = candidate
-                Log.d(name, "Current CloseLoad file source: $videoUrl")
-            }
-        }
-
-        // 3. First check JWPlayer file or sources or contentUrl in HTML/Unpacked JS before AJAX
-        if (!isValidVideoUrl(videoUrl)) {
-            val jwFileMatches = Regex(""""(?:file|contentUrl|url)"\s*:\s*"([^"]+)"""").findAll(searchHtml) +
-                    Regex(""""(?:file|contentUrl|url)"\s*:\s*"([^"]+)"""").findAll(rawHtml)
-            for (match in jwFileMatches) {
-                val candidate = match.groupValues[1].replace("\\/", "/")
-                if (isValidVideoUrl(candidate)) {
-                    videoUrl = candidate
-                    Log.d(name, "JWPlayer/JSON file match bulundu: $videoUrl")
-                    break
-                }
-            }
-        }
-
-        // 4. AJAX Hash authorization & Video URL retrieval (if videoUrl not found yet)
-        if (!isValidVideoUrl(videoUrl)) {
-            val ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
-                ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
-                ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
-
-            val ajaxPath = Regex(""""url"\s*:\s*"([^"]+ah/)"\s*""").find(searchHtml)?.groupValues?.get(1)
-                ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
-                ?: "/video/ah/"
-
-            if (ajaxHash != null) {
-                val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
-                Log.d(name, "AJAX POST yapılıyor: $fullAjaxUrl hash=$ajaxHash")
-                try {
-                    val ajaxRes = app.post(
-                        url = fullAjaxUrl,
-                        data = mapOf("hash" to ajaxHash),
-                        headers = mapOf(
-                            "Referer" to url,
-                            "Origin" to domain,
-                            "X-Requested-With" to "XMLHttpRequest",
-                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-                            if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                        ).filter { it.key.isNotBlank() },
-                        interceptor = interceptor
-                    )
-                    Log.d(name, "AJAX Response: ${ajaxRes.code} - ${ajaxRes.text}")
-                    val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                    if (newCookies.isNotBlank()) {
-                        cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
-                    }
-
-                    val ajaxText = ajaxRes.text
-                    val jsonMatches = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").findAll(ajaxText)
-                    for (match in jsonMatches) {
-                        val candidate = match.groupValues[1].replace("\\/", "/")
-                        if (isValidVideoUrl(candidate)) {
-                            videoUrl = candidate
-                            Log.d(name, "AJAX Response'dan video URL bulundu: $videoUrl")
-                            break
-                        } else {
-                            Log.w(name, "AJAX Response'daki URL geçersiz veya PlayMix: $candidate")
-                        }
-                    }
-                    if (!isValidVideoUrl(videoUrl)) {
-                        val urlMatches = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4|m3u)[^"'\s]*)""").findAll(ajaxText)
-                        for (match in urlMatches) {
-                            val candidate = match.groupValues[1].replace("\\/", "/")
-                            if (isValidVideoUrl(candidate)) {
-                                videoUrl = candidate
-                                Log.d(name, "AJAX Response'dan direkt URL bulundu: $videoUrl")
-                                break
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(name, "AJAX POST hatası: ${e.message}")
-                }
-            }
-        }
-
-        // 5. Look for m3u8 or .txt direct link in unpacked JS or raw HTML if not found
-        if (!isValidVideoUrl(videoUrl)) {
-            val directMatches = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4|m3u)[^"'\s]*)""").findAll(searchHtml) +
-                    Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4|m3u)[^"'\s]*)""").findAll(rawHtml)
-            for (match in directMatches) {
-                val candidate = match.groupValues[1].replace("\\/", "/")
-                if (isValidVideoUrl(candidate)) {
-                    videoUrl = candidate
-                    Log.d(name, "Direkt m3u8/txt bulundu: $videoUrl")
-                    break
-                }
-            }
-        }
-
-        // 6. Look for base64 / atob in script
-        if (!isValidVideoUrl(videoUrl)) {
-            val atobMatches = Regex("""aHR0[0-9a-zA-Z+\/=]+""").findAll(searchHtml) +
-                    Regex("""aHR0[0-9a-zA-Z+\/=]+""").findAll(rawHtml)
-            for (atobMatch in atobMatches) {
-                var atob = atobMatch.value
-                val padding = atob.length % 4
-                if (padding != 0) {
-                    atob += "=".repeat(4 - padding)
-                }
-                try {
-                    val decoded = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
-                    if (isValidVideoUrl(decoded)) {
-                        videoUrl = decoded
-                        Log.d(name, "Atob decoded URL: $videoUrl")
-                        break
-                    }
-                } catch (e: Exception) {
-                    Log.w(name, "Atob decode hatası: ${e.message}")
-                }
-            }
-        }
-
-        val finalUrl = videoUrl
-        videoUrl = when {
-            !isValidVideoUrl(finalUrl) -> null
-            finalUrl!!.startsWith("//") -> "https:$finalUrl"
-            finalUrl.startsWith("http") -> finalUrl
-            else -> domain.trimEnd('/') + "/" + finalUrl.trimStart('/')
-        }
-
-        if (videoUrl.isNullOrBlank() || !isValidVideoUrl(videoUrl)) {
-            Log.e(name, "Video URL bulunamadı veya geçerli değil!")
-            return
-        }
-
-        parseSubtitles(rawHtml, subtitleCallback)
-
-        val linkType = if (videoUrl.contains(".m3u8", ignoreCase = true) ||
-            videoUrl.contains(".txt", ignoreCase = true) ||
-            videoUrl.contains("/hls/", ignoreCase = true) ||
-            videoUrl.contains("playlist", ignoreCase = true)
-        ) {
-            ExtractorLinkType.M3U8
-        } else {
-            INFER_TYPE
-        }
-
-        callback.invoke(
-            newExtractorLink(
-                source = name,
-                name = name,
-                url = videoUrl,
-                type = linkType
+        if (videoUrl.isNullOrBlank()) {
+            Log.e(name, "CloseLoad URL deşifre edilemedi.")
+        } else if (videoUrl.startsWith("http")) {
+            val linkType = if (videoUrl.contains(".m3u8", ignoreCase = true) ||
+                videoUrl.contains(".txt", ignoreCase = true) ||
+                videoUrl.contains("/hls/", ignoreCase = true) ||
+                videoUrl.contains("playlist", ignoreCase = true)
             ) {
-                this.referer = url
-                this.headers = mapOf(
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-                    "Referer" to url,
-                    "Origin" to domain,
-                    "Accept" to "*/*",
-                    if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                ).filter { it.key.isNotBlank() }
+                ExtractorLinkType.M3U8
+            } else {
+                INFER_TYPE
             }
-        )
-        Log.d(name, "ExtractorLink eklendi: $videoUrl, Referer: $url, Cookies: $cookies")
-    }
 
-    private suspend fun parseSubtitles(
-        rawHtml: String,
-        subtitleCallback: (SubtitleFile) -> Unit
-    ) {
-        val tracksMatch = Regex("""tracks:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(rawHtml)
-        tracksMatch?.groupValues?.get(1)?.let { tracksStr ->
-            val subMatches = Regex(
-                """"file"\s*:\s*"([^"]+)".*?"label"\s*:\s*"([^"]+)"""",
-                RegexOption.DOT_MATCHES_ALL
-            ).findAll(tracksStr).toList()
-
-            subMatches.forEach { match ->
-                var subUrl = match.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
-                val subLabel = match.groupValues[2]
-                if (!subUrl.startsWith("http")) {
-                    subUrl = mainUrl.trimEnd('/') + (if (subUrl.startsWith("/")) "" else "/") + subUrl
+            callback.invoke(
+                newExtractorLink(
+                    source = name,
+                    name = name,
+                    url = videoUrl,
+                    type = linkType
+                ) {
+                    this.referer = url
+                    this.headers = mapOf(
+                        "User-Agent" to userAgent,
+                        "Referer" to url,
+                        "Origin" to domain
+                    )
                 }
-
-                val lang = when {
-                    subLabel.contains("Turkish", ignoreCase = true) -> "Türkçe"
-                    subLabel.contains("Forced", ignoreCase = true) -> "Forced"
-                    subLabel.contains("English", ignoreCase = true) -> "İngilizce"
-                    else -> "Türkçe"
-                }
-
-                subtitleCallback.invoke(newSubtitleFile(lang, subUrl))
-            }
+            )
+            Log.d(name, "ExtractorLink eklendi: $videoUrl")
         }
+
+        processSubtitles(rawHtml, subtitleCallback)
     }
 }
 
