@@ -1,17 +1,25 @@
 package com.gsrepo.hdfilmcehennemi
 
 import android.util.Log
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.mozilla.javascript.Context
+import org.mozilla.javascript.ScriptableObject
 
 class HDFilmCehennemi : MainAPI() {
     override var mainUrl = "https://www.hdfilmcehennemi.nl"
@@ -260,66 +268,184 @@ class HDFilmCehennemi : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        Log.d("HDCH", "loadLinks data » $data")
         val doc = app.get(data, referer = "$mainUrl/", interceptor = interceptor).document
-        val iframes = mutableListOf<String>()
 
-        fun addIframeUrl(rawUrl: String?) {
-            if (rawUrl.isNullOrBlank()) return
-            val fixed = fixUrlNull(rawUrl) ?: return
-            val lower = fixed.lowercase()
-            if (lower.endsWith(".webp") || lower.endsWith(".jpg") || lower.endsWith(".png") || lower.endsWith(".jpeg") || lower.endsWith(".svg") || lower.endsWith(".gif") || lower.endsWith(".css") || lower.endsWith(".js")) return
-            if (lower.contains("youtube.com") || lower.contains("youtu.be")) return
-            if (lower.contains("google") || lower.contains("analytics") || lower.contains("yandex") || lower.contains("facebook") || lower.contains("doubleclick") || lower.contains("adservice") || lower.contains("popunder")) return
-            iframes.add(fixed)
-        }
-
-        // 1. Direct player iframes
-        doc.select("div.player-container iframe, div.card-video iframe, iframe#player, iframe.player-iframe, iframe[src*='embed'], iframe[data-src*='embed']").forEach { el ->
-            val src = el.attr("data-src").ifEmpty { el.attr("src") }.ifEmpty { el.attr("data-lazy-src") }
-            addIframeUrl(src)
-        }
-
-        // 2. Player navigation tabs & buttons
-        doc.select("nav.card-nav a, a.card-nav-link, button.card-nav-link, [data-video], [data-url]").forEach { el ->
-            val src = el.attr("data-video").ifEmpty { el.attr("data-url") }.ifEmpty { el.attr("href") }
-            if (src.isNotEmpty() && !src.startsWith("#") && !src.startsWith("javascript:")) {
-                val fullUrl = if (src.startsWith("/")) {
-                    if (src.startsWith("/video/")) "https://hdfilmcehennemi.mobi$src" else "$mainUrl$src"
-                } else src
-                addIframeUrl(fullUrl)
+        // 1. Primary video container iframes
+        doc.select("div.video-container iframe[data-src], div.video-container iframe[src]").forEach { frame ->
+            val iframe = frame.attr("data-src").ifEmpty { frame.attr("src") }
+            if (iframe.isNotBlank()) {
+                processIframe("Ana Kaynak", iframe, subtitleCallback, callback)
             }
         }
 
-        val distinctIframes = iframes.distinct()
-        var found = false
-
-        fun isRealMediaLink(url: String): Boolean {
-            val lower = url.lowercase()
-            if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<html")) return false
-            return lower.contains(".m3u8") || lower.contains(".txt") || lower.contains("/hls/") || lower.contains(".mp4") || lower.contains(".mpd") || lower.contains(".m3u")
+        // 2. Card navigation buttons/links
+        doc.select("nav.card-nav a, a.card-nav-link, button.card-nav-link, .card-video a").forEach { a ->
+            val playerUrl = a.attr("data-video").ifEmpty { a.attr("data-url") }.ifEmpty { a.attr("href") }
+            val name = a.selectFirst("span")?.text()?.trim() ?: a.text().trim()
+            if (playerUrl.isNotBlank() && !playerUrl.startsWith("#")) {
+                val fullUrl = if (playerUrl.startsWith("/")) {
+                    if (playerUrl.startsWith("/video/")) "https://hdfilmcehennemi.mobi$playerUrl" else "$mainUrl$playerUrl"
+                } else playerUrl
+                processIframe(name.ifEmpty { "Kaynak" }, fullUrl, subtitleCallback, callback)
+            }
         }
 
-        distinctIframes.forEach { iframe ->
-            try {
-                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
-                    RapidrameExtractor().getUrl(iframe, "$mainUrl/", subtitleCallback) { link ->
-                        if (isRealMediaLink(link.url)) {
-                            found = true
-                            callback(link)
-                        }
-                    }
-                }
-
-                if (!found) {
-                    loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
-                        if (isRealMediaLink(link.url)) {
-                            found = true
-                            callback(link)
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-        return found
+        return true
     }
+
+    private suspend fun processIframe(
+        source: String,
+        rawIframe: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val iframe = fixUrlNull(rawIframe) ?: return
+        if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
+            invokeLocalSource(source, iframe, subtitleCallback, callback)
+        } else {
+            loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
+        }
+    }
+
+    private suspend fun invokeLocalSource(
+        source: String,
+        url: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        try {
+            val response = app.get(url, referer = "$mainUrl/", interceptor = interceptor)
+            val pageText = response.text
+            val doc = Jsoup.parse(pageText)
+
+            val scriptElement = doc.select("script").firstOrNull { s ->
+                val data = s.data()
+                data.contains("sources:") || data.contains("eval(function(p,a,c,k,e,d)")
+            }
+
+            val scriptText = scriptElement?.data() ?: ""
+            val decrypted = if (scriptText.isNotBlank()) decryptWithRhino(scriptText) else emptyList()
+
+            val streamUrls = if (decrypted.isNotEmpty()) {
+                decrypted
+            } else {
+                Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").findAll(pageText).map { it.value }.distinct().toList()
+            }
+
+            if (streamUrls.isEmpty()) {
+                Log.w("HDCH", "No stream URLs decrypted from $url")
+                return
+            }
+
+            val tracksStr = scriptText.substringAfter("tracks: [", "").substringBefore("]", "")
+            if (tracksStr.isNotBlank()) {
+                try {
+                    val jsonStr = "[$tracksStr]"
+                    val mapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
+                    val subs: List<SubSource>? = mapper.readValue(jsonStr)
+                    subs?.forEach { sub ->
+                        val subFile = sub.file ?: return@forEach
+                        val subLang = sub.label ?: sub.language ?: "Türkçe"
+                        val fullSub = if (subFile.startsWith("http")) subFile else mainUrl.trimEnd('/') + "/" + subFile.trimStart('/')
+                        subtitleCallback(newSubtitleFile(subLang, fullSub))
+                    }
+                } catch (_: Exception) {}
+            }
+
+            streamUrls.forEachIndexed { index, streamUrl ->
+                val linkName = if (streamUrls.size > 1) "$source ${index + 1}" else source
+                callback(
+                    newExtractorLink(
+                        source = name,
+                        name = linkName,
+                        url = streamUrl,
+                        type = ExtractorLinkType.M3U8
+                    ) {
+                        this.referer = "$mainUrl/"
+                        this.headers = mapOf(
+                            "Referer" to "$mainUrl/",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                        )
+                    }
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("HDCH", "invokeLocalSource fetch error: ${e.message}")
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun decryptWithRhino(packedScript: String): List<String> {
+        val polyfill = """
+            var console = { log: function() {} };
+            var _b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+            if (typeof btoa === 'undefined') {
+                btoa = function(input) {
+                    var str = String(input);
+                    var output = '';
+                    for (var block = 0, charCode, idx = 0, map = _b64chars;
+                        str.charAt(idx | 0) || (map = '=', idx % 1);
+                        output += map.charAt(63 & block >> 8 - idx % 1 * 8)) {
+                        charCode = str.charCodeAt(idx += 3/4);
+                        if (charCode > 0xFF) throw new Error('btoa failed');
+                        block = block << 8 | charCode;
+                    }
+                    return output;
+                };
+            }
+            if (typeof atob === 'undefined') {
+                atob = function(input) {
+                    var str = String(input).replace(/[=]+$/, '');
+                    if (str.length % 4 == 1) throw new Error('atob failed');
+                    var output = '';
+                    for (var bc = 0, bs = 0, buffer, idx = 0;
+                        buffer = str.charAt(idx++);
+                        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+                            bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+                    ) {
+                        buffer = _b64chars.indexOf(buffer);
+                    }
+                    return output;
+                };
+            }
+        """.trimIndent()
+
+        val collector = """
+            var __found_links__ = [];
+            for (var k in this) {
+                try {
+                    var v = this[k];
+                    if (typeof v === 'string' && (v.indexOf('.m3u8') !== -1 || v.indexOf('master') !== -1)) {
+                        if (__found_links__.indexOf(v) === -1) __found_links__.push(v);
+                    }
+                } catch(e){}
+            }
+            __found_links__.join('|||');
+        """.trimIndent()
+
+        val cx = Context.enter()
+        cx.optimizationLevel = -1
+        cx.languageVersion = 200
+        try {
+            val scope: ScriptableObject = cx.initStandardObjects()
+            cx.evaluateString(scope, polyfill, "polyfill", 1, null)
+            cx.evaluateString(scope, packedScript, "unpacked", 1, null)
+            val res = cx.evaluateString(scope, collector, "collector", 1, null)
+            val rawLinks = res?.toString()?.split("|||") ?: emptyList()
+            return rawLinks.map { it.trim() }.filter { it.startsWith("http") && (it.contains(".m3u8") || it.contains("master")) }
+        } catch (e: Exception) {
+            Log.e("HDCH", "Rhino decrypt error: ${e.message}")
+            return emptyList()
+        } finally {
+            Context.exit()
+        }
+    }
+
+    private data class SubSource(
+        @JsonProperty("file") val file: String? = null,
+        @JsonProperty("label") val label: String? = null,
+        @JsonProperty("language") val language: String? = null,
+        @JsonProperty("kind") val kind: String? = null
+    )
 }
