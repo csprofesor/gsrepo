@@ -31,15 +31,7 @@ class HDFilmCehennemi : MainAPI() {
             val body = response.peekBody(1024 * 1024).string()
             val doc = Jsoup.parse(body)
 
-            if (response.code == 403 || response.code == 503 ||
-                response.header("cf-mitigated") != null ||
-                body.contains("Just a moment", ignoreCase = true) ||
-                body.contains("Checking your browser", ignoreCase = true) ||
-                body.contains("cf-challenge", ignoreCase = true) ||
-                body.contains("turnstile", ignoreCase = true) ||
-                doc.title().contains("Just a moment", ignoreCase = true) ||
-                doc.title().contains("Attention Required", ignoreCase = true)
-            ) {
+            if (doc.html().contains("Just a moment", ignoreCase = true)) {
                 return cloudflareKiller.intercept(chain)
             }
 
@@ -271,28 +263,50 @@ class HDFilmCehennemi : MainAPI() {
         val doc = app.get(data, referer = mainUrl, interceptor = interceptor).document
         val iframes = mutableListOf<String>()
 
+        fun addIframeUrl(rawUrl: String?) {
+            if (rawUrl.isNullOrBlank()) return
+            val fixed = fixUrlNull(rawUrl) ?: return
+            if (fixed.endsWith(".webp") || fixed.endsWith(".jpg") || fixed.endsWith(".png") || fixed.endsWith(".jpeg") || fixed.endsWith(".svg")) return
+            if (fixed.contains("youtube.com") || fixed.contains("youtu.be")) return
+            iframes.add(fixed)
+        }
+
         // 1. Extract direct iframe elements
         doc.select("iframe").forEach { el ->
-            val src = el.attr("data-src").ifEmpty { el.attr("src") }
-            if (src.isNotEmpty() && !src.contains("youtube.com") && !src.contains("youtu.be")) {
-                fixUrlNull(src)?.let { iframes.add(it) }
+            val src = el.attr("data-src").ifEmpty { el.attr("src") }.ifEmpty { el.attr("data-lazy-src") }
+            addIframeUrl(src)
+        }
+
+        // 2. Extract embed URLs from elements with data-video, data-url, data-src, data-embed attributes (e.g. player tabs/buttons)
+        doc.select("[data-video], [data-url], [data-src], [data-embed], [data-player], [data-file]").forEach { el ->
+            val src = el.attr("data-video").ifEmpty { el.attr("data-url") }.ifEmpty { el.attr("data-src") }
+                .ifEmpty { el.attr("data-embed") }.ifEmpty { el.attr("data-player") }.ifEmpty { el.attr("data-file") }
+            if (src.isNotEmpty()) {
+                val fullUrl = if (src.startsWith("/")) {
+                    if (src.startsWith("/video/")) "https://hdfilmcehennemi.mobi$src" else "$mainUrl$src"
+                } else src
+                addIframeUrl(fullUrl)
             }
         }
 
-        // 2. Extract embed URLs from elements with data-src attributes
-        doc.select("[data-src]").forEach { el ->
-            val src = el.attr("data-src")
-            if (src.contains("hdfilmcehennemi.mobi") || src.contains("/video/embed/") || src.contains("rapidrame")) {
-                fixUrlNull(src)?.takeUnless { it.endsWith(".webp") || it.endsWith(".jpg") || it.endsWith(".png") }?.let { iframes.add(it) }
+        // 3. Extract player links from anchor tags
+        doc.select("a.card-nav-link, button.card-nav-link, .card-video a, nav.card-nav a, a[href*='/video/embed/'], a[href*='rapidrame'], a[href*='hdfilmcehennemi'], a[href*='playmix'], a[href*='closeload']").forEach { a ->
+            val href = a.attr("href").ifEmpty { a.attr("data-video") }.ifEmpty { a.attr("data-url") }
+            if (href.isNotEmpty()) {
+                val fullUrl = if (href.startsWith("/")) {
+                    if (href.startsWith("/video/")) "https://hdfilmcehennemi.mobi$href" else "$mainUrl$href"
+                } else href
+                addIframeUrl(fullUrl)
             }
         }
 
-        // 3. Fallback: Search in script tags for embed player URLs
-        doc.select("script").forEach { s ->
-            val stext = s.data()
-            Regex("""https?://[^\s'"\\]+/(?:video/embed|embed|v)/[^\s'"\\]+""").findAll(stext).forEach { match ->
-                iframes.add(match.value)
-            }
+        // 4. Fallback: Search in script tags and raw HTML for embed player URLs
+        val html = doc.html()
+        Regex("""https?://[^\s'"\\]+?/(?:video/embed|embed|v|player)[^\s'"\\]*""").findAll(html).forEach { match ->
+            addIframeUrl(match.value)
+        }
+        Regex("""https?://[^\s'"\\]+?(?:hdfilmcehennemi|rapidrame|playmix|closeload)[^\s'"\\]*""").findAll(html).forEach { match ->
+            addIframeUrl(match.value)
         }
 
         val distinctIframes = iframes.distinct()
@@ -300,12 +314,14 @@ class HDFilmCehennemi : MainAPI() {
 
         distinctIframes.forEach { iframe ->
             try {
-                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi.mobi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed") || iframe.contains("hdfilmcehennemi")) {
+                if (iframe.contains("rapidrame") || iframe.contains("hdfilmcehennemi") || iframe.contains("playmix") || iframe.contains("close") || iframe.contains("embed")) {
                     RapidrameExtractor().getUrl(iframe, data, subtitleCallback) { link ->
                         found = true
                         callback(link)
                     }
-                } else {
+                }
+
+                if (!found) {
                     if (loadExtractor(iframe, data, subtitleCallback) { link ->
                         found = true
                         callback(link)

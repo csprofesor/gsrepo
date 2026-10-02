@@ -1,6 +1,7 @@
 package com.gsrepo.hdfilmcehennemi
 
 import android.util.Base64
+import android.webkit.CookieManager
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newSubtitleFile
@@ -191,91 +192,215 @@ class RapidrameExtractor : ExtractorApi() {
         return out.toString()
     }
 
+    private fun isValidVideoUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        if (url.contains("playmix.uno", ignoreCase = true) && !url.contains(".m3u8") && !url.contains(".mp4")) return false
+        if (url.contains(".vtt", ignoreCase = true) || url.contains(".srt", ignoreCase = true)) return false
+        if (url.contains(".jpg", ignoreCase = true) || url.contains(".png", ignoreCase = true) || url.contains(".webp", ignoreCase = true)) return false
+        return true
+    }
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val html = app.get(
-            url,
-            referer = referer ?: "https://www.hdfilmcehennemi.nl/",
-            headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-            interceptor = interceptor
-        ).text
+        val domain = Regex("""(https?://[^/]+)""").find(url)?.groupValues?.get(1) ?: mainUrl
+        val targetReferer = if (url.contains("http")) url else "$domain/"
 
-        val unpackedHtml = getAndUnpack(html)
-        val targetReferer = if (url.contains("hdfilmcehennemi.mobi")) url else "https://hdfilmcehennemi.mobi/"
-        var streamFound = false
-
-        // The current CloseLoad player packs the script that initializes its JWPlayer source.
-        val rhinoStream = evaluateRhinoJs(unpackedHtml)
-            ?: if (unpackedHtml != html) evaluateRhinoJs(html) else null
-        if (rhinoStream != null) {
-            val isM3u8 = rhinoStream.contains(".m3u8") || rhinoStream.contains("master.txt") || rhinoStream.contains("/hls/") || rhinoStream.contains("/txt/")
-            callback(newExtractorLink(name, name, rhinoStream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
-                this.referer = targetReferer
-                this.headers = mapOf(
-                    "Referer" to targetReferer,
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
-            })
-            streamFound = true
+        val response = try {
+            app.get(
+                url,
+                referer = referer ?: "https://www.hdfilmcehennemi.nl/",
+                headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+                interceptor = interceptor
+            )
+        } catch (_: Exception) {
+            return
         }
 
-        // 2. Fallback: Legacy JS Array decode
-        if (!streamFound) {
-            for (pageHtml in listOf(unpackedHtml, html).distinct()) {
+        val rawHtml = response.text
+        var cookies = try {
+            CookieManager.getInstance().getCookie(url) ?: ""
+        } catch (_: Exception) {
+            response.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        }
+
+        val unpackedHtml = try { getAndUnpack(rawHtml) } catch (_: Exception) { null }
+        val searchHtml = unpackedHtml ?: rawHtml
+        var videoUrl: String? = null
+
+        // 1. Direct JWPlayer/JSON source match in unpacked JS or raw HTML
+        val directMatch = Regex("""(?i)(?:["']?file["']?|["']?url["']?|["']?source["']?|["']?contentUrl["']?)\s*:\s*["'](https?://[^"']+)["']""")
+            .find(searchHtml) ?: Regex("""(?i)(?:["']?file["']?|["']?url["']?|["']?source["']?|["']?contentUrl["']?)\s*:\s*["'](https?://[^"']+)["']""")
+            .find(rawHtml)
+
+        if (directMatch != null) {
+            val candidate = directMatch.groupValues[1].replace("\\/", "/")
+            if (isValidVideoUrl(candidate)) {
+                videoUrl = candidate
+            }
+        }
+
+        // 2. AJAX Hash authorization & Video URL retrieval
+        if (!isValidVideoUrl(videoUrl)) {
+            val ajaxHash = Regex(""""hash"\s*:\s*"([^"]+)"""").find(searchHtml)?.groupValues?.get(1)
+                ?: Regex("""hash\s*:\s*['"]([a-zA-Z0-9]{32})['"]""").find(searchHtml)?.groupValues?.get(1)
+                ?: Regex(""""hash"\s*:\s*"([^"]+)"""").find(rawHtml)?.groupValues?.get(1)
+
+            val ajaxPath = Regex(""""url"\s*:\s*"([^"]+ah/)"\s*""").find(searchHtml)?.groupValues?.get(1)
+                ?: Regex("""url\s*:\s*['"]([^'"]+ah/)['"]""").find(searchHtml)?.groupValues?.get(1)
+                ?: "/video/ah/"
+
+            if (ajaxHash != null) {
+                val fullAjaxUrl = if (ajaxPath.startsWith("http")) ajaxPath else domain.trimEnd('/') + "/" + ajaxPath.trimStart('/')
+                try {
+                    val ajaxRes = app.post(
+                        url = fullAjaxUrl,
+                        data = mapOf("hash" to ajaxHash),
+                        headers = mapOf(
+                            "Referer" to url,
+                            "Origin" to domain,
+                            "X-Requested-With" to "XMLHttpRequest",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                            if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+                        ).filter { it.key.isNotBlank() },
+                        interceptor = interceptor
+                    )
+                    val newCookies = ajaxRes.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                    if (newCookies.isNotBlank()) {
+                        cookies = if (cookies.isNotBlank()) "$cookies; $newCookies" else newCookies
+                    }
+
+                    val ajaxText = ajaxRes.text
+                    val jsonMatches = Regex(""""(?:file|url|hls|source|securedLink)"\s*:\s*"([^"]+)"""").findAll(ajaxText)
+                    for (match in jsonMatches) {
+                        val candidate = match.groupValues[1].replace("\\/", "/")
+                        if (isValidVideoUrl(candidate)) {
+                            videoUrl = candidate
+                            break
+                        }
+                    }
+                    if (!isValidVideoUrl(videoUrl)) {
+                        val urlMatches = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4|m3u)[^"'\s]*)""").findAll(ajaxText)
+                        for (match in urlMatches) {
+                            val candidate = match.groupValues[1].replace("\\/", "/")
+                            if (isValidVideoUrl(candidate)) {
+                                videoUrl = candidate
+                                break
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 3. Rhino JS Evaluation
+        if (!isValidVideoUrl(videoUrl)) {
+            val rhinoStream = evaluateRhinoJs(searchHtml) ?: evaluateRhinoJs(rawHtml)
+            if (isValidVideoUrl(rhinoStream)) {
+                videoUrl = rhinoStream
+            }
+        }
+
+        // 4. Legacy JS Array decode
+        if (!isValidVideoUrl(videoUrl)) {
+            for (pageHtml in listOf(searchHtml, rawHtml).distinct()) {
                 val matcher = Pattern.compile("\\[\\s*\"[^\\]]+\"\\s*\\]").matcher(pageHtml)
                 while (matcher.find()) {
                     val arr = matcher.group(0) ?: continue
                     if (arr.contains(".jpg") || arr.contains(".png") || arr.contains(".webp")) continue
                     try {
                         val stream = decodeLegacy(pageHtml, arr)
-                        if (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/")) {
-                            val isM3u8 = stream.contains(".m3u8") || stream.contains("master.txt") || stream.contains("/hls/") || stream.contains("/txt/")
-                            callback(newExtractorLink(name, name, stream, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
-                                this.referer = targetReferer
-                                this.headers = mapOf(
-                                    "Referer" to targetReferer,
-                                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                                )
-                            })
-                            streamFound = true
+                        if (isValidVideoUrl(stream) && (stream.contains(".m3u8") || stream.contains(".txt") || stream.contains("/hls/") || stream.contains(".mp4"))) {
+                            videoUrl = stream
                             break
                         }
                     } catch (_: Exception) {}
                 }
-                if (streamFound) break
+                if (isValidVideoUrl(videoUrl)) break
             }
         }
 
-        // 3. Fallback: Direct regex match (ignoring ld+json script tags)
-        if (!streamFound) {
-            val cleanHtml = unpackedHtml.replace(Regex("""<script type="application/ld\+json">.*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
-            val directMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(cleanHtml)?.value
-                ?: Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/)[^\s'"\\]*""").find(html)?.value
-            if (directMatch != null) {
-                val isM3u8 = directMatch.contains(".m3u8") || directMatch.contains("master.txt") || directMatch.contains("/hls/") || directMatch.contains("/txt/")
-                callback(newExtractorLink(name, name, directMatch, if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE) {
+        // 5. Direct regex match
+        if (!isValidVideoUrl(videoUrl)) {
+            val cleanHtml = searchHtml.replace(Regex("""<script type="application/ld\+json">.*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
+            val directRegMatch = Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/|\.mp4)[^\s'"\\]*""").find(cleanHtml)?.value
+                ?: Regex("""https?://[^\s'"\\]+?(?:\.m3u8|\.txt|/hls/|\.mp4)[^\s'"\\]*""").find(rawHtml)?.value
+            if (isValidVideoUrl(directRegMatch)) {
+                videoUrl = directRegMatch
+            }
+        }
+
+        // 6. Base64 / atob decode
+        if (!isValidVideoUrl(videoUrl)) {
+            val atobMatches = Regex("""aHR0[0-9a-zA-Z+/=]+""").findAll(searchHtml) + Regex("""aHR0[0-9a-zA-Z+/=]+""").findAll(rawHtml)
+            for (atobMatch in atobMatches) {
+                var atob = atobMatch.value
+                val padding = atob.length % 4
+                if (padding != 0) atob += "=".repeat(4 - padding)
+                try {
+                    val decoded = String(Base64.decode(atob, Base64.DEFAULT), Charsets.UTF_8)
+                    if (isValidVideoUrl(decoded)) {
+                        videoUrl = decoded
+                        break
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // Finalize video URL
+        val finalUrl = when {
+            videoUrl.isNullOrBlank() -> null
+            videoUrl.startsWith("//") -> "https:$videoUrl"
+            videoUrl.startsWith("http") -> videoUrl
+            else -> domain.trimEnd('/') + "/" + videoUrl.trimStart('/')
+        }
+
+        if (isValidVideoUrl(finalUrl)) {
+            val isM3u8 = finalUrl!!.contains(".m3u8", ignoreCase = true) ||
+                finalUrl.contains(".txt", ignoreCase = true) ||
+                finalUrl.contains("/hls/", ignoreCase = true) ||
+                finalUrl.contains("playlist", ignoreCase = true)
+
+            callback(
+                newExtractorLink(
+                    source = name,
+                    name = name,
+                    url = finalUrl,
+                    type = if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE
+                ) {
                     this.referer = targetReferer
                     this.headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                         "Referer" to targetReferer,
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                    )
-                })
-                streamFound = true
-            }
+                        "Origin" to domain,
+                        "Accept" to "*/*",
+                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
+                    ).filter { it.key.isNotBlank() }
+                }
+            )
         }
 
         // Subtitles extraction
-        for (pageHtml in listOf(unpackedHtml, html).distinct()) {
+        for (pageHtml in listOf(searchHtml, rawHtml).distinct()) {
             Regex("""\{"file":"(https?:[^"]+\.vtt)"[^}]*?"label":"([^"]+)"""").findAll(pageHtml).forEach {
                 val subUrl = it.groupValues[1].replace("""\/""", "/")
                 val lang = it.groupValues[2]
                 subtitleCallback(newSubtitleFile(lang, subUrl))
+            }
+            Regex("""tracks:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(pageHtml)?.groupValues?.get(1)?.let { tracksStr ->
+                Regex(""""file"\s*:\s*"([^"]+)".*?"label"\s*:\s*"([^"]+)"""", RegexOption.DOT_MATCHES_ALL).findAll(tracksStr).forEach { match ->
+                    var subUrl = match.groupValues[1].replace("\\/", "/").replace("\\\"", "\"")
+                    val subLabel = match.groupValues[2]
+                    if (!subUrl.startsWith("http")) {
+                        subUrl = domain.trimEnd('/') + (if (subUrl.startsWith("/")) "" else "/") + subUrl
+                    }
+                    subtitleCallback(newSubtitleFile(subLabel, subUrl))
+                }
             }
         }
     }
