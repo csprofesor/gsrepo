@@ -39,7 +39,24 @@ class FilmMakinesi : MainAPI() {
                 doc.title().contains("Just a moment", ignoreCase = true) ||
                 doc.title().contains("Attention Required", ignoreCase = true)
             ) {
-                return cloudflareKiller.intercept(chain)
+                synchronized(cloudflareKiller) {
+                    val checkResp = chain.proceed(request)
+                    val checkBody = checkResp.peekBody(1024 * 1024).string()
+                    val checkDoc  = Jsoup.parse(checkBody)
+
+                    if (checkResp.code == 403 || checkResp.code == 503 ||
+                        checkResp.header("cf-mitigated") != null ||
+                        checkBody.contains("Just a moment", ignoreCase = true) ||
+                        checkBody.contains("Checking your browser", ignoreCase = true) ||
+                        checkBody.contains("cf-challenge", ignoreCase = true) ||
+                        checkBody.contains("turnstile", ignoreCase = true) ||
+                        checkDoc.title().contains("Just a moment", ignoreCase = true) ||
+                        checkDoc.title().contains("Attention Required", ignoreCase = true)
+                    ) {
+                        return cloudflareKiller.intercept(chain)
+                    }
+                    return checkResp
+                }
             }
 
             return response
@@ -47,26 +64,26 @@ class FilmMakinesi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/filmler-1/sayfa/" to "Son Filmler",
-        "${mainUrl}/film-izle/olmeden-izlenmesi-gerekenler-fm1/sayfa/" to "Ölmeden İzle",
-        "${mainUrl}/tur/aksiyon-fm1/film/sayfa/" to "Aksiyon",
-        "${mainUrl}/tur/bilim-kurgu-fm2/film/sayfa/" to "Bilim Kurgu",
-        "${mainUrl}/tur/macera-fm1/film/sayfa/" to "Macera",
-        "${mainUrl}/tur/komedi-fm1/film/sayfa/" to "Komedi",
-        "${mainUrl}/tur/romantik-fm1/film/sayfa/" to "Romantik",
-        "${mainUrl}/tur/belgesel/film/sayfa/" to "Belgesel",
-        "${mainUrl}/tur/fantastik-fm1/film/sayfa/" to "Fantastik",
-        "${mainUrl}/tur/polisiye/film/sayfa/" to "Polisiye Suç",
-        "${mainUrl}/tur/korku-fm1/film/sayfa/" to "Korku"
+        "${mainUrl}/filmler-1/" to "Son Filmler",
+        "${mainUrl}/film-izle/olmeden-izlenmesi-gerekenler-fm1/" to "Ölmeden İzle",
+        "${mainUrl}/tur/aksiyon-fm1/" to "Aksiyon",
+        "${mainUrl}/tur/bilim-kurgu-fm2/" to "Bilim Kurgu",
+        "${mainUrl}/tur/macera-fm1/" to "Macera",
+        "${mainUrl}/tur/komedi-fm1/" to "Komedi",
+        "${mainUrl}/tur/romantik-fm1/" to "Romantik",
+        "${mainUrl}/tur/belgesel/" to "Belgesel",
+        "${mainUrl}/tur/fantastik-fm1/" to "Fantastik",
+        "${mainUrl}/tur/polisiye/" to "Polisiye Suç",
+        "${mainUrl}/tur/korku-fm1/" to "Korku"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         return try {
-            val cleanData = request.data.removeSuffix("/")
+            val baseUrl = request.data.trimEnd('/')
             val url = if (page <= 1) {
-                cleanData.substringBeforeLast("/sayfa") + "/"
+                "$baseUrl/"
             } else {
-                "$cleanData/$page/"
+                "$baseUrl/sayfa/$page/"
             }
             val doc = app.get(
                 url, 

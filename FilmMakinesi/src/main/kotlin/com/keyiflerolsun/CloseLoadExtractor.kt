@@ -151,6 +151,14 @@ open class CloseLoadExtractor : ExtractorApi() {
                                     }
                                 }
 
+                                val strPermutedInit = str
+
+                                // Check if ops loop alone decoded the valid URL (CloseLoad new format)
+                                if (isValidVideoUrl(strPermutedInit)) {
+                                    Log.d("Kekik_$name", "Decoded REAL URL (ops only): $strPermutedInit")
+                                    return strPermutedInit
+                                }
+
                                 val len = str.length
                                 val perm = IntArray(len)
                                 for (i in len - 1 downTo 1) {
