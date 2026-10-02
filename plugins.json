@@ -266,7 +266,7 @@
     "fileHash": "sha256-fa4e6f851f96b95b577de482910bc225ba108a050c11f201de5e8d759382c6e7"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=ef3aca9b96f26069410a5ee29cd7f3d9591ecd22e918319261bf49a2fa0a590d",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=476f194795855b82f6be0b7b12fec09ba3edcfda5ee468c2e688eafb6bd7c9cb",
     "status": 1,
     "version": 72,
     "name": "FilmMakinesi",
@@ -275,7 +275,7 @@
       "csprofesor"
     ],
     "description": "Film Makinesi sağlayıcısı",
-    "fileSize": 37480,
+    "fileSize": 37668,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -284,7 +284,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=filmmakinesi.to&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-ef3aca9b96f26069410a5ee29cd7f3d9591ecd22e918319261bf49a2fa0a590d"
+    "fileHash": "sha256-476f194795855b82f6be0b7b12fec09ba3edcfda5ee468c2e688eafb6bd7c9cb"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmModu.cs3?v=f0f64f904daf14bdf195b5e8ef27db57de7fd9d9b04988bd583f0ea62d3cf551",
