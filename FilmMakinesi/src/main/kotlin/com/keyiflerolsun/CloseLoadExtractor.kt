@@ -41,6 +41,14 @@ open class CloseLoadExtractor : ExtractorApi() {
         }
     }
 
+    private fun isValidVideoUrl(url: String?): Boolean {
+        if (url.isNullOrBlank() || !url.startsWith("http", ignoreCase = true)) return false
+        val lower = url.lowercase()
+        if (lower.contains(".vtt") || lower.contains(".srt") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".webp")) return false
+        if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<!doctype")) return false
+        return true
+    }
+
     private fun decryptNative(html: String): String? {
         return try {
             val regexKey = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z0-9]{15,35})["']""")
@@ -157,7 +165,7 @@ open class CloseLoadExtractor : ExtractorApi() {
 
                         val decodedUrl = result.toString()
                         Log.d("Kekik_$name", "Candidate decoded: $decodedUrl")
-                        if (decodedUrl.startsWith("http") && !decodedUrl.contains("playmix.uno", ignoreCase = true)) {
+                        if (isValidVideoUrl(decodedUrl)) {
                             Log.d("Kekik_$name", "Decoded REAL URL: $decodedUrl")
                             return decodedUrl
                         }
@@ -228,7 +236,7 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         var videoUrl = decryptNative(rawHtml)
 
-        if (videoUrl.isNullOrBlank() || !videoUrl.startsWith("http") || videoUrl.contains("playmix.uno", ignoreCase = true)) {
+        if (!isValidVideoUrl(videoUrl)) {
             val unpackedJs = try { getAndUnpack(rawHtml) } catch (_: Exception) { null }
             val searchHtml = unpackedJs ?: rawHtml
 
@@ -239,30 +247,31 @@ open class CloseLoadExtractor : ExtractorApi() {
 
             if (directFileMatch != null) {
                 val candidate = directFileMatch.groupValues[1].replace("\\/", "/")
-                if (candidate.startsWith("http") && !candidate.contains("playmix.uno", ignoreCase = true)) {
+                if (isValidVideoUrl(candidate)) {
                     videoUrl = candidate
                 }
             }
 
-            if (videoUrl.isNullOrBlank() || !videoUrl.startsWith("http") || videoUrl.contains("playmix.uno", ignoreCase = true)) {
+            if (!isValidVideoUrl(videoUrl)) {
                 val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchHtml)
                     ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(rawHtml)
                 if (urlMatch != null) {
                     val candidate = urlMatch.groupValues[1].replace("\\/", "/")
-                    if (candidate.startsWith("http") && !candidate.contains("playmix.uno", ignoreCase = true)) {
+                    if (isValidVideoUrl(candidate)) {
                         videoUrl = candidate
                     }
                 }
             }
         }
 
-        if (videoUrl.isNullOrBlank() || videoUrl.contains("playmix.uno", ignoreCase = true)) {
+        if (!isValidVideoUrl(videoUrl)) {
             Log.e(name, "CloseLoad URL deşifre edilemedi.")
-        } else if (videoUrl.startsWith("http")) {
-            val linkType = if (videoUrl.contains(".m3u8", ignoreCase = true) ||
-                videoUrl.contains(".txt", ignoreCase = true) ||
-                videoUrl.contains("/hls/", ignoreCase = true) ||
-                videoUrl.contains("playlist", ignoreCase = true)
+        } else {
+            val finalVideoUrl = videoUrl!!
+            val linkType = if (finalVideoUrl.contains(".m3u8", ignoreCase = true) ||
+                finalVideoUrl.contains(".txt", ignoreCase = true) ||
+                finalVideoUrl.contains("/hls/", ignoreCase = true) ||
+                finalVideoUrl.contains("playlist", ignoreCase = true)
             ) {
                 ExtractorLinkType.M3U8
             } else {
@@ -279,7 +288,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                 newExtractorLink(
                     source = name,
                     name = name,
-                    url = videoUrl,
+                    url = finalVideoUrl,
                     type = linkType
                 ) {
                     this.referer = "${mainUrl}/"
@@ -287,7 +296,7 @@ open class CloseLoadExtractor : ExtractorApi() {
                     this.headers = linkHeaders
                 }
             )
-            Log.d(name, "ExtractorLink eklendi: $videoUrl")
+            Log.d(name, "ExtractorLink eklendi: $finalVideoUrl")
         }
 
         processSubtitles(rawHtml, subtitleCallback)
