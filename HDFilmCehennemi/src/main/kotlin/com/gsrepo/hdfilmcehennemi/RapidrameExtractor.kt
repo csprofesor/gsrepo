@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.Interceptor
@@ -34,15 +33,7 @@ class RapidrameExtractor : ExtractorApi() {
             val body = response.peekBody(1024 * 1024).string()
             val doc = Jsoup.parse(body)
 
-            if (response.code == 403 || response.code == 503 ||
-                response.header("cf-mitigated") != null ||
-                body.contains("Just a moment", ignoreCase = true) ||
-                body.contains("Checking your browser", ignoreCase = true) ||
-                body.contains("cf-challenge", ignoreCase = true) ||
-                body.contains("turnstile", ignoreCase = true) ||
-                doc.title().contains("Just a moment", ignoreCase = true) ||
-                doc.title().contains("Attention Required", ignoreCase = true)
-            ) {
+            if (doc.html().contains("Just a moment", ignoreCase = true)) {
                 return cloudflareKiller.intercept(chain)
             }
 
@@ -194,9 +185,11 @@ class RapidrameExtractor : ExtractorApi() {
 
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
-        if (url.contains("playmix.uno", ignoreCase = true) && !url.contains(".m3u8") && !url.contains(".mp4")) return false
-        if (url.contains(".vtt", ignoreCase = true) || url.contains(".srt", ignoreCase = true)) return false
-        if (url.contains(".jpg", ignoreCase = true) || url.contains(".png", ignoreCase = true) || url.contains(".webp", ignoreCase = true)) return false
+        val lower = url.lowercase()
+        if (lower.contains("playmix.uno") && !lower.contains(".m3u8") && !lower.contains(".mp4")) return false
+        if (lower.contains(".vtt") || lower.contains(".srt")) return false
+        if (lower.contains(".jpg") || lower.contains(".png") || lower.contains(".webp") || lower.contains(".jpeg") || lower.contains(".svg")) return false
+        if (lower.contains("intro") || lower.contains("fragman") || lower.contains("promo") || lower.contains("sample") || lower.contains("trailer") || lower.contains("preview") || lower.contains("advert") || lower.contains("preroll")) return false
         return true
     }
 
@@ -361,26 +354,26 @@ class RapidrameExtractor : ExtractorApi() {
         }
 
         if (isValidVideoUrl(finalUrl)) {
-            val isM3u8 = finalUrl!!.contains(".m3u8", ignoreCase = true) ||
-                finalUrl.contains(".txt", ignoreCase = true) ||
-                finalUrl.contains("/hls/", ignoreCase = true) ||
-                finalUrl.contains("playlist", ignoreCase = true)
+            val lower = finalUrl!!.lowercase()
+            val isMp4 = lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".webm")
+            val isM3u8 = !isMp4
+
+            val embedDomain = Regex("""(https?://[^/]+)""").find(targetReferer)?.groupValues?.get(1) ?: domain
 
             callback(
                 newExtractorLink(
                     source = name,
                     name = name,
                     url = finalUrl,
-                    type = if (isM3u8) ExtractorLinkType.M3U8 else INFER_TYPE
+                    type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 ) {
-                    this.referer = targetReferer
+                    this.referer = "$embedDomain/"
                     this.headers = mapOf(
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Referer" to targetReferer,
-                        "Origin" to domain,
-                        "Accept" to "*/*",
-                        if (cookies.isNotBlank()) "Cookie" to cookies else "" to ""
-                    ).filter { it.key.isNotBlank() }
+                        "Referer" to "$embedDomain/",
+                        "Origin" to embedDomain,
+                        "Accept" to "*/*"
+                    )
                 }
             )
         }
