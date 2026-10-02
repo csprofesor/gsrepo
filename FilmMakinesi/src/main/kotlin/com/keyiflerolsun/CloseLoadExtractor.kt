@@ -44,6 +44,7 @@ open class CloseLoadExtractor : ExtractorApi() {
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank() || !url.startsWith("http", ignoreCase = true)) return false
         val lower = url.lowercase()
+        if (lower.contains("f9gx1m12bwc")) return false // Filter CloseLoad decoy/honeypot URL
         if (lower.contains(".vtt") || lower.contains(".srt") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".webp")) return false
         if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<!doctype")) return false
         return true
@@ -55,18 +56,17 @@ open class CloseLoadExtractor : ExtractorApi() {
             val regexOps = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z]{2,8})["']""")
             val regexArr = Regex("""\(\[((?:["'][^"']+["'],?\s*)+)\]\)""")
 
-            // 1. Unpack any packer scripts in HTML and concatenate all scripts into a single search scope!
             val doc = Jsoup.parse(html)
-            val scriptTexts = mutableListOf<String>()
+            val scriptScopeList = mutableListOf<String>()
 
             doc.select("script").forEach { script ->
                 val text = script.data().ifEmpty { script.html() }
                 if (text.isNotBlank()) {
-                    scriptTexts.add(text)
+                    scriptScopeList.add(text)
                     if (text.contains("eval(function(p,a,c,k,e,d)")) {
                         try {
                             getAndUnpack(text)?.let { unpacked ->
-                                scriptTexts.add(unpacked)
+                                scriptScopeList.add(unpacked)
                                 Log.d("CLOSELOAD_UNPACKED", unpacked.take(500))
                             }
                         } catch (_: Exception) {}
@@ -74,104 +74,106 @@ open class CloseLoadExtractor : ExtractorApi() {
                 }
             }
 
-            // Combine all scripts so key/ops from one script and array from another can be matched!
-            val combinedJs = scriptTexts.joinToString("\n;\n")
+            val combinedJs = scriptScopeList.joinToString("\n;\n")
+            scriptScopeList.add(combinedJs)
 
-            val matchKeys = regexKey.findAll(combinedJs).toList()
-            val matchOpss = regexOps.findAll(combinedJs).toList()
-            val matchArrs = regexArr.findAll(combinedJs).toList()
+            for (jsScope in scriptScopeList) {
+                val matchKeys = regexKey.findAll(jsScope).toList()
+                val matchOpss = regexOps.findAll(jsScope).toList()
+                val matchArrs = regexArr.findAll(jsScope).toList()
 
-            Log.d("CLOSELOAD_COMBINED", "Combined JS: keys=${matchKeys.size}, ops=${matchOpss.size}, arrs=${matchArrs.size}")
+                if (matchKeys.isEmpty() || matchOpss.isEmpty() || matchArrs.isEmpty()) continue
 
-            for (matchKey in matchKeys) {
-                for (matchOps in matchOpss) {
-                    for (matchArr in matchArrs) {
-                        try {
-                            val key = matchKey.groupValues[1]
-                            val ops = matchOps.groupValues[1]
-                            val rawArrStr = matchArr.groupValues[1]
+                for (matchKey in matchKeys) {
+                    for (matchOps in matchOpss) {
+                        for (matchArr in matchArrs) {
+                            try {
+                                val key = matchKey.groupValues[1]
+                                val ops = matchOps.groupValues[1]
+                                val rawArrStr = matchArr.groupValues[1]
 
-                            val arrList = rawArrStr.split(",")
-                                .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
+                                val arrList = rawArrStr.split(",")
+                                    .map { it.trim().replace("\"", "").replace("'", "").replace("\\/", "/") }
 
-                            var str = arrList.joinToString("")
+                                var str = arrList.joinToString("")
 
-                            var h1 = 0
-                            var h2 = 0
-                            for (i in 0 until key.length) {
-                                val charCode = key[i].code
-                                h1 = (h1 * 31 + charCode) % 251
-                                h2 = ((charCode + i) xor h2) and 255
-                            }
+                                var h1 = 0
+                                var h2 = 0
+                                for (i in 0 until key.length) {
+                                    val charCode = key[i].code
+                                    h1 = (h1 * 31 + charCode) % 251
+                                    h2 = ((charCode + i) xor h2) and 255
+                                }
 
-                            val seed = (h1 + h2) % 256
-                            val shift = (h1 % 13) + 3
-                            var currentNum = (h1 * 256 + h2) % 65521 + 1
+                                val seed = (h1 + h2) % 256
+                                val shift = (h1 % 13) + 3
+                                var currentNum = (h1 * 256 + h2) % 65521 + 1
 
-                            for (i in ops.length - 1 downTo 0) {
-                                when (val op = ops[i]) {
-                                    'v' -> {
-                                        str = str.reversed()
-                                    }
-                                    'b' -> {
-                                        val mod = str.length % 4
-                                        if (mod != 0) {
-                                            str += "=".repeat(4 - mod)
+                                for (i in ops.length - 1 downTo 0) {
+                                    when (val op = ops[i]) {
+                                        'v' -> {
+                                            str = str.reversed()
                                         }
-                                        val decodedBytes = Base64.decode(str, Base64.DEFAULT)
-                                        str = String(decodedBytes, Charsets.ISO_8859_1)
-                                    }
-                                    else -> {
-                                        val rot = (26 - ((op.code - 64) % 26)) % 26
-                                        val sb = StringBuilder(str.length)
-                                        for (j in 0 until str.length) {
-                                            val c = str[j]
-                                            when (c) {
-                                                in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
-                                                in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
-                                                else -> sb.append(c)
+                                        'b' -> {
+                                            val mod = str.length % 4
+                                            if (mod != 0) {
+                                                str += "=".repeat(4 - mod)
                                             }
+                                            val decodedBytes = Base64.decode(str, Base64.DEFAULT)
+                                            str = String(decodedBytes, Charsets.ISO_8859_1)
                                         }
-                                        str = sb.toString()
+                                        else -> {
+                                            val rot = (26 - ((op.code - 64) % 26)) % 26
+                                            val sb = StringBuilder(str.length)
+                                            for (j in 0 until str.length) {
+                                                val c = str[j]
+                                                when (c) {
+                                                    in 'A'..'Z' -> sb.append(((c.code - 65 + rot) % 26 + 65).toChar())
+                                                    in 'a'..'z' -> sb.append(((c.code - 97 + rot) % 26 + 97).toChar())
+                                                    else -> sb.append(c)
+                                                }
+                                            }
+                                            str = sb.toString()
+                                        }
                                     }
                                 }
-                            }
 
-                            val len = str.length
-                            val perm = IntArray(len)
-                            for (i in len - 1 downTo 1) {
-                                currentNum = (currentNum * 75 + 74) % 65537
-                                perm[i] = currentNum % (i + 1)
-                            }
+                                val len = str.length
+                                val perm = IntArray(len)
+                                for (i in len - 1 downTo 1) {
+                                    currentNum = (currentNum * 75 + 74) % 65537
+                                    perm[i] = currentNum % (i + 1)
+                                }
 
-                            val charArray = str.toCharArray()
-                            for (i in 1 until len) {
-                                val idx = perm[i]
-                                val tmp = charArray[i]
-                                charArray[i] = charArray[idx]
-                                charArray[idx] = tmp
-                            }
+                                val charArray = str.toCharArray()
+                                for (i in 1 until len) {
+                                    val idx = perm[i]
+                                    val tmp = charArray[i]
+                                    charArray[i] = charArray[idx]
+                                    charArray[idx] = tmp
+                                }
 
-                            val strPermuted = String(charArray)
+                                val strPermuted = String(charArray)
 
-                            val result = StringBuilder(strPermuted.length)
-                            var k = seed
-                            for (i in 0 until strPermuted.length) {
-                                val c = strPermuted[i].code
-                                val nextK = (k + shift) % 256
-                                val decChar = (c xor nextK).toChar()
-                                result.append(decChar)
-                                k = (nextK + c) % 256
-                            }
+                                val result = StringBuilder(strPermuted.length)
+                                var k = seed
+                                for (i in 0 until strPermuted.length) {
+                                    val c = strPermuted[i].code
+                                    val nextK = (k + shift) % 256
+                                    val decChar = (c xor nextK).toChar()
+                                    result.append(decChar)
+                                    k = (nextK + c) % 256
+                                }
 
-                            val decodedUrl = result.toString()
-                            Log.d("Kekik_$name", "Candidate decoded: $decodedUrl")
-                            if (isValidVideoUrl(decodedUrl)) {
-                                Log.d("Kekik_$name", "Decoded REAL URL: $decodedUrl")
-                                return decodedUrl
+                                val decodedUrl = result.toString()
+                                Log.d("Kekik_$name", "Candidate decoded: $decodedUrl")
+                                if (isValidVideoUrl(decodedUrl)) {
+                                    Log.d("Kekik_$name", "Decoded REAL URL: $decodedUrl")
+                                    return decodedUrl
+                                }
+                            } catch (e: Exception) {
+                                Log.d("Kekik_$name", "Candidate evaluation failed: ${e.message}")
                             }
-                        } catch (e: Exception) {
-                            Log.d("Kekik_$name", "Candidate evaluation failed: ${e.message}")
                         }
                     }
                 }
