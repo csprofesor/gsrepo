@@ -43,15 +43,22 @@ open class CloseLoadExtractor : ExtractorApi() {
 
     private fun decryptNative(html: String): String? {
         return try {
-            val scriptRegex = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
             val regexKey = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z0-9]{15,35})["']""")
             val regexOps = Regex("""var\s+[a-zA-Z0-9_]+\s*=\s*["']([a-zA-Z]{2,8})["']""")
             val regexArr = Regex("""\(\[((?:["'][^"']+["'],?\s*)+)\]\)""")
 
-            val scriptMatches = scriptRegex.findAll(html)
-            for (scriptMatch in scriptMatches) {
-                val scriptContent = scriptMatch.groupValues[1]
+            val unpackedJs = try { getAndUnpack(html) } catch (_: Exception) { null }
+            val candidates = mutableListOf<String>()
+            if (!unpackedJs.isNullOrBlank()) {
+                candidates.add(unpackedJs)
+            }
+            val doc = Jsoup.parse(html)
+            doc.select("script").forEach {
+                val data = it.data().ifEmpty { it.html() }
+                if (data.isNotBlank()) candidates.add(data)
+            }
 
+            for (scriptContent in candidates) {
                 val matchKey = regexKey.find(scriptContent) ?: continue
                 val matchOps = regexOps.find(scriptContent) ?: continue
                 val matchArr = regexArr.find(scriptContent) ?: continue
@@ -201,7 +208,35 @@ open class CloseLoadExtractor : ExtractorApi() {
 
         Log.d(name, "Raw HTML uzunluğu: ${rawHtml.length}")
 
-        val videoUrl = decryptNative(rawHtml)
+        var videoUrl = decryptNative(rawHtml)
+
+        if (videoUrl.isNullOrBlank() || !videoUrl.startsWith("http")) {
+            val unpackedJs = try { getAndUnpack(rawHtml) } catch (_: Exception) { null }
+            val searchHtml = unpackedJs ?: rawHtml
+
+            val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
+                .find(searchHtml)
+                ?: Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
+                    .find(rawHtml)
+
+            if (directFileMatch != null) {
+                val candidate = directFileMatch.groupValues[1].replace("\\/", "/")
+                if (candidate.startsWith("http")) {
+                    videoUrl = candidate
+                }
+            }
+
+            if (videoUrl.isNullOrBlank() || !videoUrl.startsWith("http")) {
+                val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(searchHtml)
+                    ?: Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(rawHtml)
+                if (urlMatch != null) {
+                    val candidate = urlMatch.groupValues[1].replace("\\/", "/")
+                    if (candidate.startsWith("http") && !candidate.contains("playmix.uno")) {
+                        videoUrl = candidate
+                    }
+                }
+            }
+        }
 
         if (videoUrl.isNullOrBlank()) {
             Log.e(name, "CloseLoad URL deşifre edilemedi.")
