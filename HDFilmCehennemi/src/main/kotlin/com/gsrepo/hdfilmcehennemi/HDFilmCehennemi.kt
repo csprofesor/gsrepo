@@ -40,32 +40,17 @@ class HDFilmCehennemi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/" to "Son Eklenenler",
-        "${mainUrl}/category/film-izle-2/" to "Filmler",
-        "${mainUrl}/yabancidiziizle-5/" to "Yabancı Diziler",
-        "${mainUrl}/dil/turkce-dublajli-film-izleyin-6/" to "Türkçe Dublaj",
-        "${mainUrl}/dil/turkce-altyazili-filmleri-izleme-sitesi-3/" to "Türkçe Altyazılı",
-        "${mainUrl}/en-cok-izlenen-filmler-hd-1/" to "En Çok İzlenenler",
-        "${mainUrl}/category/tavsiye-filmler-izle3/" to "Tavsiye Filmler",
-        "${mainUrl}/top100-2/" to "IMDb Top 100",
-        "${mainUrl}/category/marvel-yapimlarini-izle-5/" to "Marvel Yapımları",
-        "${mainUrl}/category/dc-yapimlarini-izle-1/" to "DC Yapımları",
-        "${mainUrl}/tur/aksiyon-filmleri-izleyin-8/" to "Aksiyon",
-        "${mainUrl}/tur/animasyon-filmlerini-izleyin-5/" to "Animasyon",
-        "${mainUrl}/tur/bilim-kurgu-filmlerini-izleyin-5/" to "Bilim Kurgu",
-        "${mainUrl}/tur/dram-filmlerini-izle-2/" to "Dram",
-        "${mainUrl}/tur/fantastik-filmlerini-izleyin-4/" to "Fantastik",
-        "${mainUrl}/tur/gerilim-filmlerini-izle-4/" to "Gerilim",
-        "${mainUrl}/tur/komedi-filmlerini-izleyin-2/" to "Komedi",
-        "${mainUrl}/tur/korku-filmlerini-izle-9/" to "Korku",
-        "${mainUrl}/tur/macera-filmlerini-izleyin-5/" to "Macera",
-        "${mainUrl}/tur/romantik-filmleri-izle-3/" to "Romantik"
+        "${mainUrl}/load/page/sayfano/home/" to "Yeni Eklenen Filmler",
+        "${mainUrl}/load/page/sayfano/home-series/" to "Yeni Eklenen Diziler",
+        "${mainUrl}/load/page/sayfano/categories/tavsiye-filmler-izle3/" to "Tavsiye Filmler",
+        "${mainUrl}/load/page/sayfano/imdb7/" to "IMDB 7+ Filmler",
+        "${mainUrl}/load/page/sayfano/mostCommented/" to "En Çok Yorumlananlar",
+        "${mainUrl}/load/page/sayfano/mostLiked/" to "En Çok Beğenilenler"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         return try {
-            val base = request.data.removeSuffix("/")
-            val url = if (page <= 1) request.data else "$base/page/$page/"
+            val url = request.data.replace("sayfano", page.toString())
             val doc = app.get(url, referer = "$mainUrl/", interceptor = interceptor).document
             val items = parseHomePage(doc)
             newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
