@@ -103,9 +103,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
 
         fun emitStream(streamUrl: String) {
             var fixStream = streamUrl
-            if (fixStream.contains("cdn1.sinematv.az")) {
-                fixStream = fixStream.replace("cdn1.sinematv.az", "abyss.to")
-            }
             if (fixStream.startsWith("//")) {
                 fixStream = "https:$fixStream"
             }
@@ -159,16 +156,12 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
             }
         }
 
-        val targetUrl = if (url.contains("cdn1.sinematv.az")) {
-            url.replace("cdn1.sinematv.az", "abyss.to")
-        } else {
-            url
-        }
+        val targetUrl = url
 
         val finalUrl = withContext(Dispatchers.IO) {
             try {
                 val doc = app.get(targetUrl, referer = referer ?: mainUrl).document
-                val iframe = doc.selectFirst("iframe[src*=\"player.abyssplayer.com\"], iframe[data-src*=\"player.abyssplayer.com\"], iframe")
+                val iframe = doc.selectFirst("iframe[src*=\"player.abyssplayer.com\"], iframe[data-src*=\"player.abyssplayer.com\"]")
                 val iframeSrc = iframe?.attr("data-src")?.takeIf { it.isNotBlank() } ?: iframe?.attr("src")?.takeIf { it.isNotBlank() }
                 when {
                     iframeSrc?.startsWith("//") == true -> "https:$iframeSrc"
