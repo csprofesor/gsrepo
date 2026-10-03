@@ -39,7 +39,11 @@ class SinemaTvAz : MainAPI() {
     ): HomePageResponse {
         val url = if (page == 1) request.data else "${request.data}page/$page/"
         val document = app.get(url, headers = browserHeaders).document
-        val home = document.select(".poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
+        var items = document.select("div.sect:not(.sect--top) .poster-item, div.sect:not(.sect--top) .grid-item, div.sect:not(.sect--top) .shortstory, div.sect:not(.sect--top) article")
+        if (items.isEmpty()) {
+            items = document.select(".poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item")
+        }
+        val home = items.mapNotNull {
             it.toSearchResult()
         }
         return newHomePageResponse(request.name, home)
@@ -53,8 +57,9 @@ class SinemaTvAz : MainAPI() {
 
         val fixHref = fixUrl(href)
 
-        val title = this.attr("title").ifEmpty {
-            this.selectFirst(".poster-item__title, div.shortstory-title, h2.title, span.title")?.text()?.trim() ?: ""
+        val titleElement = this.selectFirst(".poster-item__title, div.shortstory-title, h2.title, span.title")
+        val title = (titleElement?.text()?.trim() ?: "").ifEmpty {
+            this.attr("title")
         }.ifEmpty {
             this.selectFirst("img")?.attr("title")?.ifEmpty { this.selectFirst("img")?.attr("alt") } ?: ""
         }.ifEmpty {
@@ -91,7 +96,7 @@ class SinemaTvAz : MainAPI() {
             headers = browserHeaders
         ).document
 
-        return response.select(".poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
+        return response.select("div.sect:not(.sect--top) .poster-item, div.sect:not(.sect--top) .grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
             it.toSearchResult()
         }
     }
