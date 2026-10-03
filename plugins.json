@@ -494,7 +494,7 @@
     "fileHash": "sha256-f36ccc2bb6ed5c8f4af292d0a959c113985babf3c160346f85ee3e8760510652"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaCX.cs3?v=10fc824bef7bc99d589d494e77f14b07a7d2a46fe5c92678057a3951340cc37e",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaCX.cs3?v=ce02080c5f308df47c8ecec4fa54cc6bbc0c6ebfd8e749b5f58047a45856f662",
     "status": 1,
     "version": 25,
     "name": "SinemaCX",
@@ -503,7 +503,7 @@
       "csprofesor"
     ],
     "description": "Güncel ve en iyi yabancı filmleri yüksek görüntü kalitesinde, Türkçe dublaj ve altyazı seçenekleriyle filmleri full izleyin.",
-    "fileSize": 18283,
+    "fileSize": 20705,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -511,7 +511,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.sinema.cx&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-10fc824bef7bc99d589d494e77f14b07a7d2a46fe5c92678057a3951340cc37e"
+    "fileHash": "sha256-ce02080c5f308df47c8ecec4fa54cc6bbc0c6ebfd8e749b5f58047a45856f662"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTvAz.cs3?v=cb8df43f0513dad1b306c319bc000a243720f87b0cdbfd76e1a48fc706afb96f",
