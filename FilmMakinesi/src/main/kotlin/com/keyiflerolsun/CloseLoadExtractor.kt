@@ -34,7 +34,24 @@ open class CloseLoadExtractor : ExtractorApi() {
                 doc.title().contains("Just a moment", ignoreCase = true) ||
                 doc.title().contains("Attention Required", ignoreCase = true)
             ) {
-                return cloudflareKiller.intercept(chain)
+                synchronized(cloudflareKiller) {
+                    val checkResp = chain.proceed(request)
+                    val checkBody = checkResp.peekBody(1024 * 1024).string()
+                    val checkDoc  = Jsoup.parse(checkBody)
+
+                    if (checkResp.code == 403 || checkResp.code == 503 ||
+                        checkResp.header("cf-mitigated") != null ||
+                        checkBody.contains("Just a moment", ignoreCase = true) ||
+                        checkBody.contains("Checking your browser", ignoreCase = true) ||
+                        checkBody.contains("cf-challenge", ignoreCase = true) ||
+                        checkBody.contains("turnstile", ignoreCase = true) ||
+                        checkDoc.title().contains("Just a moment", ignoreCase = true) ||
+                        checkDoc.title().contains("Attention Required", ignoreCase = true)
+                    ) {
+                        return cloudflareKiller.intercept(chain)
+                    }
+                    return checkResp
+                }
             }
 
             return response
@@ -250,7 +267,7 @@ open class CloseLoadExtractor : ExtractorApi() {
         val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
         val requestHeaders = mapOf(
             "User-Agent" to userAgent,
-            "Referer" to "${mainUrl}/"
+            "Referer" to (referer?.takeIf { it.isNotBlank() } ?: "${mainUrl}/")
         )
 
         val response = try {
