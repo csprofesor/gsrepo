@@ -36,7 +36,7 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 class DiziPal : MainAPI() {
-    override var mainUrl              = "https://dizipal1584.com"
+    override var mainUrl              = "https://dizipal2224.com"
     override var name                 = "DiziPal"
     override val hasMainPage          = true
     override var lang                 = "tr"
@@ -58,7 +58,7 @@ class DiziPal : MainAPI() {
             val response = chain.proceed(request)
             val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
 
-            if (doc.html().contains("Just a moment")) {
+            if (doc.html().contains("Just a moment") || doc.html().contains("Attention Required!") || doc.html().contains("Cloudflare")) {
                 return cloudflareKiller.intercept(chain)
             }
 
@@ -67,16 +67,9 @@ class DiziPal : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/yabanci-dizi-izle"                 to "Yeni Diziler",
-        "${mainUrl}/hd-film-izle"                      to "Yeni Filmler",
-        "${mainUrl}/kanal/netflix"                     to "Netflix",
-        "${mainUrl}/kanal/exxen"                       to "Exxen",
-        "${mainUrl}/kanal/max"                         to "Max",
-        "${mainUrl}/kanal/disney"                      to "Disney+",
-        "${mainUrl}/kanal/amazon"                      to "Amazon Prime",
-        "${mainUrl}/kanal/tod"                         to "TOD (beIN)",
-        "${mainUrl}/kanal/tabii"                       to "Tabii",
-        "${mainUrl}/kanal/hulu"                        to "Hulu",
+        "${mainUrl}/diziler"                           to "Diziler",
+        "${mainUrl}/filmler"                           to "Filmler",
+        "${mainUrl}/yeni-eklenen-bolumler"             to "Son Eklenen Bölümler",
         "${mainUrl}/anime"                             to "Anime"
     )
 
@@ -171,6 +164,9 @@ class DiziPal : MainAPI() {
 
         if (href.isBlank()
             || href.endsWith("/kanal/")
+            || href.endsWith("/diziler")
+            || href.endsWith("/filmler")
+            || href.endsWith("/yeni-eklenen-bolumler")
             || href.endsWith("/yabanci-dizi-izle")
             || href.endsWith("/hd-film-izle")
             || href.endsWith("/anime")
