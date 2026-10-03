@@ -61,7 +61,6 @@ open class CloseLoadExtractor : ExtractorApi() {
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank() || !url.startsWith("http", ignoreCase = true)) return false
         val lower = url.lowercase()
-        if (lower.contains("f9gx1m12bwc")) return false
         if (lower.contains(".vtt") || lower.contains(".srt") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".webp")) return false
         if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<!doctype")) return false
         return true
