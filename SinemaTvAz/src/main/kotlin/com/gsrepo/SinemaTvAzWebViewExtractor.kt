@@ -10,7 +10,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
@@ -32,25 +31,51 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
     private var webView: WebView? = null
     private val emittedUrls: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
 
-    data class ParsedJson(
-        val sources: List<ParsedSource>?
-    )
-    data class ParsedSource(
-        val link: String?,
-        val links: List<ParsedLink>?
-    )
-    data class ParsedLink(
-        val quality: String?,
-        val src: String?
-    )
+    private fun isJunkUrl(url: String): Boolean {
+        val lower = url.lowercase()
+        if (lower.contains("google-analytics") ||
+            lower.contains("googletagmanager") ||
+            lower.contains("google.com/g/collect") ||
+            lower.contains("googleapis.com") ||
+            lower.contains("yandex") ||
+            lower.contains("mc.yandex") ||
+            lower.contains("metrika") ||
+            lower.contains("doubleclick") ||
+            lower.contains("facebook") ||
+            lower.contains("pixel.morphify") ||
+            lower.contains("kkkkkkkrrrrrrrr") ||
+            lower.contains("decafeligiblyhad") ||
+            lower.contains("yaropolka.link") ||
+            lower.contains("pepyakanew.link") ||
+            lower.contains("rude-movie.com") ||
+            lower.contains("/contents/") ||
+            lower.contains("/user-stats/") ||
+            lower.contains("player-metrics") ||
+            lower.contains("gtag") ||
+            lower.contains("favicon") ||
+            lower.contains("blank.mp4") ||
+            lower.contains("dummy.mp4") ||
+            lower.contains("empty.mp4")
+        ) {
+            return true
+        }
 
-    data class CatalogEpisode(
-        val m3u8MasterFilePath: String?,
-        val episodeVariants: List<CatalogVariant>?
-    )
-    data class CatalogVariant(
-        val filepath: String?
-    )
+        val path = lower.substringBefore("?")
+        if (path.endsWith(".js") ||
+            path.endsWith(".css") ||
+            path.endsWith(".png") ||
+            path.endsWith(".jpg") ||
+            path.endsWith(".jpeg") ||
+            path.endsWith(".gif") ||
+            path.endsWith(".webp") ||
+            path.endsWith(".svg") ||
+            path.endsWith(".ico")
+        ) {
+            return true
+        }
+
+        return false
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override suspend fun getUrl(
@@ -62,8 +87,12 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         val defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 
         fun getHeadersForStream(streamUrl: String): Map<String, String> {
+            val lower = streamUrl.lowercase()
             val streamReferer = when {
-                streamUrl.contains("vkvideo") || streamUrl.contains("vk.com") || streamUrl.contains("vk.ru") -> "https://vk.com/"
+                lower.contains("vkvideo") || lower.contains("vk.com") || lower.contains("vk.ru") -> "https://vk.com/"
+                lower.contains("abyss.to") -> "https://abyss.to/"
+                lower.contains("cdn2.sinematv.az") -> "https://cdn2.sinematv.az/"
+                lower.contains("cdn.sinematv.az") || lower.contains("cdn1.sinematv.az") -> "https://sinematv.az/"
                 else -> referer ?: "$mainUrl/"
             }
             return mapOf(
@@ -81,7 +110,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 fixStream = "https:$fixStream"
             }
 
-            if (fixStream.contains("/contents/") || fixStream.contains("/user-stats/") || fixStream.contains("player-metrics") || fixStream.contains("pixel.morphify.net")) {
+            if (isJunkUrl(fixStream)) {
                 return
             }
 
@@ -89,79 +118,43 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 return
             }
 
-            if (fixStream.startsWith("http://") || fixStream.startsWith("https://")) {
-                Log.d("SinemaTvAzWebView", "EMITTING_STREAM=$fixStream")
-                CoroutineScope(Dispatchers.IO).launch {
-                    if (fixStream.contains("parsed.json") || fixStream.contains("catalog-api/episodes")) {
-                        try {
-                            if (fixStream.contains("catalog-api/episodes")) {
-                                val jsonStr = app.get(fixStream, referer = mainUrl).text
-                                val episodes = parseJson<List<CatalogEpisode>>(jsonStr)
-                                episodes.firstOrNull()?.let { ep ->
-                                    val masterPath = ep.m3u8MasterFilePath ?: ep.episodeVariants?.firstOrNull()?.filepath
-                                    if (masterPath != null) {
-                                        withContext(Dispatchers.Main) {
-                                            webView?.evaluateJavascript("fetch('$masterPath').then(r => r.text()).then(txt => window.AndroidBridge.onStreamFound(txt, '$masterPath'));", null)
-                                        }
-                                    }
-                                }
-                            } else {
-                                val jsonStr = app.get(fixStream, referer = mainUrl).text
-                                val parsed = parseJson<ParsedJson>(jsonStr)
-                                parsed.sources?.forEach { src ->
-                                    src.link?.let { link ->
-                                        callback.invoke(
-                                            newExtractorLink(
-                                                source = "SinemaTvAzWebView",
-                                                name = "SinemaTvAz Auto",
-                                                url = link,
-                                                type = ExtractorLinkType.M3U8,
-                                            ) {
-                                                this.quality = Qualities.Unknown.value
-                                                this.headers = getHeadersForStream(link)
-                                            }
-                                        )
-                                    }
-                                    src.links?.forEach { link ->
-                                        link.src?.let { srcLink ->
-                                            val qualityValue = when(link.quality) {
-                                                "1080" -> Qualities.P1080.value
-                                                "720" -> Qualities.P720.value
-                                                "480" -> Qualities.P480.value
-                                                "360" -> Qualities.P360.value
-                                                else -> Qualities.Unknown.value
-                                            }
-                                            callback.invoke(
-                                                newExtractorLink(
-                                                    source = "SinemaTvAzWebView",
-                                                    name = "SinemaTvAz ${link.quality}p",
-                                                    url = srcLink,
-                                                    type = if (srcLink.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
-                                                ) {
-                                                    this.quality = qualityValue
-                                                    this.headers = getHeadersForStream(srcLink)
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("SinemaTvAzWebView", "JSON parsing failed", e)
+            if (!fixStream.startsWith("http://") && !fixStream.startsWith("https://")) {
+                return
+            }
+
+            Log.d("SinemaTvAzWebView", "EMITTING_STREAM=$fixStream")
+
+            CoroutineScope(Dispatchers.IO).launch {
+                val lower = fixStream.lowercase()
+                val path = fixStream.substringBefore("?").lowercase()
+
+                if (lower.contains("parsed.json") || lower.contains("catalog-api") || lower.contains("balancer-api") || lower.contains("proxy/playlists") || lower.contains("vv-api.php") || lower.contains("api/v1/player")) {
+                    try {
+                        val jsonStr = app.get(fixStream, headers = getHeadersForStream(fixStream)).text
+                        val streamUrls = Regex("https?://[^\"'\\s<>]+?\\.(?:m3u8|mp4)(?:\\?[^\"'\\s<>]*)?", RegexOption.IGNORE_CASE)
+                            .findAll(jsonStr)
+                            .map { it.value }
+                            .distinct()
+                            .toList()
+
+                        for (sUrl in streamUrls) {
+                            emitStream(sUrl)
                         }
-                    } else if (fixStream.contains(".m3u8") || fixStream.contains(".mp4") || fixStream.contains("playlist") || fixStream.contains("master.m3u8")) {
-                        callback.invoke(
-                            newExtractorLink(
-                                source = "SinemaTvAzWebView",
-                                name = "SinemaTvAz",
-                                url = fixStream,
-                                type = if (fixStream.contains(".m3u8", true) || fixStream.contains("playlist", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
-                            ) {
-                                this.quality = Qualities.Unknown.value
-                                this.headers = getHeadersForStream(fixStream)
-                            }
-                        )
+                    } catch (e: Exception) {
+                        Log.e("SinemaTvAzWebView", "API JSON fetch failed for $fixStream", e)
                     }
+                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || lower.contains(".m3u8") || lower.contains("playlist")) {
+                    callback.invoke(
+                        newExtractorLink(
+                            source = "SinemaTvAzWebView",
+                            name = "SinemaTvAz",
+                            url = fixStream,
+                            type = if (path.endsWith(".mp4")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
+                        ) {
+                            this.quality = Qualities.Unknown.value
+                            this.headers = getHeadersForStream(fixStream)
+                        }
+                    )
                 }
             }
         }
@@ -193,6 +186,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
+                    databaseEnabled = true
                     mediaPlaybackRequiresUserGesture = false
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     userAgentString = defaultUserAgent
@@ -202,7 +196,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     @JavascriptInterface
                     fun onStreamFound(body: String, reqUrl: String) {
                         Log.d("SinemaTvAzWebView", "BRIDGE_FOUND: $reqUrl")
-                        val urls = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8(?:\\?[^\"',\\s<>]*)?|\\.mp4(?:\\?[^\"',\\s<>]*)?|parsed\\.json(?:\\?[^\"',\\s<>]*)?|catalog-api/episodes(?:\\?[^\"',\\s<>]*)?)", RegexOption.IGNORE_CASE)
+                        val urls = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8(?:\\?[^\"',\\s<>]*)?|\\.mp4(?:\\?[^\"',\\s<>]*)?|parsed\\.json(?:\\?[^\"',\\s<>]*)?|catalog-api(?:\\?[^\"',\\s<>]*)?)", RegexOption.IGNORE_CASE)
                             .findAll("$body $reqUrl")
                             .map { it.value }
                             .distinct()
@@ -301,8 +295,11 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
 
-                        if (reqUrl.contains(".mp4") || reqUrl.contains(".m3u8") || reqUrl.contains("m3u") || reqUrl.contains("manifest") || reqUrl.contains("playlist") || reqUrl.contains("master") || reqUrl.contains("json") || reqUrl.contains("api") || reqUrl.contains("proxy") || reqUrl.contains("token")) {
-                            emitStream(reqUrl)
+                        if (!isJunkUrl(reqUrl)) {
+                            val path = reqUrl.substringBefore("?").lowercase()
+                            if (path.endsWith(".m3u8") || path.endsWith(".mp4") || path.contains("master.m3u8") || path.contains("index.m3u8") || path.contains("playlist") || path.contains("manifest") || reqUrl.contains("parsed.json") || reqUrl.contains("catalog-api") || reqUrl.contains("balancer-api") || reqUrl.contains("proxy/playlists") || reqUrl.contains("vv-api.php") || reqUrl.contains("api/v1/player")) {
+                                emitStream(reqUrl)
+                            }
                         }
 
                         return super.shouldInterceptRequest(view, request)
