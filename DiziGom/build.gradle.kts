@@ -1,6 +1,6 @@
-version = 17
+version = 18
 
-// DiziGom v17 build
+// DiziGom v18 build
 
 cloudstream {
     authors = listOf("csprofesor")
