@@ -314,8 +314,12 @@ open class CloseLoadExtractor : ExtractorApi() {
             }
         }
 
-        var videoUrl = decryptNative(rawHtml)
-        val sourceScope = "$searchScope\n$authResponseText"
+        val unpackedAuth = if (authResponseText.isNotBlank()) {
+            try { getAndUnpack(authResponseText) } catch (_: Exception) { null }
+        } else null
+
+        val sourceScope = searchScope + "\n" + (unpackedAuth ?: "") + "\n" + authResponseText
+        var videoUrl = decryptNative(sourceScope) ?: decryptNative(rawHtml)
 
         if (!isValidVideoUrl(videoUrl)) {
             val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
