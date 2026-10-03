@@ -224,9 +224,9 @@
     "fileHash": "sha256-9ccb2b8fea28cd7b23947fb3c9379e9543bd74e4862ad2f2f9754b49126f0b05"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=9668002a3f88b11aa2fa89d83bea2667a28cd343bf47bc02550e2d279d2e917a",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=a2dbc99d0ba72b7c395b9d43b3b1c5bb9ef0e914ea28ec6701e02e8c4725f784",
     "status": 1,
-    "version": 111,
+    "version": 112,
     "name": "DiziPal",
     "internalName": "DiziPal",
     "authors": [
@@ -240,14 +240,14 @@
       "TvSeries",
       "Movie"
     ],
-    "iconUrl": "https://dizipal2223.com/assets/favicon/favicon-32x32.png?v=3",
+    "iconUrl": "https://www.google.com/s2/favicons?domain=dizipal2224.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-9668002a3f88b11aa2fa89d83bea2667a28cd343bf47bc02550e2d279d2e917a"
+    "fileHash": "sha256-a2dbc99d0ba72b7c395b9d43b3b1c5bb9ef0e914ea28ec6701e02e8c4725f784"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=cf1b72fb327da739680a980ec631b97886440bd6ad4aec2316611202423ee8dd",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=3ef670bc30ac6de46208f3f377be8e67ffdb0bd13a43f404809f946533b544a3",
     "status": 1,
-    "version": 94,
+    "version": 95,
     "name": "DiziPalOriginal",
     "internalName": "DiziPalOriginal",
     "authors": [
@@ -261,9 +261,9 @@
       "TvSeries",
       "Movie"
     ],
-    "iconUrl": "https://chessplyimages.cfd/uploads/site/favicon-32x32.png",
+    "iconUrl": "https://www.google.com/s2/favicons?domain=dizipal2224.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-cf1b72fb327da739680a980ec631b97886440bd6ad4aec2316611202423ee8dd"
+    "fileHash": "sha256-3ef670bc30ac6de46208f3f377be8e67ffdb0bd13a43f404809f946533b544a3"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=096ece0e2947716e9df05b4fcb380b96edb292dc1453bc71050a275e22f6fba2",
