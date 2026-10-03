@@ -69,7 +69,9 @@ class SinemaTvAz : MainAPI() {
         if (title.isBlank()) return null
 
         val imgElement = this.selectFirst("img")
-        val posterUrl = imgElement?.attr("data-src")?.ifEmpty { imgElement.attr("src") }?.let { fixUrl(it) }
+        val posterUrl = imgElement?.attr("data-src")?.ifEmpty { imgElement.attr("src") }
+            ?.replace("/uploads/movies/", "/movies/")
+            ?.let { fixUrl(it) }
 
         val isTvSeries = fixHref.contains("/serial/") || fixHref.contains("/mult/") || fixHref.contains("/anime/") || fixHref.contains("/dorama/") || title.contains("sezon", ignoreCase = true)
 
@@ -107,7 +109,7 @@ class SinemaTvAz : MainAPI() {
         val title = document.selectFirst("h1.title, h1.entry-title, h1")?.text()?.trim() ?: ""
         val poster = document.selectFirst("div.poster img, div.shortstory-poster img, div.story-poster img, img")?.let {
             it.attr("data-src").ifEmpty { it.attr("src") }
-        }?.let { fixUrl(it) }
+        }?.replace("/uploads/movies/", "/movies/")?.let { fixUrl(it) }
 
         val description = document.selectFirst("div.full-text, div.story-text, div.description")?.text()?.trim()
         val year = document.selectFirst("div.info:contains(İl), span:contains(İl)")?.text()?.let {
