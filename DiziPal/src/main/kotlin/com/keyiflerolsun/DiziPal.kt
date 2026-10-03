@@ -67,14 +67,11 @@ class DiziPal : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
+        "${mainUrl}/"                                  to "Anasayfa",
         "${mainUrl}/diziler"                           to "Diziler",
         "${mainUrl}/filmler"                           to "Filmler",
         "${mainUrl}/yeni-eklenen-bolumler"             to "Son Eklenen Bölümler",
-        "${mainUrl}/anime"                             to "Anime",
-        "${mainUrl}/filmler?tur=13"                    to "Aksiyon Filmleri",
-        "${mainUrl}/filmler?tur=4"                     to "Dram Filmleri",
-        "${mainUrl}/filmler?tur=3"                     to "Komedi Filmleri",
-        "${mainUrl}/diziler?ulke=2"                    to "Yerli Diziler"
+        "${mainUrl}/anime"                             to "Anime"
     )
 
     private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
