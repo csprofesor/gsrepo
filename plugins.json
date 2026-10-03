@@ -224,9 +224,9 @@
     "fileHash": "sha256-9ccb2b8fea28cd7b23947fb3c9379e9543bd74e4862ad2f2f9754b49126f0b05"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=1f0b022c00d1ab96e5c2afd21affd2864d5040882f9f9dc20e6c4d848bd624be",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=9668002a3f88b11aa2fa89d83bea2667a28cd343bf47bc02550e2d279d2e917a",
     "status": 1,
-    "version": 110,
+    "version": 111,
     "name": "DiziPal",
     "internalName": "DiziPal",
     "authors": [
@@ -242,12 +242,12 @@
     ],
     "iconUrl": "https://dizipal2223.com/assets/favicon/favicon-32x32.png?v=3",
     "apiVersion": 1,
-    "fileHash": "sha256-1f0b022c00d1ab96e5c2afd21affd2864d5040882f9f9dc20e6c4d848bd624be"
+    "fileHash": "sha256-9668002a3f88b11aa2fa89d83bea2667a28cd343bf47bc02550e2d279d2e917a"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=2faa12d06fcfc5dcea4d50f9f742dc80db8480df83ddea86d23303847a330c5c",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=cf1b72fb327da739680a980ec631b97886440bd6ad4aec2316611202423ee8dd",
     "status": 1,
-    "version": 93,
+    "version": 94,
     "name": "DiziPalOriginal",
     "internalName": "DiziPalOriginal",
     "authors": [
@@ -263,7 +263,7 @@
     ],
     "iconUrl": "https://chessplyimages.cfd/uploads/site/favicon-32x32.png",
     "apiVersion": 1,
-    "fileHash": "sha256-2faa12d06fcfc5dcea4d50f9f742dc80db8480df83ddea86d23303847a330c5c"
+    "fileHash": "sha256-cf1b72fb327da739680a980ec631b97886440bd6ad4aec2316611202423ee8dd"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=096ece0e2947716e9df05b4fcb380b96edb292dc1453bc71050a275e22f6fba2",
