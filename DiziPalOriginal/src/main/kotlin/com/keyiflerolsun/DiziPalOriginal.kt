@@ -68,7 +68,11 @@ class DiziPalOriginal : MainAPI() {
         "$mainUrl/diziler"               to "Diziler",
         "$mainUrl/filmler"               to "Filmler",
         "$mainUrl/yeni-eklenen-bolumler" to "Son Eklenen Bölümler",
-        "$mainUrl/anime"                 to "Anime"
+        "$mainUrl/anime"                 to "Anime",
+        "$mainUrl/filmler?tur=13"        to "Aksiyon Filmleri",
+        "$mainUrl/filmler?tur=4"         to "Dram Filmleri",
+        "$mainUrl/filmler?tur=3"         to "Komedi Filmleri",
+        "$mainUrl/diziler?ulke=2"        to "Yerli Diziler"
     )
 
     private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
@@ -172,7 +176,7 @@ class DiziPalOriginal : MainAPI() {
 
         try {
             val url = if (page > 1) {
-                if (request.data.contains("?")) "${request.data}&sayfa=$page" else "${request.data}?sayfa=$page"
+                if (request.data.contains("?")) "${request.data}&page=$page" else "${request.data}?page=$page"
             } else {
                 request.data
             }
