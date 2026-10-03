@@ -13,7 +13,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 
 class DiziMom : MainAPI() {
-    override var mainUrl              = "https://www.dizimom.help"
+    override var mainUrl              = "https://www.dizimom.wiki"
     override var name                 = "DiziMom"
     override val hasMainPage          = true
     override var lang                 = "tr"
@@ -58,16 +58,20 @@ class DiziMom : MainAPI() {
     }
     
     override val mainPage = mainPageOf(
-        "${mainUrl}/tum-bolumler"        to "Son Bölümler",
-        "${mainUrl}/yerli-dizi-izle"     to "Yerli Diziler",
-        "${mainUrl}/yabanci-dizi-izle"   to "Yabancı Diziler",
-        "${mainUrl}/tv-programlari-izle" to "TV Programları",
-        "${mainUrl}/netflix-dizileri-izle"      to "Netflix Dizileri",
-        "${mainUrl}/kore-dizileri-izle"         to "Kore Dizileri",
+        "${mainUrl}/tum-bolumler"            to "Son Bölümler",
+        "${mainUrl}/yerli-dizi-izle"         to "Yerli Diziler",
+        "${mainUrl}/yabanci-dizi-izle"       to "Yabancı Diziler",
+        "${mainUrl}/tv-program-bolumleri"    to "TV Programları",
+        "${mainUrl}/netflix-dizileri-izle"   to "Netflix Dizileri",
+        "${mainUrl}/kore-dizileri-izle-hd"   to "Kore Dizileri",
+        "${mainUrl}/anime-izle"              to "Animeler",
+        "${mainUrl}/full-hd-hint-dizileri-izle" to "Hint Dizileri",
     )
 
     private fun Element.posterUrl(): String? {
-        val img = this.selectFirst("img") ?: if (this.tagName() == "img") this else return null
+        val img = this.selectFirst("div.img img, div.cat-img img, div.poster img:not(.tipsol), img:not(.tipsol)")
+            ?: this.selectFirst("img")
+            ?: if (this.tagName() == "img") this else return null
         val url = img.attr("data-src").takeIf { it.isNotBlank() && !it.startsWith("data:") }
             ?: img.attr("data-lazy-src").takeIf { it.isNotBlank() && !it.startsWith("data:") }
             ?: img.attr("data-original").takeIf { it.isNotBlank() && !it.startsWith("data:") }
@@ -91,8 +95,8 @@ class DiziMom : MainAPI() {
             return newHomePageResponse(request.name, emptyList())
         }
         
-        val items = document.select("div.items article, div.result-item article, div.single-item, div.episode-box, div.cat-item, div.dizi-box, article, div.post-item, div.box, div.poster, div.item, div.movie, div.card, div.flix-item, div.movie-box, div.movies-list-item, a.poster")
-        val home = if (request.data.contains("/tum-bolumler")) {
+        val items = document.select("div.episode-box, div.cat-item, div.dizi-box, div.single-item, div.result-item article, div.post-item, article.post")
+        val home = if (request.data.contains("/tum-bolumler") || request.data.contains("/bolum")) {
             items.mapNotNull { it.sonBolumler() }.ifEmpty { items.mapNotNull { it.diziler() } }
         } else {
             items.mapNotNull { it.diziler() }
@@ -102,7 +106,7 @@ class DiziMom : MainAPI() {
     }
 
     private fun Element.sonBolumler(): SearchResponse? {
-        val titleEl = this.select("div.episode-name a, div.title a, h2 a, h3 a, a")
+        val titleEl = this.select("div.episode-name a, div.serie-name a, div.title a, h2 a, h3 a, a[href]")
             .firstOrNull { it.text().substringBefore(" izle").trim().isNotBlank() }
             ?: this
 
@@ -119,13 +123,13 @@ class DiziMom : MainAPI() {
             .ifBlank { rawName }
 
         val epHref = fixUrlNull(
-            this.selectFirst("div.episode-name a, a[href]")?.attr("href")
+            this.selectFirst("div.episode-name a, div.serie-name a, div.img a, a[href]")?.attr("href")
                 ?: titleEl.attr("href")
         ) ?: return null
 
         val posterUrl = this.posterUrl() ?: titleEl.posterUrl()
 
-        val ratingStr = this.selectFirst("span.imdb, div.imdb, span.puan, div.puan, span.score, .label-imdb")?.text()?.trim()
+        val ratingStr = this.selectFirst("span.imdb, div.imdb, span.puan, div.puan, span.score, .label-imdb, .episode-date")?.text()?.trim()
             ?: Regex("""(?i)(?:imdb|puan)\s*:?\s*([0-9]+(?:[.,][0-9]+)?)""").find(this.text())?.groupValues?.get(1)
 
         return newTvSeriesSearchResponse(title, epHref, TvType.TvSeries) {
@@ -135,7 +139,7 @@ class DiziMom : MainAPI() {
     }
 
     private fun Element.diziler(): SearchResponse? {
-        val titleEl = this.select("div.categorytitle a, div.episode-name a, div.title a, h2 a, h3 a, a.title, header a, .entry-title a, h2, h3, a")
+        val titleEl = this.select("div.serie-name a, div.categorytitle a, div.episode-name a, div.title a, h2 a, h3 a, a.title, header a, .entry-title a, h2, h3, a")
             .firstOrNull { it.text().substringBefore(" izle").trim().isNotBlank() }
             ?: this.selectFirst("a[title]")
             ?: this
@@ -153,14 +157,14 @@ class DiziMom : MainAPI() {
         if (title.isBlank()) return null
 
         val href = fixUrlNull(
-            this.selectFirst("div.categorytitle a, div.cat-img a, a[href]")?.attr("href")
+            this.selectFirst("div.serie-name a, div.categorytitle a, div.cat-img a, div.img a, a[href]")?.attr("href")
                 ?: titleEl.attr("href").takeIf { it.isNotBlank() }
                 ?: this.attr("href")
         ) ?: return null
 
         val posterUrl = this.posterUrl() ?: titleEl.posterUrl()
 
-        val ratingStr = this.selectFirst("span.imdb, div.imdb, span.score, div.puan, span.puan, span.rating, .label-imdb, .cat-rating")?.text()?.trim()
+        val ratingStr = this.selectFirst("span.imdb, div.imdb, span.score, div.puan, span.puan, span.rating, .label-imdb, .cat-rating, .episode-date")?.text()?.trim()
             ?: Regex("""(?i)(?:imdb|puan)\s*:?\s*([0-9]+(?:[.,][0-9]+)?)""").find(this.text())?.groupValues?.get(1)
 
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
@@ -176,7 +180,7 @@ class DiziMom : MainAPI() {
             return emptyList()
         }
 
-        return document.select("div.items article, div.result-item article, div.single-item, div.episode-box, div.cat-item, div.dizi-box, article, div.post-item, div.box, div.poster, div.item, div.movie, div.card, div.flix-item, div.movie-box, div.movies-list-item, a.poster").mapNotNull { it.diziler() }
+        return document.select("div.episode-box, div.cat-item, div.dizi-box, div.single-item, div.result-item article, div.post-item, article.post").mapNotNull { it.diziler() }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
