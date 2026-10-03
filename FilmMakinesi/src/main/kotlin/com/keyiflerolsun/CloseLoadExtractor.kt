@@ -61,13 +61,14 @@ open class CloseLoadExtractor : ExtractorApi() {
     private fun isValidVideoUrl(url: String?): Boolean {
         if (url.isNullOrBlank() || !url.startsWith("http", ignoreCase = true)) return false
         val lower = url.lowercase()
+        if (lower.contains("f9gx1m12bwc")) return false
         if (lower.contains(".vtt") || lower.contains(".srt") || lower.contains(".png") || lower.contains(".jpg") || lower.contains(".jpeg") || lower.contains(".webp")) return false
         if (lower.contains("embed/?") || lower.contains("video/embed") || lower.contains("<!doctype")) return false
         return true
     }
 
     private fun findBase64VideoUrl(text: String): String? {
-        val encodedUrls = Regex("""aHR0(?:cHM6Ly|cDovL)[A-Za-z0-9+/_=-]+""")
+        val encodedUrls = Regex("""aHR0[A-Za-z0-9+/_=-]{20,}""")
         return encodedUrls.findAll(text).firstNotNullOfOrNull { match ->
             safeBase64Decode(match.value)
                 .trim()
@@ -318,7 +319,12 @@ open class CloseLoadExtractor : ExtractorApi() {
         } else null
 
         val sourceScope = searchScope + "\n" + (unpackedAuth ?: "") + "\n" + authResponseText
-        var videoUrl = decryptNative(sourceScope) ?: decryptNative(rawHtml)
+
+        var videoUrl = findBase64VideoUrl(sourceScope)
+
+        if (!isValidVideoUrl(videoUrl)) {
+            videoUrl = decryptNative(sourceScope) ?: decryptNative(rawHtml)
+        }
 
         if (!isValidVideoUrl(videoUrl)) {
             val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
@@ -330,19 +336,15 @@ open class CloseLoadExtractor : ExtractorApi() {
                     videoUrl = candidate
                 }
             }
+        }
 
-            if (!isValidVideoUrl(videoUrl)) {
-                val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(sourceScope)
-                if (urlMatch != null) {
-                    val candidate = urlMatch.groupValues[1].replace("\\/", "/")
-                    if (isValidVideoUrl(candidate)) {
-                        videoUrl = candidate
-                    }
+        if (!isValidVideoUrl(videoUrl)) {
+            val urlMatch = Regex("""(https?://[^"'\s]+\.(?:m3u8|txt|mp4)[^"'\s]*)""").find(sourceScope)
+            if (urlMatch != null) {
+                val candidate = urlMatch.groupValues[1].replace("\\/", "/")
+                if (isValidVideoUrl(candidate)) {
+                    videoUrl = candidate
                 }
-            }
-
-            if (!isValidVideoUrl(videoUrl)) {
-                videoUrl = findBase64VideoUrl(sourceScope)
             }
         }
 
