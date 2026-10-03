@@ -245,6 +245,12 @@ class DiziMag : MainAPI() {
         }
     }
 
+    private fun unescapeUnicode(str: String): String {
+        return Regex("""\\u([0-9a-fA-F]{4})""").replace(str) { match ->
+            match.groupValues[1].toInt(16).toChar().toString()
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -258,16 +264,31 @@ class DiziMag : MainAPI() {
 
         for (iframe in iframes) {
             try {
-                val iframeHtml = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/")).text
-                val sourceMatch = Regex("""var\s+SOURCE\s*=\s*["']([^"']+)["']""").find(iframeHtml)
-                if (sourceMatch != null) {
-                    val sourceUrl = sourceMatch.groupValues[1]
+                var targetUrl = iframe
+                var referer = "$mainUrl/"
+
+                if (iframe.contains("yabancidizim.com/rplayer/")) {
+                    val hash = iframe.substringAfter("rplayer/").substringBefore(".html")
+                    if (hash.isNotBlank()) {
+                        targetUrl = "https://ksdpictures.site/ch/$hash?st=ZGl6aW1hZy5vbmU="
+                        referer = "https://yabancidizim.com/"
+                    }
+                }
+
+                val playerHtml = app.get(targetUrl, headers = mapOf("Referer" to referer)).text
+
+                val videoMatch = Regex("""videoFile\s*=\s*["']([^"']+)["']""").find(playerHtml)
+                    ?: Regex("""var\s+SOURCE\s*=\s*["']([^"']+)["']""").find(playerHtml)
+                    ?: Regex("""file:\s*["']([^"']+)["']""").find(playerHtml)
+
+                if (videoMatch != null) {
+                    val sourceUrl = videoMatch.groupValues[1].replace("\\/", "/")
                     callback.invoke(
                         newExtractorLink(
                             source = this.name,
                             name = this.name,
                             url = sourceUrl,
-                            type = ExtractorLinkType.M3U8
+                            type = if (sourceUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                         ) {
                             this.referer = "https://ksdpictures.site/"
                             this.quality = Qualities.Unknown.value
@@ -275,10 +296,10 @@ class DiziMag : MainAPI() {
                     )
                     foundLinks = true
                 }
-                
-                Regex("""\{"file":"([^"]+)","label":"([^"]+)"""").findAll(iframeHtml).forEach { match ->
-                    val file = match.groupValues[1]
-                    val label = match.groupValues[2]
+
+                Regex("""\{"file"\s*:\s*"([^"]+)"\s*,\s*"label"\s*:\s*"([^"]+)"""").findAll(playerHtml).forEach { match ->
+                    val file = fixUrlNull(match.groupValues[1].replace("\\/", "/")) ?: return@forEach
+                    val label = unescapeUnicode(match.groupValues[2]).replace("\\/", "/")
                     subtitleCallback(newSubtitleFile(label, file))
                 }
             } catch (_: Exception) { }
