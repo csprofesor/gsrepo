@@ -42,8 +42,27 @@ class DiziMag : MainAPI() {
     override var sequentialMainPageScrollDelay = 250L
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/" to "Son Eklenenler",
-        "${mainUrl}/tum-bolumler/" to "Tüm Bölümler"
+        "$mainUrl/" to "Son Eklenenler",
+        "$mainUrl/tum-bolumler/" to "Tüm Bölümler",
+        "$mainUrl/diziler/" to "Tüm Diziler",
+        "$mainUrl/filmler/" to "Filmler",
+        "$mainUrl/asya-dizileri/" to "Asya Dizileri",
+        "$mainUrl/tur/aksiyon/" to "Aksiyon",
+        "$mainUrl/tur/aile/" to "Aile",
+        "$mainUrl/tur/animasyon/" to "Animasyon",
+        "$mainUrl/tur/belgesel/" to "Belgesel",
+        "$mainUrl/tur/bilim-kurgu/" to "Bilim Kurgu",
+        "$mainUrl/tur/dram/" to "Dram",
+        "$mainUrl/tur/fantastik/" to "Fantastik",
+        "$mainUrl/tur/gerilim/" to "Gerilim",
+        "$mainUrl/tur/gizem/" to "Gizem",
+        "$mainUrl/tur/komedi/" to "Komedi",
+        "$mainUrl/tur/korku/" to "Korku",
+        "$mainUrl/tur/macera/" to "Macera",
+        "$mainUrl/tur/romantik/" to "Romantik",
+        "$mainUrl/tur/savas/" to "Savaş",
+        "$mainUrl/tur/suc/" to "Suç",
+        "$mainUrl/tur/tarih/" to "Tarih",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -63,13 +82,15 @@ class DiziMag : MainAPI() {
         val document = app.get(url).document
         val home = mutableListOf<SearchResponse>()
 
-        document.select("div.poster").forEach { posterDiv ->
-            val aTag = posterDiv.selectFirst("a") ?: return@forEach
-            val rawHref = aTag.attr("href")
+        document.select("div.poster, div.single-item").forEach { item ->
+            val aTag = item.selectFirst("div.categorytitle a, .serie-name, a[href*='/dizi/'], a[href*='/film/'], a") ?: return@forEach
+            val rawHref = aTag.attr("href").takeIf { it.isNotBlank() && it != "#" }
+                ?: item.selectFirst("a[href]")?.attr("href")
             val href = fixUrlNull(rawHref) ?: return@forEach
 
-            val imgTag = posterDiv.selectFirst("img")
-            val title = imgTag?.attr("title")?.trim()?.takeIf { it.isNotBlank() }
+            val imgTag = item.selectFirst("img")
+            val title = item.selectFirst("div.categorytitle a, .serie-name")?.text()?.trim()?.takeIf { it.isNotBlank() }
+                ?: imgTag?.attr("title")?.trim()?.takeIf { it.isNotBlank() }
                 ?: imgTag?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
                 ?: aTag.text().trim().takeIf { it.isNotBlank() }
                 ?: return@forEach
@@ -116,13 +137,15 @@ class DiziMag : MainAPI() {
 
         val results = mutableListOf<SearchResponse>()
 
-        document.select("div.poster").forEach { posterDiv ->
-            val aTag = posterDiv.selectFirst("a") ?: return@forEach
-            val rawHref = aTag.attr("href")
+        document.select("div.poster, div.single-item").forEach { item ->
+            val aTag = item.selectFirst("div.categorytitle a, .serie-name, a[href*='/dizi/'], a[href*='/film/'], a") ?: return@forEach
+            val rawHref = aTag.attr("href").takeIf { it.isNotBlank() && it != "#" }
+                ?: item.selectFirst("a[href]")?.attr("href")
             val href = fixUrlNull(rawHref) ?: return@forEach
 
-            val imgTag = posterDiv.selectFirst("img")
-            val title = imgTag?.attr("title")?.trim()?.takeIf { it.isNotBlank() }
+            val imgTag = item.selectFirst("img")
+            val title = item.selectFirst("div.categorytitle a, .serie-name")?.text()?.trim()?.takeIf { it.isNotBlank() }
+                ?: imgTag?.attr("title")?.trim()?.takeIf { it.isNotBlank() }
                 ?: imgTag?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
                 ?: aTag.text().trim().takeIf { it.isNotBlank() }
                 ?: return@forEach
