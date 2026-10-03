@@ -65,6 +65,7 @@ class DiziPalOriginal : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
+        "$mainUrl/trendler"              to "Trendler",
         "$mainUrl/diziler"               to "Diziler",
         "$mainUrl/filmler"               to "Filmler",
         "$mainUrl/yeni-eklenen-bolumler" to "Son Eklenen Bölümler",
@@ -79,6 +80,7 @@ class DiziPalOriginal : MainAPI() {
 
         if (href.isBlank()
             || href.endsWith("/kanal/")
+            || href.endsWith("/trendler")
             || href.endsWith("/diziler")
             || href.endsWith("/filmler")
             || href.endsWith("/yeni-eklenen-bolumler")
