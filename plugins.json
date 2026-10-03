@@ -123,9 +123,9 @@
     "fileHash": "sha256-556321b847ea83865f11effeebeaa17a2e3bbb394ae2910ac53205c7f6046235"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=94b03c3b300136701b2fc08f3045ef443449bf66cde37277468fd920625c4d34",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=d8eda2dee6e84cb5203be83842b1c181c7e36ca18041b029463ac5ab69a5eda7",
     "status": 1,
-    "version": 16,
+    "version": 18,
     "name": "DiziGom",
     "internalName": "DiziGom",
     "authors": [
@@ -140,7 +140,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dizigom.love&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-94b03c3b300136701b2fc08f3045ef443449bf66cde37277468fd920625c4d34"
+    "fileHash": "sha256-d8eda2dee6e84cb5203be83842b1c181c7e36ca18041b029463ac5ab69a5eda7"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziKorea.cs3?v=1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da",
