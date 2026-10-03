@@ -514,7 +514,7 @@
     "fileHash": "sha256-ce02080c5f308df47c8ecec4fa54cc6bbc0c6ebfd8e749b5f58047a45856f662"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTvAz.cs3?v=30482c8985b61abe238612d47f8486e9491eff9efebf4a7ad4d2d27f9523285c",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTvAz.cs3?v=ce15202982cc861eeb0c3cbf5672abefa6fa409d8e2c7b9887ffe61918b1b631",
     "status": 1,
     "version": 1,
     "name": "SinemaTvAz",
@@ -523,7 +523,7 @@
       "csprofesor"
     ],
     "description": "SinemaTvAz - Azərbaycan dilində filmlər və seriallar",
-    "fileSize": 28219,
+    "fileSize": 24632,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "az",
     "tvTypes": [
@@ -533,7 +533,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=sinematv.az&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-30482c8985b61abe238612d47f8486e9491eff9efebf4a7ad4d2d27f9523285c"
+    "fileHash": "sha256-ce15202982cc861eeb0c3cbf5672abefa6fa409d8e2c7b9887ffe61918b1b631"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SineWix.cs3?v=3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763",
