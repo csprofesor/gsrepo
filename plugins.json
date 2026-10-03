@@ -453,7 +453,7 @@
     "fileHash": "sha256-835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SetFilmIzle.cs3?v=ed92a53643ff8e176dde6165f6923dd571837a8482bad196b473bec0d7f1069a",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SetFilmIzle.cs3?v=8b419d0050c0ab016c2891abd550fe55e6109cdcff4e1160eaff7868395a30b5",
     "status": 1,
     "version": 31,
     "name": "SetFilmIzle",
@@ -462,7 +462,7 @@
       "csprofesor"
     ],
     "description": "Setfilmizle sitemizde, donma yaşamadan Türkçe dublaj ve altyazılı filmleri ile dizileri muhteşem 1080p full HD kalitesinde izleyebilirsiniz.",
-    "fileSize": 28475,
+    "fileSize": 30500,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -471,7 +471,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.setfilmizle.uk&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-ed92a53643ff8e176dde6165f6923dd571837a8482bad196b473bec0d7f1069a"
+    "fileHash": "sha256-8b419d0050c0ab016c2891abd550fe55e6109cdcff4e1160eaff7868395a30b5"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SezonlukDizi.cs3?v=f36ccc2bb6ed5c8f4af292d0a959c113985babf3c160346f85ee3e8760510652",
