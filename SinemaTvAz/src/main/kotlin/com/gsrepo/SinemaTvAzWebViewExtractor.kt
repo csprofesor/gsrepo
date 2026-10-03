@@ -2,6 +2,7 @@ package com.gsrepo
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -186,10 +187,44 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 }, "AndroidBridge")
 
                 webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        val jsBypass = """
+                            try {
+                                Object.defineProperty(window, 'top', {
+                                    get: function() {
+                                        return {
+                                            location: {
+                                                hostname: 'abyss.to',
+                                                href: 'https://abyss.to/',
+                                                toString: function() { return 'https://abyss.to/'; }
+                                            }
+                                        };
+                                    }
+                                });
+                            } catch(e) {}
+                        """.trimIndent()
+                        evaluateJavascript(jsBypass, null)
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         val js = """
                             (function() {
+                                try {
+                                    Object.defineProperty(window, 'top', {
+                                        get: function() {
+                                            return {
+                                                location: {
+                                                    hostname: 'abyss.to',
+                                                    href: 'https://abyss.to/',
+                                                    toString: function() { return 'https://abyss.to/'; }
+                                                }
+                                            };
+                                        }
+                                    });
+                                } catch(e) {}
+
                                 function autoPlay() {
                                     try {
                                         const docs = [document];
@@ -252,7 +287,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                     } catch(e) {}
                                 }
 
-                                setInterval(autoPlay, 250);
+                                setInterval(autoPlay, 200);
                             })();
                         """.trimIndent()
                         evaluateJavascript(js, null)
@@ -275,22 +310,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     }
                 }
 
-                val htmlWrapper = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="utf-8">
-                        <style>
-                            body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-                            iframe { width: 100%; height: 100%; border: none; }
-                        </style>
-                    </head>
-                    <body>
-                        <iframe src="$finalUrl" allowfullscreen></iframe>
-                    </body>
-                    </html>
-                """.trimIndent()
-                loadDataWithBaseURL(referer ?: "$mainUrl/", htmlWrapper, "text/html", "UTF-8", null)
+                loadUrl(finalUrl, mapOf("Referer" to (referer ?: "$mainUrl/")))
             }
         }
 
