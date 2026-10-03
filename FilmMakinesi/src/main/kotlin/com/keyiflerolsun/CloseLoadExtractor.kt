@@ -5,6 +5,7 @@ import android.util.Log
 import android.webkit.CookieManager
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.*
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -323,15 +324,11 @@ open class CloseLoadExtractor : ExtractorApi() {
         var videoUrl = findBase64VideoUrl(sourceScope)
 
         if (!isValidVideoUrl(videoUrl)) {
-            videoUrl = decryptNative(sourceScope) ?: decryptNative(rawHtml)
-        }
-
-        if (!isValidVideoUrl(videoUrl)) {
-            val directFileMatch = Regex("""(?i)(?:["']?file["']?)\s*:\s*["'](https?://[^"']+)["']""")
+            val directMatch = Regex("""(?i)(?:["']?(?:file|src|url|source|stream|hls|video)["']?)\s*:\s*["'](https?://[^"']+)["']""")
                 .find(sourceScope)
 
-            if (directFileMatch != null) {
-                val candidate = directFileMatch.groupValues[1].replace("\\/", "/")
+            if (directMatch != null) {
+                val candidate = directMatch.groupValues[1].replace("\\/", "/")
                 if (isValidVideoUrl(candidate)) {
                     videoUrl = candidate
                 }
@@ -345,6 +342,45 @@ open class CloseLoadExtractor : ExtractorApi() {
                 if (isValidVideoUrl(candidate)) {
                     videoUrl = candidate
                 }
+            }
+        }
+
+        if (!isValidVideoUrl(videoUrl)) {
+            videoUrl = decryptNative(sourceScope) ?: decryptNative(rawHtml)
+        }
+
+        if (!isValidVideoUrl(videoUrl)) {
+            val slideMatch = Regex("""(https?://[^"'/\s]+\.(?:rapidrame\.com|closeload\.com|playmix\.uno))/i/[^"'\s]+/([a-zA-Z0-9]+)0000\.jpg""").find(sourceScope)
+            if (slideMatch != null) {
+                val host = slideMatch.groupValues[1]
+                val embedId = slideMatch.groupValues[2]
+                val cands = listOf(
+                    "$host/hls/$embedId/master.txt",
+                    "$host/hls/$embedId/master.m3u8",
+                    "$host/hls/$embedId/index.m3u8",
+                    "$host/hls/$embedId.mp4/master.txt"
+                )
+                for (cand in cands) {
+                    if (isValidVideoUrl(cand)) {
+                        videoUrl = cand
+                        break
+                    }
+                }
+            }
+        }
+
+        if (!isValidVideoUrl(videoUrl)) {
+            try {
+                Log.d(name, "Trying WebViewResolver for $url...")
+                val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|\\.txt|/hls/|playlist).*"))
+                val wvResp = app.get(url, headers = requestHeaders, interceptor = resolver)
+                val wvUrl = wvResp.url
+                if (isValidVideoUrl(wvUrl)) {
+                    videoUrl = wvUrl
+                    Log.d(name, "WebViewResolver found stream URL: $wvUrl")
+                }
+            } catch (e: Exception) {
+                Log.d(name, "WebViewResolver error: ${e.message}")
             }
         }
 
