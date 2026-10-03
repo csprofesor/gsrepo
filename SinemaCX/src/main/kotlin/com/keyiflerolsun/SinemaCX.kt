@@ -2,6 +2,7 @@
 
 package com.keyiflerolsun
 
+import android.util.Base64
 import android.util.Log
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
@@ -105,6 +106,24 @@ class SinemaCX : MainAPI() {
         }
     }
 
+    private fun decodeIfBase64(input: String): String {
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) return ""
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("//")) {
+            return trimmed
+        }
+        return try {
+            val decoded = String(Base64.decode(trimmed, Base64.DEFAULT), Charsets.UTF_8).trim()
+            if (decoded.startsWith("http://") || decoded.startsWith("https://") || decoded.startsWith("//")) {
+                decoded
+            } else {
+                trimmed
+            }
+        } catch (_: Exception) {
+            trimmed
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -113,79 +132,111 @@ class SinemaCX : MainAPI() {
     ): Boolean {
         Log.d("SCX", "data » $data")
 
-        // Sayfa ve ilk iframe'i al
         val document = app.get(data).document
-        val iframeRaw = document.select("iframe").map { it.attr("data-vsrc") }
 
-        val hasOnlyTrailer = iframeRaw.all {
-            it.contains("youtube", ignoreCase = true) ||
-            it.contains("fragman", ignoreCase = true) ||
-            it.contains("trailer", ignoreCase = true)
-        }
+        // Collect all potential player sources (from buttons and iframes)
+        val rawSources = mutableListOf<Pair<String, String>>()
 
-        // Eğer sayfa sadece fragmansa, /2/ sayfasından iframe'leri al
-        val iframeList = if (hasOnlyTrailer) {
-            val altUrl = if (data.endsWith("/")) data + "2/" else "$data/2/"
-            val altDoc = app.get(altUrl).document
-            altDoc.select("iframe").map { it.attr("data-vsrc") }
-        } else {
-            iframeRaw
-        }
-
-        // Eğer iframe bulunamadıysa işlemi sonlandır
-        val iframe = fixUrlNull(iframeList.firstOrNull())?.substringBefore("?img=") ?: return false
-        Log.d("SCX", "iframe » $iframe")
-
-        // Altyazı kontrolü
-        val iframeSource = app.get(iframe, referer = "$mainUrl/").text
-        val subtitleSectionRegex = Regex("""playerjsSubtitle\s*=\s*"(.+?)"""")
-        val subtitleSectionMatch = subtitleSectionRegex.find(iframeSource)
-        if (subtitleSectionMatch != null) {
-            val subtitleSection = subtitleSectionMatch.groupValues[1]
-            val subtitleRegex = Regex("""\[(.*?)](https?://[^\s",]+)""")
-            val subtitleMatches = subtitleRegex.findAll(subtitleSection)
-
-            for (subtitleMatch in subtitleMatches) {
-                val subtitleGroups = subtitleMatch.groupValues
-                val subtitleLanguage = subtitleGroups[1]
-                val subtitleUrl = subtitleGroups[2]
-
-                subtitleCallback.invoke(
-                    newSubtitleFile(
-                        lang = subtitleLanguage,
-                        url = fixUrl(subtitleUrl)
-                    )
-                )
+        // 1. From button[rel] in player_part or part_button
+        document.select("div.player_part button[rel], button.part_button[rel], button.grup_button[rel]").forEach { button ->
+            val rel = button.attr("rel")
+            val label = button.text().trim()
+            if (rel.isNotEmpty()) {
+                rawSources.add(Pair(rel, label))
             }
         }
 
-        // iframe kaynak kontrolü ve link çekme
-        if (iframe.lowercase().contains("player.filmizle.in")) {
-            val baseUrl = Regex("""https?://([^/]+)""").find(iframe)?.groupValues?.get(1)
-                ?: return false
-
-            val vidUrl = app.post(
-                "https://$baseUrl/player/index.php?data=" + iframe.split("/").last() + "&do=getVideo",
-                headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
-                referer = "$mainUrl/"
-            ).parsedSafe<Panel>()?.securedLink ?: return false
-
-            callback.invoke(
-                newExtractorLink(
-                    source = this.name,
-                    name = this.name,
-                    url = vidUrl,
-                    type = ExtractorLinkType.M3U8
-                ) {
-                    quality = Qualities.Unknown.value
-                    headers = mapOf("Referer" to iframe)
-                }
-            )
-        } else {
-            loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
+        // 2. From iframes
+        document.select("iframe#video_playeriframe, iframe[data-vsrc], iframe[src]").forEach { iframe ->
+            val vsrc = iframe.attr("data-vsrc").ifEmpty { iframe.attr("src") }
+            if (vsrc.isNotEmpty()) {
+                rawSources.add(Pair(vsrc, ""))
+            }
         }
 
-        return true
+        // Decode base64, fix URLs, and filter out trailers and ads
+        val validSources = rawSources.mapNotNull { (raw, label) ->
+            val decoded = decodeIfBase64(raw)
+            val fixed = fixUrlNull(decoded) ?: return@mapNotNull null
+            Pair(fixed, label)
+        }.distinctBy { it.first }.filter { (url, _) ->
+            !url.contains("youtube", ignoreCase = true) &&
+            !url.contains("fragman", ignoreCase = true) &&
+            !url.contains("trailer", ignoreCase = true) &&
+            !url.contains("vr_set=", ignoreCase = true)
+        }
+
+        Log.d("SCX", "validSources » ${validSources.map { it.first }}")
+
+        if (validSources.isEmpty()) return false
+
+        var foundAny = false
+
+        for ((sourceUrl, label) in validSources) {
+            val cleanUrl = sourceUrl.substringBefore("?img=")
+            Log.d("SCX", "processing sourceUrl » $cleanUrl (label: $label)")
+
+            val sourceName = if (label.isNotEmpty()) "${this.name} - $label" else this.name
+
+            if (cleanUrl.lowercase().contains("player.filmizle.in")) {
+                val baseUrl = Regex("""https?://([^/]+)""").find(cleanUrl)?.groupValues?.get(1) ?: continue
+                val dataKey = cleanUrl.split("/").lastOrNull()?.substringBefore("?") ?: continue
+
+                try {
+                    val panel = app.post(
+                        "https://$baseUrl/player/index.php?data=$dataKey&do=getVideo",
+                        headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                        referer = "$mainUrl/"
+                    ).parsedSafe<Panel>()
+
+                    val vidUrl = panel?.securedLink ?: continue
+
+                    callback.invoke(
+                        newExtractorLink(
+                            source = sourceName,
+                            name = sourceName,
+                            url = vidUrl,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = mapOf("Referer" to cleanUrl)
+                        }
+                    )
+                    foundAny = true
+                } catch (e: Exception) {
+                    Log.e("SCX", "Error fetching filmizle.in player video", e)
+                }
+
+                // Subtitle extraction
+                try {
+                    val iframeSource = app.get(cleanUrl, referer = "$mainUrl/").text
+                    val subtitleSectionRegex = Regex("""playerjsSubtitle\s*=\s*"(.+?)"""")
+                    val subtitleSectionMatch = subtitleSectionRegex.find(iframeSource)
+                    if (subtitleSectionMatch != null) {
+                        val subtitleSection = subtitleSectionMatch.groupValues[1]
+                        val subtitleRegex = Regex("""\[(.*?)](https?://[^\s",]+)""")
+                        for (subtitleMatch in subtitleRegex.findAll(subtitleSection)) {
+                            val subtitleLanguage = subtitleMatch.groupValues[1]
+                            val subtitleUrl = subtitleMatch.groupValues[2]
+
+                            subtitleCallback.invoke(
+                                newSubtitleFile(
+                                    lang = subtitleLanguage,
+                                    url = fixUrl(subtitleUrl)
+                                )
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("SCX", "Error fetching subtitles", e)
+                }
+            } else {
+                val loaded = loadExtractor(cleanUrl, "$mainUrl/", subtitleCallback, callback)
+                if (loaded) foundAny = true
+            }
+        }
+
+        return foundAny
     }
 
     data class Panel(
