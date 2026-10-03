@@ -60,7 +60,6 @@ class SinemaTvAz : MainAPI() {
             else -> TvType.Movie
         }
 
-        // Only parse the items within the main content block, ignoring the popular sidebar
         val contentBlock = Regex("""id="dle-content"[^>]*>(.*?)(?:<div class="pagination|<!-- dle_content -->)""", RegexOption.DOT_MATCHES_ALL).find(html)?.groupValues?.get(1) ?: html
         val document = Jsoup.parse(contentBlock)
         
@@ -107,7 +106,7 @@ class SinemaTvAz : MainAPI() {
         val img       = this.selectFirst("img")
         val posterUrl = fixUrlNull(img?.getImgUrl())
 
-        val tvType = if (href.contains("/serial") || href.contains("/mult")) TvType.TvSeries else TvType.Movie
+        val tvType = if (href.contains("/serial") || href.contains("/mult") || href.contains("/anime")) TvType.TvSeries else TvType.Movie
 
         return if (tvType == TvType.Movie) {
             newMovieSearchResponse(title, href, tvType) { 
@@ -138,10 +137,30 @@ class SinemaTvAz : MainAPI() {
         val trailer         = fixUrlNull(document.selectFirst("div.page__trailer iframe")?.attr("data-src")?.takeIf { it.isNotBlank() } ?: document.selectFirst("div.page__trailer iframe")?.attr("src"))
         val recommendations = document.select("div#owl-related a.poster-item, div.sect__content a.poster-item").mapNotNull { it.toRecommendationResult() }
 
-        val isSeries        = url.contains("/serial/") || document.select("select#season").isNotEmpty() || document.select("div.serial-tabs").isNotEmpty()
+        val isSeries        = url.contains("/serial/") || url.contains("/mult/") || url.contains("/anime/") || document.select("select#season").isNotEmpty() || document.select("div.serial-tabs").isNotEmpty()
 
         return if (isSeries) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, emptyList()) {
+            val episodes = mutableListOf<Episode>()
+            val episodeElements = document.select("select#episode option, select.episode-select option, div.serial-series a, div.episodes a")
+            if (episodeElements.isNotEmpty()) {
+                episodeElements.forEachIndexed { index, el ->
+                    val epName = el.text().trim().ifEmpty { "${index + 1}. Bölüm" }
+                    val epUrl = fixUrlNull(el.attr("value").ifEmpty { el.attr("href") }) ?: url
+                    episodes.add(newEpisode(epUrl) {
+                        this.name = epName
+                        this.episode = index + 1
+                        this.season = 1
+                    })
+                }
+            } else {
+                episodes.add(newEpisode(url) {
+                    this.name = "1. Bölüm"
+                    this.episode = 1
+                    this.season = 1
+                })
+            }
+
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl       = poster
                 this.posterHeaders   = browserHeaders
                 this.plot            = description
@@ -171,7 +190,7 @@ class SinemaTvAz : MainAPI() {
         val img       = this.selectFirst("img")
         val posterUrl = fixUrlNull(img?.getImgUrl())
 
-        val tvType = if (href.contains("/serial") || href.contains("/mult")) TvType.TvSeries else TvType.Movie
+        val tvType = if (href.contains("/serial") || href.contains("/mult") || href.contains("/anime")) TvType.TvSeries else TvType.Movie
 
         return if (tvType == TvType.Movie) {
             newMovieSearchResponse(title, href, tvType) { 
@@ -197,7 +216,7 @@ class SinemaTvAz : MainAPI() {
                 return@forEach
             }
 
-            if (src.isEmpty() || src.contains("googletagmanager") || src.contains("yandex") || src.contains("facebook")) {
+            if (src.isEmpty() || src.contains("googletagmanager") || src.contains("yandex") || src.contains("facebook") || src.contains("/t?token=")) {
                 return@forEach
             }
 

@@ -21,7 +21,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() {
     override val name = "SinemaTvAz Özel"
@@ -29,6 +30,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
     override val requiresReferer = true
 
     private var webView: WebView? = null
+    private val emittedUrls: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
 
     data class ParsedJson(
         val sources: List<ParsedSource>?
@@ -57,6 +59,19 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ) {
+        val defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+
+        fun getHeadersForStream(streamUrl: String): Map<String, String> {
+            val streamReferer = when {
+                streamUrl.contains("vkvideo") || streamUrl.contains("vk.com") || streamUrl.contains("vk.ru") -> "https://vk.com/"
+                else -> referer ?: "$mainUrl/"
+            }
+            return mapOf(
+                "User-Agent" to defaultUserAgent,
+                "Referer" to streamReferer
+            )
+        }
+
         fun emitStream(streamUrl: String) {
             var fixStream = streamUrl
             if (fixStream.contains("cdn1.sinematv.az")) {
@@ -66,8 +81,11 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 fixStream = "https:$fixStream"
             }
 
-            // Ignore metadata/content endpoints that are not actual video streams
-            if (fixStream.contains("/contents/") || fixStream.contains("/user-stats/") || fixStream.contains("player-metrics")) {
+            if (fixStream.contains("/contents/") || fixStream.contains("/user-stats/") || fixStream.contains("player-metrics") || fixStream.contains("pixel.morphify.net")) {
+                return
+            }
+
+            if (!emittedUrls.add(fixStream)) {
                 return
             }
 
@@ -82,7 +100,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                 episodes.firstOrNull()?.let { ep ->
                                     val masterPath = ep.m3u8MasterFilePath ?: ep.episodeVariants?.firstOrNull()?.filepath
                                     if (masterPath != null) {
-                                        // Fetch masterPath inside WebView to inherit session/cookies and avoid 403 Forbidden
                                         withContext(Dispatchers.Main) {
                                             webView?.evaluateJavascript("fetch('$masterPath').then(r => r.text()).then(txt => window.AndroidBridge.onStreamFound(txt, '$masterPath'));", null)
                                         }
@@ -101,7 +118,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                                 type = ExtractorLinkType.M3U8,
                                             ) {
                                                 this.quality = Qualities.Unknown.value
-                                                this.headers = mapOf("Referer" to mainUrl)
+                                                this.headers = getHeadersForStream(link)
                                             }
                                         )
                                     }
@@ -122,7 +139,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                                     type = if (srcLink.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
                                                 ) {
                                                     this.quality = qualityValue
-                                                    this.headers = mapOf("Referer" to mainUrl)
+                                                    this.headers = getHeadersForStream(srcLink)
                                                 }
                                             )
                                         }
@@ -132,7 +149,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                         } catch (e: Exception) {
                             Log.e("SinemaTvAzWebView", "JSON parsing failed", e)
                         }
-                    } else if (fixStream.contains(".m3u8") || fixStream.contains(".mp4") || fixStream.contains("playlist")) {
+                    } else if (fixStream.contains(".m3u8") || fixStream.contains(".mp4") || fixStream.contains("playlist") || fixStream.contains("master.m3u8")) {
                         callback.invoke(
                             newExtractorLink(
                                 source = "SinemaTvAzWebView",
@@ -141,7 +158,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                 type = if (fixStream.contains(".m3u8", true) || fixStream.contains("playlist", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO,
                             ) {
                                 this.quality = Qualities.Unknown.value
-                                this.headers = mapOf("Referer" to mainUrl)
+                                this.headers = getHeadersForStream(fixStream)
                             }
                         )
                     }
@@ -158,7 +175,8 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         val finalUrl = withContext(Dispatchers.IO) {
             try {
                 val doc = app.get(targetUrl, referer = referer ?: mainUrl).document
-                val iframeSrc = doc.selectFirst("iframe[src*=\"player.abyssplayer.com\"], iframe")?.attr("src")?.takeIf { it.isNotBlank() }
+                val iframe = doc.selectFirst("iframe[src*=\"player.abyssplayer.com\"], iframe[data-src*=\"player.abyssplayer.com\"], iframe")
+                val iframeSrc = iframe?.attr("data-src")?.takeIf { it.isNotBlank() } ?: iframe?.attr("src")?.takeIf { it.isNotBlank() }
                 when {
                     iframeSrc?.startsWith("//") == true -> "https:$iframeSrc"
                     iframeSrc?.startsWith("http") == true -> iframeSrc
@@ -177,7 +195,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     domStorageEnabled = true
                     mediaPlaybackRequiresUserGesture = false
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                    userAgentString = defaultUserAgent
                 }
 
                 addJavascriptInterface(object : Any() {
@@ -201,12 +219,10 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                         super.onPageFinished(view, url)
                         val js = """
                             (function() {
-                                // Mock top/self for domain checks
                                 try {
-                                    Object.defineProperty(window, 'top', { get: function() { return window; } });
+                                    Object.defineProperty(window, 'top', { get: function() { return window.parent || window; } });
                                 } catch(e) {}
 
-                                // Poll players and DOM thoroughly
                                 setInterval(function() {
                                     try {
                                         if (typeof jwplayer !== 'undefined') {
@@ -242,7 +258,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                             window.AndroidBridge.onStreamFound(hls.url, hls.url);
                                         }
 
-                                        // Scan body HTML for any m3u8/mp4 links
                                         const html = document.documentElement.innerHTML;
                                         const matches = html.match(/https?:\/\/[^\"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^\"'\s<>]*)?/gi);
                                         if (matches) {
@@ -294,27 +309,22 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     }
                 }
 
-                val needsIframeWrapper = finalUrl.contains("cdn2") || finalUrl.contains("token_movie") || finalUrl.contains("stloadi") || finalUrl.contains("allarknow") || finalUrl.contains("vv-player.php")
-                if (needsIframeWrapper) {
-                    val htmlWrapper = """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta charset="utf-8">
-                            <style>
-                                body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-                                iframe { width: 100%; height: 100%; border: none; }
-                            </style>
-                        </head>
-                        <body>
-                            <iframe src="$finalUrl" allowfullscreen></iframe>
-                        </body>
-                        </html>
-                    """.trimIndent()
-                    loadDataWithBaseURL(referer ?: mainUrl, htmlWrapper, "text/html", "UTF-8", null)
-                } else {
-                    loadUrl(finalUrl)
-                }
+                val htmlWrapper = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <style>
+                            body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+                            iframe { width: 100%; height: 100%; border: none; }
+                        </style>
+                    </head>
+                    <body>
+                        <iframe src="$finalUrl" allowfullscreen></iframe>
+                    </body>
+                    </html>
+                """.trimIndent()
+                loadDataWithBaseURL(referer ?: mainUrl, htmlWrapper, "text/html", "UTF-8", null)
             }
         }
 
