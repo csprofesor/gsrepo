@@ -156,23 +156,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
             }
         }
 
-        val targetUrl = url
-
-        val finalUrl = withContext(Dispatchers.IO) {
-            try {
-                val doc = app.get(targetUrl, referer = referer ?: mainUrl).document
-                val iframe = doc.selectFirst("iframe[src*=\"player.abyssplayer.com\"], iframe[data-src*=\"player.abyssplayer.com\"]")
-                val iframeSrc = iframe?.attr("data-src")?.takeIf { it.isNotBlank() } ?: iframe?.attr("src")?.takeIf { it.isNotBlank() }
-                when {
-                    iframeSrc?.startsWith("//") == true -> "https:$iframeSrc"
-                    iframeSrc?.startsWith("http") == true -> iframeSrc
-                    iframeSrc != null -> "${mainUrl}${if (iframeSrc.startsWith("/")) "" else "/"}$iframeSrc"
-                    else -> targetUrl
-                }
-            } catch (_: Exception) {
-                targetUrl
-            }
-        }
+        val finalUrl = if (url.startsWith("http")) url else "$mainUrl${if (url.startsWith("/")) "" else "/"}$url"
 
         withContext(Dispatchers.Main) {
             webView = WebView(context).apply {
@@ -252,31 +236,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                         }
                                     } catch(e) {}
                                 }, 300);
-
-                                const originalFetch = window.fetch;
-                                window.fetch = async function(...args) {
-                                    const response = await originalFetch.apply(this, args);
-                                    try {
-                                        const clone = response.clone();
-                                        const text = await clone.text();
-                                        if (text.includes('m3u8') || text.includes('mp4') || text.includes('json') || response.url.includes('api') || response.url.includes('playlist')) {
-                                            window.AndroidBridge.onStreamFound(text, response.url);
-                                        }
-                                    } catch(e) {}
-                                    return response;
-                                };
-
-                                const originalXHR = window.XMLHttpRequest.prototype.open;
-                                window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
-                                    this.addEventListener('load', function() {
-                                        try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('mp4') || this.responseText.includes('json') || url.includes('api') || url.includes('playlist'))) {
-                                                window.AndroidBridge.onStreamFound(this.responseText, url);
-                                            }
-                                        } catch(e) {}
-                                    });
-                                    return originalXHR.apply(this, [method, url, ...args]);
-                                };
                             })();
                         """.trimIndent()
                         evaluateJavascript(js, null)
@@ -314,7 +273,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     </body>
                     </html>
                 """.trimIndent()
-                loadDataWithBaseURL(referer ?: mainUrl, htmlWrapper, "text/html", "UTF-8", null)
+                loadDataWithBaseURL(referer ?: "$mainUrl/", htmlWrapper, "text/html", "UTF-8", null)
             }
         }
 
