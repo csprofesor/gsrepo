@@ -1,4 +1,4 @@
-version = 94
+version = 95
 
 cloudstream {
     authors = listOf("csprofesor")
@@ -14,6 +14,6 @@ cloudstream {
     **/
     status  = 1 // will be 3 if unspecified
     tvTypes = listOf("TvSeries", "Movie")
-    iconUrl = "https://chessplyimages.cfd/uploads/site/favicon-32x32.png"
+    iconUrl = "https://www.google.com/s2/favicons?domain=dizipal2224.com&sz=%size%"
     requiresResources = false
 }
