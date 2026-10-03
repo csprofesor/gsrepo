@@ -190,52 +190,69 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                         super.onPageFinished(view, url)
                         val js = """
                             (function() {
-                                try {
-                                    Object.defineProperty(window, 'top', { get: function() { return window.parent || window; } });
-                                } catch(e) {}
-
-                                setInterval(function() {
+                                function autoPlay() {
                                     try {
-                                        if (typeof jwplayer !== 'undefined') {
-                                            const player = jwplayer();
-                                            if (player && player.getConfig) {
-                                                const cfg = player.getConfig();
-                                                if (cfg) {
-                                                    if (cfg.file) window.AndroidBridge.onStreamFound(cfg.file, cfg.file);
-                                                    if (cfg.playlist && cfg.playlist[0] && cfg.playlist[0].file) {
-                                                        window.AndroidBridge.onStreamFound(cfg.playlist[0].file, cfg.playlist[0].file);
-                                                    }
-                                                    if (cfg.sources) {
-                                                        cfg.sources.forEach(s => {
-                                                            if (s.file) window.AndroidBridge.onStreamFound(s.file, s.file);
-                                                        });
-                                                    }
+                                        const docs = [document];
+                                        const iframes = document.querySelectorAll('iframe');
+                                        iframes.forEach(f => {
+                                            try {
+                                                if (f.contentDocument) docs.push(f.contentDocument);
+                                                else if (f.contentWindow && f.contentWindow.document) docs.push(f.contentWindow.document);
+                                            } catch(e) {}
+                                        });
+
+                                        docs.forEach(d => {
+                                            const ov = d.getElementById('overlay');
+                                            if (ov) {
+                                                try { ov.click(); } catch(e) {}
+                                                try { ov.remove(); } catch(e) {}
+                                            }
+
+                                            const win = d.defaultView || window;
+                                            if (win) {
+                                                if (typeof win.jwplayer !== 'undefined') {
+                                                    try {
+                                                        const p = win.jwplayer();
+                                                        if (p) {
+                                                            if (typeof p.play === 'function' && p.getState && p.getState() !== 'playing') {
+                                                                p.play();
+                                                            }
+                                                            if (p.getConfig) {
+                                                                const cfg = p.getConfig();
+                                                                if (cfg) {
+                                                                    if (cfg.file) window.AndroidBridge.onStreamFound(cfg.file, cfg.file);
+                                                                    if (cfg.playlist && cfg.playlist[0] && cfg.playlist[0].file) {
+                                                                        window.AndroidBridge.onStreamFound(cfg.playlist[0].file, cfg.playlist[0].file);
+                                                                    }
+                                                                    if (cfg.sources) {
+                                                                        cfg.sources.forEach(s => {
+                                                                            if (s.file) window.AndroidBridge.onStreamFound(s.file, s.file);
+                                                                        });
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    } catch(e) {}
+                                                }
+
+                                                if (typeof win.player !== 'undefined' && win.player.config) {
+                                                    if (win.player.config.url) window.AndroidBridge.onStreamFound(win.player.config.url, win.player.config.url);
+                                                    if (win.player.config.manifestUrl) window.AndroidBridge.onStreamFound(win.player.config.manifestUrl, win.player.config.manifestUrl);
                                                 }
                                             }
-                                            if (player && player.getPlaylistItem) {
-                                                const item = player.getPlaylistItem();
-                                                if (item && item.file) {
-                                                    window.AndroidBridge.onStreamFound(item.file, item.file);
+
+                                            try {
+                                                const html = d.documentElement.innerHTML;
+                                                const matches = html.match(/https?:\/\/[^\"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^\"'\s<>]*)?/gi);
+                                                if (matches) {
+                                                    matches.forEach(m => window.AndroidBridge.onStreamFound(m, m));
                                                 }
-                                            }
-                                        }
-
-                                        if (typeof player !== 'undefined' && player.config) {
-                                            if (player.config.url) window.AndroidBridge.onStreamFound(player.config.url, player.config.url);
-                                            if (player.config.manifestUrl) window.AndroidBridge.onStreamFound(player.config.manifestUrl, player.config.manifestUrl);
-                                        }
-
-                                        if (typeof hls !== 'undefined' && hls.url) {
-                                            window.AndroidBridge.onStreamFound(hls.url, hls.url);
-                                        }
-
-                                        const html = document.documentElement.innerHTML;
-                                        const matches = html.match(/https?:\/\/[^\"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^\"'\s<>]*)?/gi);
-                                        if (matches) {
-                                            matches.forEach(m => window.AndroidBridge.onStreamFound(m, m));
-                                        }
+                                            } catch(e) {}
+                                        });
                                     } catch(e) {}
-                                }, 300);
+                                }
+
+                                setInterval(autoPlay, 250);
                             })();
                         """.trimIndent()
                         evaluateJavascript(js, null)
