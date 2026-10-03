@@ -27,7 +27,10 @@ class SinemaTvAz : MainAPI() {
         "$mainUrl/turkce-filmler/" to "Türkcə Filmlər",
         "$mainUrl/hind-filmleri/" to "Hind Filmləri",
         "$mainUrl/serial/" to "Seriallar",
-        "$mainUrl/animasiya/" to "Animasiya"
+        "$mainUrl/rus-filmleri/" to "Rus Filmləri",
+        "$mainUrl/mult/" to "Cizgi Filmləri",
+        "$mainUrl/anime/" to "Anime",
+        "$mainUrl/dorama/" to "Doramalar"
     )
 
     override suspend fun getMainPage(
@@ -36,28 +39,41 @@ class SinemaTvAz : MainAPI() {
     ): HomePageResponse {
         val url = if (page == 1) request.data else "${request.data}page/$page/"
         val document = app.get(url, headers = browserHeaders).document
-        val home = document.select("div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
+        val home = document.select(".poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
             it.toSearchResult()
         }
         return newHomePageResponse(request.name, home)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val titleElement = this.selectFirst("div.shortstory-title a, h2.title a, a.shortstory-title, a.title") ?: return null
-        val title = titleElement.text().trim()
-        val href = fixUrl(titleElement.attr("href"))
+        val href = when {
+            this.tagName() == "a" -> this.attr("href")
+            else -> this.selectFirst("a.poster-item, div.shortstory-title a, h2.title a, a.shortstory-title, a.title, a")?.attr("href")
+        } ?: return null
 
-        val imgElement = this.selectFirst("div.shortstory-poster img, div.poster img, img")
+        val fixHref = fixUrl(href)
+
+        val title = this.attr("title").ifEmpty {
+            this.selectFirst(".poster-item__title, div.shortstory-title, h2.title, span.title")?.text()?.trim() ?: ""
+        }.ifEmpty {
+            this.selectFirst("img")?.attr("title")?.ifEmpty { this.selectFirst("img")?.attr("alt") } ?: ""
+        }.ifEmpty {
+            this.text().trim()
+        }
+
+        if (title.isBlank()) return null
+
+        val imgElement = this.selectFirst("img")
         val posterUrl = imgElement?.attr("data-src")?.ifEmpty { imgElement.attr("src") }?.let { fixUrl(it) }
 
-        val isTvSeries = href.contains("/serial/") || href.contains("/animasiya/") || title.contains("sezon", ignoreCase = true)
+        val isTvSeries = fixHref.contains("/serial/") || fixHref.contains("/mult/") || fixHref.contains("/anime/") || fixHref.contains("/dorama/") || title.contains("sezon", ignoreCase = true)
 
         return if (isTvSeries) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+            newTvSeriesSearchResponse(title, fixHref, TvType.TvSeries) {
                 this.posterUrl = posterUrl
             }
         } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
+            newMovieSearchResponse(title, fixHref, TvType.Movie) {
                 this.posterUrl = posterUrl
             }
         }
@@ -75,7 +91,7 @@ class SinemaTvAz : MainAPI() {
             headers = browserHeaders
         ).document
 
-        return response.select("div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
+        return response.select(".poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
             it.toSearchResult()
         }
     }
@@ -84,7 +100,7 @@ class SinemaTvAz : MainAPI() {
         val document = app.get(url, headers = browserHeaders).document
 
         val title = document.selectFirst("h1.title, h1.entry-title, h1")?.text()?.trim() ?: ""
-        val poster = document.selectFirst("div.poster img, div.shortstory-poster img, div.story-poster img")?.let {
+        val poster = document.selectFirst("div.poster img, div.shortstory-poster img, div.story-poster img, img")?.let {
             it.attr("data-src").ifEmpty { it.attr("src") }
         }?.let { fixUrl(it) }
 
@@ -113,7 +129,7 @@ class SinemaTvAz : MainAPI() {
             }
         }
 
-        val isTvSeries = url.contains("/serial/") || url.contains("/animasiya/") || title.contains("sezon", ignoreCase = true)
+        val isTvSeries = url.contains("/serial/") || url.contains("/mult/") || url.contains("/anime/") || url.contains("/dorama/") || title.contains("sezon", ignoreCase = true)
 
         return if (isTvSeries) {
             val finalEpisodes = if (episodes.isEmpty()) {
