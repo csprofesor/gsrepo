@@ -30,6 +30,66 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
 
     private var webView: WebView? = null
 
+    private fun isJunkUrl(url: String): Boolean {
+        val lower = url.lowercase()
+        if (lower.contains("doubleclick") ||
+            lower.contains("google-analytics") ||
+            lower.contains("googletagmanager") ||
+            lower.contains("googlesyndication") ||
+            lower.contains("google.com") ||
+            lower.contains("gstatic.com") ||
+            lower.contains("yandex") ||
+            lower.contains("facebook") ||
+            lower.contains("disqus") ||
+            lower.contains("ad_status") ||
+            lower.contains("instream") ||
+            lower.contains("outstream") ||
+            lower.contains("/ads/") ||
+            lower.contains("/ad/") ||
+            lower.contains("popunder") ||
+            lower.contains("pixel") ||
+            lower.contains("banner") ||
+            lower.contains("tracker") ||
+            lower.contains("vast")
+        ) {
+            return true
+        }
+
+        val path = lower.substringBefore("?").substringBefore("#")
+        if (path.endsWith(".js") ||
+            path.endsWith(".css") ||
+            path.endsWith(".png") ||
+            path.endsWith(".jpg") ||
+            path.endsWith(".jpeg") ||
+            path.endsWith(".gif") ||
+            path.endsWith(".webp") ||
+            path.endsWith(".svg") ||
+            path.endsWith(".ico") ||
+            path.endsWith(".html") ||
+            path.endsWith(".htm") ||
+            path.endsWith(".txt")
+        ) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun isValidStreamUrl(url: String): Boolean {
+        if (isJunkUrl(url)) return false
+        val lower = url.lowercase()
+        val path = lower.substringBefore("?").substringBefore("#")
+        return path.endsWith(".m3u8") ||
+               path.endsWith(".mp4") ||
+               lower.contains(".m3u8") ||
+               lower.contains("master.m3u8") ||
+               lower.contains("index.m3u8") ||
+               lower.contains("/playlist") ||
+               lower.contains("stream.php") ||
+               lower.contains("api/stream") ||
+               lower.contains("manifest")
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override suspend fun getUrl(
         url: String,
@@ -64,11 +124,11 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                     @JavascriptInterface
                     fun onStreamFound(body: String, reqUrl: String) {
                         Log.d("DiziGomWebView", "BRIDGE_FOUND: $reqUrl")
-                        val m3u8 = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|playlist|manifest|hls|stream)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(body)?.value 
-                            ?: Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|playlist|manifest|hls|stream)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(reqUrl)?.value
+                        val m3u8 = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|playlist|manifest|hls|stream\\.php)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(body)?.value 
+                            ?: Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|playlist|manifest|hls|stream\\.php)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(reqUrl)?.value
                             ?: reqUrl
 
-                        if ((m3u8.contains("m3u8", true) || m3u8.contains("playlist", true) || m3u8.contains("manifest", true) || m3u8.contains("hls", true) || m3u8.contains("stream", true)) && !foundStream.getAndSet(true)) {
+                        if (isValidStreamUrl(m3u8) && !foundStream.getAndSet(true)) {
                             Log.d("DiziGomWebView", "EMITTING_STREAM=$m3u8")
                             GlobalScope.launch(Dispatchers.IO) {
                                 callback.invoke(
@@ -76,7 +136,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                         source = pluginName,
                                         name = pluginName,
                                         url = m3u8,
-                                        type = if (m3u8.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                        type = if (m3u8.contains(".m3u8", true) || m3u8.contains("stream.php", true) || m3u8.contains("playlist", true) || m3u8.contains("manifest", true) || m3u8.contains("hls", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                     ) {
                                         this.quality = Qualities.P1080.value
                                         this.headers = mapOf(
@@ -111,7 +171,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                     try {
                                         const clone = response.clone();
                                         const text = await clone.text();
-                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('stream')) {
+                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('stream.php') || text.includes('manifest')) {
                                             window.AndroidBridge.onStreamFound(text, response.url);
                                         }
                                     } catch(e) {}
@@ -122,7 +182,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                 window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
                                     this.addEventListener('load', function() {
                                         try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('stream'))) {
+                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('stream.php') || this.responseText.includes('manifest'))) {
                                                 window.AndroidBridge.onStreamFound(this.responseText, url);
                                             }
                                         } catch(e) {}
@@ -134,7 +194,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                     try {
                                         const entries = performance.getEntriesByType('resource');
                                         for (let e of entries) {
-                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('playlist') || e.name.includes('stream'))) {
+                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('playlist') || e.name.includes('stream.php') || e.name.includes('manifest'))) {
                                                 window.AndroidBridge.onStreamFound(e.name, e.name);
                                             }
                                         }
@@ -151,11 +211,11 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                         request: WebResourceRequest?
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
-                        if (reqUrl.contains("ads", true) || reqUrl.contains("analytics", true) || reqUrl.contains("vast", true) || reqUrl.contains("banner", true) || reqUrl.contains("popunder", true) || reqUrl.contains("tracker", true) || reqUrl.contains("pixel", true) || reqUrl.contains("googletagmanager", true)) {
+                        if (isJunkUrl(reqUrl)) {
                             return WebResourceResponse("text/plain", "UTF-8", null)
                         }
 
-                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true) || reqUrl.contains("hls", true) || reqUrl.contains("stream", true)) {
+                        if (isValidStreamUrl(reqUrl)) {
                             Log.d("DiziGomWebView", "INTERCEPTED_REQ=$reqUrl")
                             if (!foundStream.getAndSet(true)) {
                                 GlobalScope.launch(Dispatchers.IO) {
@@ -164,7 +224,7 @@ class DiziGomWebViewExtractor(private val context: Context, private val pluginNa
                                             source = pluginName,
                                             name = pluginName,
                                             url = reqUrl,
-                                            type = if (reqUrl.contains(".m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                            type = if (reqUrl.contains(".m3u8", true) || reqUrl.contains("stream.php", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true) || reqUrl.contains("hls", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                         ) {
                                             this.quality = Qualities.P1080.value
                                             this.headers = mapOf(

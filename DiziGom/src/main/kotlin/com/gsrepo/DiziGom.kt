@@ -233,11 +233,15 @@ class DiziGom : MainAPI() {
     private fun extractPlayerUrls(document: Document): List<String> {
         val candidates = mutableListOf<String>()
 
-        document.select("iframe[src], iframe[data-src], iframe[data-lazy-src], frame[src]").forEach { element ->
+        document.select("iframe[src], iframe[data-src], iframe[data-lazy-src], frame[src], [data-embed], [data-player], [data-url], [data-frame]").forEach { element ->
             val src = cleanUrl(
                 element.attr("src").takeIf { it.isNotBlank() }
                     ?: element.attr("data-src").takeIf { it.isNotBlank() }
-                    ?: element.attr("data-lazy-src")
+                    ?: element.attr("data-lazy-src").takeIf { it.isNotBlank() }
+                    ?: element.attr("data-embed").takeIf { it.isNotBlank() }
+                    ?: element.attr("data-player").takeIf { it.isNotBlank() }
+                    ?: element.attr("data-url").takeIf { it.isNotBlank() }
+                    ?: element.attr("data-frame")
             )
             if (!src.isNullOrBlank()) {
                 candidates.add(src)
@@ -245,7 +249,7 @@ class DiziGom : MainAPI() {
         }
 
         val htmlMatches = Regex(
-            """https?://[^\s"'<>]+(?:/s\.php|pilavyer|pilayer|spidypro|vidmoly|sibnet|fembed|dood|filemoon|vOE|streamtape)[^\s"'<>]*""",
+            """https?://[^\s"'<>]+(?:/s\.php|pilavyer|pilayer|spidypro|vidmoly|sibnet|fembed|dood|filemoon|vOE|streamtape|play2)[^\s"'<>]*""",
             RegexOption.IGNORE_CASE
         ).findAll(document.html()).mapNotNull { cleanUrl(it.value) }
 
@@ -258,6 +262,7 @@ class DiziGom : MainAPI() {
             !lower.contains("google.com") &&
             !lower.contains("facebook.com") &&
             !lower.contains("disqus.com") &&
+            !lower.contains("doubleclick") &&
             !lower.contains("wargamings.net") &&
             !lower.endsWith(".js") &&
             !lower.endsWith(".css") &&
@@ -353,6 +358,8 @@ class DiziGom : MainAPI() {
             ).findAll(document.html()).mapNotNull { cleanUrl(it.value) }.distinct().toList()
 
             for (stream in directUrls) {
+                val lower = stream.lowercase()
+                if (lower.contains("doubleclick") || lower.contains("ad_status") || lower.contains("blank") || lower.contains("dummy")) continue
                 callback(
                     newExtractorLink(
                         source = name,
