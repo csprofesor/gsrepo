@@ -70,7 +70,7 @@ open class SetPlay : ExtractorApi() {
         )
         val fastHtml = fastRes.text
 
-        val spgMatch = Regex("""window\.SPG_A\s*=\s*(\{.*?\});""").find(fastHtml)
+        val spgMatch = Regex("""window\.SPG_A\s*=\s*(\{.*?\}|\{.*\});""").find(fastHtml)
         val spgJsonStr = spgMatch?.groupValues?.get(1)
         val (sp, spT) = if (spgJsonStr != null) {
             try {
@@ -81,9 +81,7 @@ open class SetPlay : ExtractorApi() {
             }
         } else Pair("", 0L)
 
-        val xSp = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
-
-        val kopruMatch = Regex("""window\.STF_KOPRU\s*=\s*(\{.*?\});""", setOf(RegexOption.DOT_MATCHES_ALL)).find(fastHtml)
+        val kopruMatch = Regex("""window\.STF_KOPRU\s*=\s*(\{.*?\}|\{.*\});""", setOf(RegexOption.DOT_MATCHES_ALL)).find(fastHtml)
         val kopruStr = kopruMatch?.groupValues?.get(1) ?: throw ErrorLoadingException("Player STF_KOPRU bulunamadı")
 
         val srcPath = Regex("""src:\s*"([^"]+)"""").find(kopruStr)?.groupValues?.get(1)
@@ -108,19 +106,66 @@ open class SetPlay : ExtractorApi() {
             }
         }
 
-        Log.d("SetPlay", "M3U8 Link » $m3uLink")
+        val masterRes = app.get(
+            url = m3uLink,
+            headers = mapOf(
+                "User-Agent" to userAgent,
+                "Referer" to targetUrl,
+                "X-Sp" to calcXSp(sp, spT)
+            )
+        )
+        val masterContent = masterRes.text
+
+        suspend fun fetchSubAsDataUri(subUrl: String): String {
+            return try {
+                val fullUrl = if (subUrl.startsWith("http")) subUrl else "https://fastplay.mom" + subUrl
+                val res = app.get(
+                    url = fullUrl,
+                    headers = mapOf(
+                        "User-Agent" to userAgent,
+                        "Referer" to targetUrl,
+                        "X-Sp" to calcXSp(sp, spT)
+                    )
+                )
+                val b64 = Base64.encodeToString(res.text.toByteArray(), Base64.NO_WRAP)
+                "data:application/vnd.apple.mpegurl;base64,$b64"
+            } catch (e: Exception) {
+                Log.e("SetPlay", "Failed to fetch sub-playlist $subUrl: ${e.message}")
+                subUrl
+            }
+        }
+
+        val rewrittenLines = masterContent.lines().map { line ->
+            var l = line.trim()
+            if (l.startsWith("#EXT-X-MEDIA") && l.contains("URI=\"")) {
+                val match = Regex("""URI="([^"]+)"""").find(l)
+                if (match != null) {
+                    val uri = match.groupValues[1]
+                    val dataUri = fetchSubAsDataUri(uri)
+                    l = l.replace("URI=\"$uri\"", "URI=\"$dataUri\"")
+                }
+            } else if (l.isNotEmpty() && !l.startsWith("#")) {
+                l = fetchSubAsDataUri(l)
+            }
+            l
+        }
+
+        val finalMaster = rewrittenLines.joinToString("\n")
+        val finalMasterB64 = Base64.encodeToString(finalMaster.toByteArray(), Base64.NO_WRAP)
+        val dataUrl = "data:application/vnd.apple.mpegurl;base64,$finalMasterB64"
+
+        Log.d("SetPlay", "Data URL generated length » ${dataUrl.length}")
 
         callback.invoke(
             newExtractorLink(
                 source = this.name,
                 name = this.name,
-                url = m3uLink,
+                url = dataUrl,
                 type = ExtractorLinkType.M3U8
             ) {
                 quality = Qualities.Unknown.value
                 headers = mapOf(
-                    "Referer" to targetUrl,
-                    "X-Sp" to xSp,
+                    "Referer" to "https://fastplay.mom/",
                     "User-Agent" to userAgent
                 )
             }
