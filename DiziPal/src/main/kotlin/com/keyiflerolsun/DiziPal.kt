@@ -79,7 +79,19 @@ class DiziPal : MainAPI() {
         "${mainUrl}/api-kanal/242"                     to "tabii"
     )
 
-    private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
+    private val cardSelector = "article.dp-card, article, div.dp-card, div.poster, div.movie-item, div.serie-item, div.content-item, div.card, div.group"
+
+    private fun fixPosterUrl(url: String?, backdropUrl: String? = null): String? {
+        val cleanUrl = fixUrlNull(url?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
+        if (!cleanUrl.isNullOrBlank() && !cleanUrl.contains("file.cdnhipter.xyz")) {
+            return cleanUrl
+        }
+        val cleanBackdrop = fixUrlNull(backdropUrl?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
+        if (!cleanBackdrop.isNullOrBlank()) {
+            return cleanBackdrop.replace("/backdrop/", "/poster/")
+        }
+        return null
+    }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val home = mutableListOf<SearchResponse>()
@@ -184,7 +196,26 @@ class DiziPal : MainAPI() {
             || (href.contains("/kategori/") && !href.contains("/dizi/") && !href.contains("/film/") && !href.contains("/series/") && !href.contains("/movies/"))
         ) return null
 
-        val imgEl = this.selectFirst("img") ?: aTag.selectFirst("img")
+        val imgEl = this.selectFirst("img") ?: aTag.selectFirst("img") ?: return null
+
+        val rawPoster = imgEl.attr("data-src").takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            ?: imgEl.attr("data-original").takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            ?: imgEl.attr("data-lazy-src").takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            ?: imgEl.attr("data-bg").takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            ?: imgEl.attr("srcset").split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            ?: imgEl.attr("src").takeIf { it.isNotBlank() && !it.startsWith("data:") }
+            ?: this.selectFirst("[style*='background-image']")?.attr("style")?.let { style ->
+                Regex("""url\((['"]?)(.*?)\1\)""").find(style)?.groupValues?.get(2)
+            }
+            ?: aTag.selectFirst("[style*='background-image']")?.attr("style")?.let { style ->
+                Regex("""url\((['"]?)(.*?)\1\)""").find(style)?.groupValues?.get(2)
+            }
+
+        val backdropImg = this.selectFirst("img[src*='backdrop'], img[data-src*='backdrop']")
+            ?: aTag.selectFirst("img[src*='backdrop'], img[data-src*='backdrop']")
+        val backdropUrl = backdropImg?.attr("data-src")?.takeIf { it.isNotBlank() } ?: backdropImg?.attr("src")
+
+        val posterUrl = fixPosterUrl(rawPoster, backdropUrl) ?: return null
 
         val titleSelectors = "h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name"
         val rawTitle = (
@@ -210,29 +241,14 @@ class DiziPal : MainAPI() {
                 && !cls.contains("rating")
                 && !cls.contains("point")
             }?.text()
-            ?: imgEl?.attr("alt")
-            ?: imgEl?.attr("title")
+            ?: imgEl.attr("alt")
+            ?: imgEl.attr("title")
             ?: aTag.attr("title")
             ?: this.attr("title")
         ).toString().trim()
 
         val title = rawTitle.removeSuffix(" izle").removeSuffix(" İzle").removeSuffix(" izle -").removeSuffix(" İzle -").trim()
         if (title.isBlank()) return null
-
-        val posterUrl = fixUrlNull(
-            imgEl?.attr("data-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
-                ?: imgEl?.attr("data-original")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
-                ?: imgEl?.attr("data-lazy-src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
-                ?: imgEl?.attr("data-bg")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
-                ?: imgEl?.attr("srcset")?.split(",")?.firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
-                ?: imgEl?.attr("src")?.takeIf { it.isNotBlank() && !it.startsWith("data:") }
-                ?: this.selectFirst("[style*='background-image']")?.attr("style")?.let { style ->
-                    Regex("""url\((['"]?)(.*?)\1\)""").find(style)?.groupValues?.get(2)
-                }
-                ?: aTag.selectFirst("[style*='background-image']")?.attr("style")?.let { style ->
-                    Regex("""url\((['"]?)(.*?)\1\)""").find(style)?.groupValues?.get(2)
-                }
-        )
 
         val scoreRaw = (
             this.selectFirst(".imdb, .rating, .score, .point, .dp-rating, .dp-imdb, span[class*='imdb'], div[class*='imdb'], span[class*='rating'], div[class*='rating'], span[class*='score'], div[class*='score']")?.text()
@@ -263,7 +279,7 @@ class DiziPal : MainAPI() {
         val title     = this.title.trim().takeIf { it.isNotBlank() } ?: return null
         val slugStr   = this.slug?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val href      = if (slugStr.startsWith("http")) slugStr else "${mainUrl}/${slugStr}"
-        val posterUrl = fixUrlNull(this.poster?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
+        val posterUrl = fixPosterUrl(this.poster, this.backUrl)
         val imdbScore = this.imdb?.toString()?.trim()?.takeIf { it.isNotBlank() }
 
         return if (this.type.equals("series", ignoreCase = true) || href.contains("/series/") || href.contains("/dizi/")) {
@@ -321,12 +337,15 @@ class DiziPal : MainAPI() {
             ?: document.selectFirst("meta[property='og:title']")?.attr("content")?.substringBefore(" İzle")?.substringBefore(" izle")?.trim()
             ?: return null
 
-        val poster = fixUrlNull(
-            document.selectFirst("div.page-top img[alt]")?.attr("src")?.takeIf { !it.startsWith("data:") }
-                ?: document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("data-src")?.takeIf { !it.startsWith("data:") }
-                ?: document.selectFirst("img[src*='/poster/']")?.attr("src")?.takeIf { !it.startsWith("data:") }
-                ?: document.selectFirst("meta[property='og:image']")?.attr("content")
-        )
+        val rawPoster = document.selectFirst("div.page-top img[alt]")?.attr("src")?.takeIf { !it.startsWith("data:") }
+            ?: document.selectFirst("img[src*='/poster/'], img[data-src*='/poster/']")?.attr("data-src")?.takeIf { !it.startsWith("data:") }
+            ?: document.selectFirst("img[src*='/poster/']")?.attr("src")?.takeIf { !it.startsWith("data:") }
+            ?: document.selectFirst("meta[property='og:image']")?.attr("content")
+
+        val backdropImg = document.selectFirst("img[src*='backdrop'], img[data-src*='backdrop']")
+        val backdropUrl = backdropImg?.attr("src")?.takeIf { it.isNotBlank() } ?: backdropImg?.attr("data-src")?.takeIf { it.isNotBlank() }
+
+        val poster = fixPosterUrl(rawPoster, backdropUrl)
 
         val year = document.selectXpath("//div[text()='Yıl']//following-sibling::div").text().trim().toIntOrNull()
             ?: Regex("""\((\d{4})\)""").find(document.title())?.groupValues?.get(1)?.toIntOrNull()

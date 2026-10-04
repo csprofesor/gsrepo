@@ -16,6 +16,9 @@ data class DizipalSearchResult(
     @JsonProperty("object_poster_url")
     val poster: String? = null,
 
+    @JsonProperty("object_back_url")
+    val backUrl: String? = null,
+
     @JsonProperty("object_related_imdb_point")
     val imdb: Any? = null,
 

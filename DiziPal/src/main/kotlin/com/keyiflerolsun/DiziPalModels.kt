@@ -19,6 +19,9 @@ data class SearchItem(
     @JsonProperty("object_poster_url")
     val poster: String? = null,
 
+    @JsonProperty("object_back_url")
+    val backUrl: String? = null,
+
     @JsonProperty("object_categories")
     val genres: String? = null,
 
