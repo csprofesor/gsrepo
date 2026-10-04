@@ -115,8 +115,8 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
 
-                        if (reqUrl.contains("embed.js", true)) {
-                            Log.d("HintFilmIzleWebView", "INTERCEPTING_EMBED_JS=$reqUrl")
+                        if (reqUrl.contains("embed.js", true) || reqUrl.contains("playerjs.js", true)) {
+                            Log.d("HintFilmIzleWebView", "INTERCEPTING_KINE_JS=$reqUrl")
                             runCatching {
                                 val originalJs = runBlocking {
                                     app.get(reqUrl, headers = mapOf("Referer" to "$mainUrl/", "Origin" to mainUrl)).text

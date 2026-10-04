@@ -1,1 +1,1 @@
-Inject JS bridge directly into iframe's embed.js in shouldInterceptRequest to decrypt Kinescope M3U8 in iframe context (v45).
+Intercept both embed.js and playerjs.js in iframe to guarantee M3U8 decryption and video streaming (v46).
