@@ -1,1 +1,1 @@
-Fix Kinescope embed DNS and player extraction for HintFilmIzle.
+Bump HintFilmIzle plugin version to 42.
