@@ -71,7 +71,17 @@ class DiziPal : MainAPI() {
         "${mainUrl}/diziler"                           to "Diziler",
         "${mainUrl}/filmler"                           to "Filmler",
         "${mainUrl}/yeni-eklenen-bolumler"             to "Son Eklenen Bölümler",
-        "${mainUrl}/anime"                             to "Anime"
+        "${mainUrl}/anime"                             to "Anime",
+        "${mainUrl}/kanal/netflix"                     to "Netflix",
+        "${mainUrl}/kanal/blutv"                       to "BluTV",
+        "${mainUrl}/kanal/exxen"                       to "Exxen",
+        "${mainUrl}/kanal/amazon-prime"                to "Amazon Prime",
+        "${mainUrl}/kanal/disney-plus"                 to "Disney+",
+        "${mainUrl}/kanal/apple-tv"                    to "Apple TV+",
+        "${mainUrl}/kanal/hbo-max"                     to "HBO Max",
+        "${mainUrl}/kanal/hulu"                        to "Hulu",
+        "${mainUrl}/kanal/gain"                        to "GAİN",
+        "${mainUrl}/kanal/tabii"                       to "tabii"
     )
 
     private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
