@@ -519,6 +519,12 @@ class HintFilmIzle : MainAPI() {
         }
 
         val ctx = HintFilmIzlePlugin.pluginContext
+        if (ctx != null) {
+            runCatching {
+                HintFilmIzleWebViewExtractor(ctx, name).getUrl(data, data, subtitleCallback, wrappedCallback)
+            }
+        }
+
         for(p in players){
             if (linkCount > 0) break
             val kineId = extractKinescopeId(p)
@@ -531,12 +537,6 @@ class HintFilmIzle : MainAPI() {
 
             val isKine = realUrl.contains("kinescope", true) || realUrl.contains("kinescopecdn", true) || realUrl.contains("player.hintfilmizle.com", true)
             if (isKine) {
-                if (ctx != null) {
-                    runCatching {
-                        HintFilmIzleWebViewExtractor(ctx, name).getUrl(realUrl, data, subtitleCallback, wrappedCallback)
-                    }
-                }
-                if (linkCount > 0) break
                 runCatching {
                     kinescope(realUrl, data, subtitleCallback, wrappedCallback)
                 }

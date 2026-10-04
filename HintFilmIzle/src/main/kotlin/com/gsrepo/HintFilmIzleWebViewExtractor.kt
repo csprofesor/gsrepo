@@ -38,7 +38,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
     ) {
         Log.d("HintFilmIzleWebView", "WEBVIEW_EXTRACTOR_START=$url")
         val foundStream = AtomicBoolean(false)
-        val targetUrl = if (url.contains("?")) "$url&autoplay=1&muted=1&playsinline=1" else "$url?autoplay=1&muted=1&playsinline=1"
+        val targetUrl = url
 
         withContext(Dispatchers.Main) {
             webView = WebView(context).apply {
@@ -86,6 +86,10 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                             (function() {
                                 setInterval(() => {
                                     try {
+                                        const fp = document.querySelector('.fplayer');
+                                        if (fp) fp.click();
+                                        const btns = document.querySelectorAll('.cpp-switcher button, #singlePlay, [data-frame]');
+                                        btns.forEach(b => b.click());
                                         const v = document.querySelector('video');
                                         if (v) {
                                             if (v.src && (v.src.includes('m3u8') || v.src.includes('/hls/'))) {

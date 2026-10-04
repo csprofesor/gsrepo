@@ -1,1 +1,1 @@
-Bump HintFilmIzle plugin version to 42.
+Fix WebView extraction by loading main movie page in WebView (v43).
