@@ -87,7 +87,15 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                 setInterval(() => {
                                     try {
                                         const v = document.querySelector('video');
-                                        if (v && v.paused) { v.muted = true; v.play(); }
+                                        if (v) {
+                                            if (v.src && (v.src.includes('m3u8') || v.src.includes('/hls/'))) {
+                                                window.AndroidBridge.onStreamFound(v.src, v.src);
+                                            }
+                                            if (v.currentSrc && (v.currentSrc.includes('m3u8') || v.currentSrc.includes('/hls/'))) {
+                                                window.AndroidBridge.onStreamFound(v.currentSrc, v.currentSrc);
+                                            }
+                                            if (v.paused) { v.muted = true; v.play(); }
+                                        }
                                         const btn = document.querySelector('[role="button"], .kinescope-player button, .play-button, #loading-overlay, #noads-overlay, .loader');
                                         if (btn) btn.click();
                                     } catch(e) {}
@@ -130,7 +138,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                         }
                                     } catch(e) {}
                                 }
-                                setInterval(scanRes, 500);
+                                setInterval(scanRes, 300);
                             })();
                         """.trimIndent()
                         view?.evaluateJavascript(js, null)
@@ -141,9 +149,6 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                         request: WebResourceRequest?
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
-                        if (reqUrl.contains("ads", true) || reqUrl.contains("analytics", true) || reqUrl.contains("vast", true) || reqUrl.contains("banner", true) || reqUrl.contains("popunder", true) || reqUrl.contains("tracker", true) || reqUrl.contains("pixel", true) || reqUrl.contains("yandex.ru", true) || reqUrl.contains("googletagmanager", true)) {
-                            return WebResourceResponse("text/plain", "UTF-8", null)
-                        }
 
                         if (reqUrl.contains(".m3u8", true) || reqUrl.contains("/hls/", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true)) {
                             Log.d("HintFilmIzleWebView", "INTERCEPTED_REQ=$reqUrl")
@@ -179,7 +184,13 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
 
         withContext(Dispatchers.Main) {
             try {
-                webView?.destroy()
+                webView?.apply {
+                    stopLoading()
+                    loadUrl("about:blank")
+                    clearHistory()
+                    removeAllViews()
+                    destroy()
+                }
                 webView = null
                 Log.d("HintFilmIzleWebView", "WEBVIEW_EXTRACTOR_DESTROYED")
             } catch (e: Exception) {
