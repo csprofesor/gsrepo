@@ -144,7 +144,7 @@ class DiziPal : MainAPI() {
                     val resultArrayNode = rootNode.at("/data/result")
                     if (!resultArrayNode.isMissingNode && resultArrayNode.isArray) {
                         try {
-                            val searchItems: List<SearchItem> = mapper.readValue(resultArrayNode.traverse())
+                            val searchItems: List<SearchItem> = mapper.readValue(resultArrayNode.toString())
                             searchItems.mapNotNull { it.toPostSearchResult() }.forEach { res ->
                                 if (home.none { it.url == res.url }) {
                                     home.add(res)
@@ -276,7 +276,7 @@ class DiziPal : MainAPI() {
     }
 
     private fun SearchItem.toPostSearchResult(): SearchResponse? {
-        val title     = this.title.trim().takeIf { it.isNotBlank() } ?: return null
+        val title     = this.title?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val slugStr   = this.slug?.trim()?.takeIf { it.isNotBlank() } ?: return null
         val href      = if (slugStr.startsWith("http")) slugStr else "${mainUrl}/${slugStr}"
         val posterUrl = fixPosterUrl(this.poster, this.backUrl)
@@ -320,7 +320,7 @@ class DiziPal : MainAPI() {
                 return emptyList()
             }
 
-            val searchItems: List<SearchItem> = mapper.readValue(resultArrayNode.traverse())
+            val searchItems: List<SearchItem> = mapper.readValue(resultArrayNode.toString())
             searchItems.mapNotNull { it.toPostSearchResult() }
         } catch (e: Exception) {
             Log.e("DiziPal", "Search hatası: ${e.message}")

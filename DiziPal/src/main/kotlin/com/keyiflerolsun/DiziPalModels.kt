@@ -11,7 +11,7 @@ data class SearchItem(
     val id: Any? = null,
 
     @JsonProperty("object_name")
-    val title: String = "",
+    val title: String? = null,
 
     @JsonProperty("object_alternative_name")
     val trTitle: String? = null,

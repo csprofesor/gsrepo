@@ -241,7 +241,7 @@ class DiziPalOriginal : MainAPI() {
                     val resultArrayNode = rootNode.at("/data/result")
                     if (!resultArrayNode.isMissingNode && resultArrayNode.isArray) {
                         try {
-                            val searchItems: List<DizipalSearchResult> = mapper.readValue(resultArrayNode.traverse())
+                            val searchItems: List<DizipalSearchResult> = mapper.readValue(resultArrayNode.toString())
                             searchItems.mapNotNull { item ->
                                 val title = item.title?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                                 val slugStr = item.slug?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -314,7 +314,7 @@ class DiziPalOriginal : MainAPI() {
                 return emptyList()
             }
 
-            val searchItems: List<DizipalSearchResult> = mapper.readValue(resultArrayNode.traverse())
+            val searchItems: List<DizipalSearchResult> = mapper.readValue(resultArrayNode.toString())
             searchItems.mapNotNull { item ->
                 val title = item.title?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val slugStr = item.slug?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
