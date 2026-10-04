@@ -80,13 +80,20 @@ class DiziPalOriginal : MainAPI() {
     private val cardSelector = "article.dp-card, article, div.dp-card, div.poster, div.movie-item, div.serie-item, div.content-item, div.card, div.group"
 
     private fun fixPosterUrl(url: String?, backdropUrl: String? = null): String? {
+        val cleanBack = fixUrlNull(backdropUrl?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
+        if (!cleanBack.isNullOrBlank() && cleanBack.contains("ampproject.org")) {
+            return cleanBack
+                .replace("/backdrop/", "/poster/")
+                .replace("/face/", "/poster/")
+                .replace("/square/", "/poster/")
+                .replace("/brand/", "/poster/")
+        }
         val cleanUrl = fixUrlNull(url?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
-        if (!cleanUrl.isNullOrBlank() && !cleanUrl.contains("file.cdnhipter.xyz")) {
+        if (!cleanUrl.isNullOrBlank()) {
             return cleanUrl
         }
-        val cleanBackdrop = fixUrlNull(backdropUrl?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
-        if (!cleanBackdrop.isNullOrBlank()) {
-            return cleanBackdrop.replace("/backdrop/", "/poster/")
+        if (!cleanBack.isNullOrBlank()) {
+            return cleanBack.replace("/backdrop/", "/poster/")
         }
         return null
     }
@@ -133,35 +140,31 @@ class DiziPalOriginal : MainAPI() {
 
         val posterUrl = fixPosterUrl(rawPoster, backdropUrl) ?: return null
 
-        val titleSelectors = "h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name"
-        val rawTitle = (
+        val titleSelectors = "h2, h3, h4, h5, .title, .name, .content-title, .dp-title, .card-title, div.font-semibold, div.truncate, div.line-clamp-1, div.line-clamp-2, span.title, span.name, span.text-white"
+        
+        val aTitle = aTag.attr("title").trim()
+        val rawTitle = if (aTitle.isNotBlank() && !aTitle.lowercase().endsWith("izle")) {
+            aTitle
+        } else if (imgEl.attr("alt").isNotBlank() && imgEl.attr("alt") != "loading icon" && !imgEl.attr("alt").lowercase().contains("reklam")) {
+            imgEl.attr("alt").trim()
+        } else {
             this.select(titleSelectors).firstOrNull {
                 val t = it.text().trim()
                 val cls = it.className().lowercase()
+                val tLow = t.lowercase()
                 t.isNotBlank()
                 && !t.matches(Regex("""^[\d.,\s/]+$"""))
-                && !t.contains("imdb", ignoreCase = true)
+                && !tLow.contains("imdb")
+                && !tLow.contains("sezon")
+                && !tLow.contains("bölüm")
                 && !cls.contains("imdb")
                 && !cls.contains("score")
                 && !cls.contains("rating")
                 && !cls.contains("point")
             }?.text()
-            ?: aTag.select(titleSelectors).firstOrNull {
-                val t = it.text().trim()
-                val cls = it.className().lowercase()
-                t.isNotBlank()
-                && !t.matches(Regex("""^[\d.,\s/]+$"""))
-                && !t.contains("imdb", ignoreCase = true)
-                && !cls.contains("imdb")
-                && !cls.contains("score")
-                && !cls.contains("rating")
-                && !cls.contains("point")
-            }?.text()
-            ?: imgEl.attr("alt")
-            ?: imgEl.attr("title")
             ?: aTag.attr("title")
             ?: this.attr("title")
-        ).toString().trim()
+        }.toString().trim()
 
         val title = rawTitle.removeSuffix(" izle").removeSuffix(" İzle").removeSuffix(" izle -").removeSuffix(" İzle -").trim()
         if (title.isBlank()) return null

@@ -224,9 +224,9 @@
     "fileHash": "sha256-bb3c20bfb3b8f81852eecde3e374788bd8de4b932ab8958674bf563b331927b9"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=c7d074ed6d7181cf3aee2839c787689a100e1a55fc316dc569061ae6ffd3df85",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3",
     "status": 1,
-    "version": 116,
+    "version": 117,
     "name": "DiziPal",
     "internalName": "DiziPal",
     "authors": [
@@ -245,9 +245,9 @@
     "fileHash": "sha256-c7d074ed6d7181cf3aee2839c787689a100e1a55fc316dc569061ae6ffd3df85"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=e231c82c923ca92864cae22581cbad242f8545db1c86993cf959a40c0ca5e414",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3",
     "status": 1,
-    "version": 99,
+    "version": 100,
     "name": "DiziPalOriginal",
     "internalName": "DiziPalOriginal",
     "authors": [
