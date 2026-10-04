@@ -2,6 +2,7 @@ package com.gsrepo
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -55,19 +56,31 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                 addJavascriptInterface(object : Any() {
                     @JavascriptInterface
                     fun onStreamFound(body: String, reqUrl: String) {
-                        Log.d("HintFilmIzleWebView", "BRIDGE_FOUND: $reqUrl")
-                        val m3u8 = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|/hls/|playlist|manifest)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(body)?.value 
-                            ?: Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|/hls/|playlist|manifest)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(reqUrl)?.value
-                            ?: reqUrl
+                        Log.d("HintFilmIzleWebView", "BRIDGE_FOUND: reqUrl=$reqUrl, bodyLen=${body.length}")
 
-                        if ((m3u8.contains("m3u8", true) || m3u8.contains("/hls/", true) || m3u8.contains("playlist", true) || m3u8.contains("manifest", true)) && !foundStream.getAndSet(true)) {
-                            Log.d("HintFilmIzleWebView", "EMITTING_STREAM=$m3u8")
+                        val m3u8Content = if (body.startsWith("#EXTM3U")) {
+                            body
+                        } else {
+                            Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|/hls/|playlist|manifest)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(body)?.value 
+                                ?: Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|/hls/|playlist|manifest)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(reqUrl)?.value
+                                ?: reqUrl
+                        }
+
+                        if (!foundStream.getAndSet(true)) {
+                            val streamUrl = if (m3u8Content.startsWith("#EXTM3U")) {
+                                val base64 = Base64.encodeToString(m3u8Content.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                                "data:application/vnd.apple.mpegurl;base64,$base64"
+                            } else {
+                                m3u8Content
+                            }
+
+                            Log.d("HintFilmIzleWebView", "EMITTING_STREAM=$streamUrl")
                             GlobalScope.launch(Dispatchers.IO) {
                                 callback.invoke(
                                     newExtractorLink(
                                         source = pluginName,
                                         name = pluginName,
-                                        url = m3u8,
+                                        url = streamUrl,
                                         type = ExtractorLinkType.M3U8
                                     ) {
                                         this.quality = Qualities.P1080.value
@@ -84,65 +97,64 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                         super.onPageFinished(view, url)
                         val js = """
                             (function() {
+                                function tryDecryptAndEmit(body, reqUrl) {
+                                    try {
+                                        if (typeof body === 'string' && body.indexOf('#EXTM3U') === 0) {
+                                            window.AndroidBridge.onStreamFound(body, reqUrl);
+                                            return true;
+                                        }
+                                        if (body && (typeof body === 'object' || (typeof body === 'string' && body.indexOf('"p"') > -1)) && window.decryptM3U8Content) {
+                                            const parsed = typeof body === 'object' ? body : JSON.parse(body);
+                                            const decrypted = window.decryptM3U8Content(parsed);
+                                            if (decrypted && decrypted.indexOf('#EXTM3U') === 0) {
+                                                window.AndroidBridge.onStreamFound(decrypted, reqUrl);
+                                                return true;
+                                            }
+                                        }
+                                    } catch(e) {}
+                                    return false;
+                                }
+
+                                const origFetch = window.fetch;
+                                if (origFetch) {
+                                    window.fetch = async function(...args) {
+                                        const resp = await origFetch.apply(this, args);
+                                        try {
+                                            const clone = resp.clone();
+                                            const text = await clone.text();
+                                            tryDecryptAndEmit(text, resp.url);
+                                        } catch(e) {}
+                                        return resp;
+                                    };
+                                }
+
+                                const origXHR = window.XMLHttpRequest.prototype.open;
+                                if (origXHR) {
+                                    window.XMLHttpRequest.prototype.open = function(method, reqUrl, ...args) {
+                                        this.addEventListener('load', function() {
+                                            try {
+                                                if (this.responseText) {
+                                                    tryDecryptAndEmit(this.responseText, reqUrl);
+                                                }
+                                            } catch(e) {}
+                                        });
+                                        return origXHR.apply(this, [method, reqUrl, ...args]);
+                                    };
+                                }
+
                                 setInterval(() => {
                                     try {
                                         const fp = document.querySelector('.fplayer');
                                         if (fp) fp.click();
                                         const btns = document.querySelectorAll('.cpp-switcher button, #singlePlay, [data-frame]');
                                         btns.forEach(b => b.click());
+
                                         const v = document.querySelector('video');
-                                        if (v) {
-                                            if (v.src && (v.src.includes('m3u8') || v.src.includes('/hls/'))) {
-                                                window.AndroidBridge.onStreamFound(v.src, v.src);
-                                            }
-                                            if (v.currentSrc && (v.currentSrc.includes('m3u8') || v.currentSrc.includes('/hls/'))) {
-                                                window.AndroidBridge.onStreamFound(v.currentSrc, v.currentSrc);
-                                            }
-                                            if (v.paused) { v.muted = true; v.play(); }
+                                        if (v && v.src && v.src.indexOf('m3u8') > -1) {
+                                            window.AndroidBridge.onStreamFound(v.src, v.src);
                                         }
-                                        const btn = document.querySelector('[role="button"], .kinescope-player button, .play-button, #loading-overlay, #noads-overlay, .loader');
-                                        if (btn) btn.click();
                                     } catch(e) {}
                                 }, 300);
-
-                                const originalFetch = window.fetch;
-                                window.fetch = async function(...args) {
-                                    const response = await originalFetch.apply(this, args);
-                                    try {
-                                        const clone = response.clone();
-                                        const text = await clone.text();
-                                        if (response.url.includes('.m3u8') || response.url.includes('/hls/') || text.includes('m3u8') || text.includes('playlist') || text.includes('manifest')) {
-                                            window.AndroidBridge.onStreamFound(text, response.url);
-                                        }
-                                    } catch(e) {}
-                                    return response;
-                                };
-                                
-                                const originalXHR = window.XMLHttpRequest.prototype.open;
-                                window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
-                                    this.addEventListener('load', function() {
-                                        try {
-                                            if (url && (url.includes('.m3u8') || url.includes('/hls/') || url.includes('playlist') || url.includes('manifest'))) {
-                                                window.AndroidBridge.onStreamFound(this.responseText || '', url);
-                                            } else if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('manifest'))) {
-                                                window.AndroidBridge.onStreamFound(this.responseText, url);
-                                            }
-                                        } catch(e) {}
-                                    });
-                                    return originalXHR.apply(this, [method, url, ...args]);
-                                };
-
-                                function scanRes() {
-                                    try {
-                                        const entries = performance.getEntriesByType('resource');
-                                        for (let e of entries) {
-                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('/hls/') || e.name.includes('playlist') || e.name.includes('manifest'))) {
-                                                window.AndroidBridge.onStreamFound(e.name, e.name);
-                                            }
-                                        }
-                                    } catch(e) {}
-                                }
-                                setInterval(scanRes, 300);
                             })();
                         """.trimIndent()
                         view?.evaluateJavascript(js, null)
@@ -154,7 +166,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
 
-                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains("/hls/", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true)) {
+                        if (reqUrl.endsWith(".m3u8", true) && !reqUrl.contains("/hls/", true)) {
                             Log.d("HintFilmIzleWebView", "INTERCEPTED_REQ=$reqUrl")
                             if (!foundStream.getAndSet(true)) {
                                 GlobalScope.launch(Dispatchers.IO) {

@@ -1,1 +1,1 @@
-Fix WebView extraction by loading main movie page in WebView (v43).
+Decrypt Kinescope encrypted index.m3u8 JSON using in-page window.decryptM3U8Content and emit data URI for ExoPlayer (v44).
