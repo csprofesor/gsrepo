@@ -2,7 +2,6 @@ package com.gsrepo
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -20,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -162,22 +162,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
 
         val finalUrl = if (url.startsWith("http")) url else "$mainUrl${if (url.startsWith("/")) "" else "/"}$url"
 
-        val htmlData = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; }
-                    iframe { width: 100%; height: 100%; border: none; }
-                </style>
-            </head>
-            <body>
-                <iframe src="$finalUrl" allowfullscreen></iframe>
-            </body>
-            </html>
-        """.trimIndent()
-
         withContext(Dispatchers.Main) {
             webView = WebView(context).apply {
                 settings.apply {
@@ -193,7 +177,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     @JavascriptInterface
                     fun onStreamFound(body: String, reqUrl: String) {
                         Log.d("SinemaTvAzWebView", "BRIDGE_FOUND: $reqUrl")
-                        val urls = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8(?:\\?[^\"',\\s<>]*)?|\\.mp4(?:\\?[^\"',\\s<>]*)?|parsed\\.json(?:\\?[^\"',\\s<>]*)?|catalog-api(?:\\?[^\"',\\s<>]*)?)", RegexOption.IGNORE_CASE)
+                        val urls = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8(?:\\?[^\"',\\s<>]*)?|\\.mp4(?:\\?[^\"',\\s<>]*)?|parsed\\.json(?:\\?[^\"',\\s<>]*)?)", RegexOption.IGNORE_CASE)
                             .findAll("$body $reqUrl")
                             .map { it.value }
                             .distinct()
@@ -206,44 +190,10 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 }, "AndroidBridge")
 
                 webViewClient = object : WebViewClient() {
-                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                        super.onPageStarted(view, url, favicon)
-                        val jsBypass = """
-                            try {
-                                Object.defineProperty(window, 'top', {
-                                    get: function() {
-                                        return {
-                                            location: {
-                                                hostname: 'abyss.to',
-                                                href: 'https://abyss.to/',
-                                                toString: function() { return 'https://abyss.to/'; }
-                                            }
-                                        };
-                                    }
-                                });
-                            } catch(e) {}
-                        """.trimIndent()
-                        evaluateJavascript(jsBypass, null)
-                    }
-
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         val js = """
                             (function() {
-                                try {
-                                    Object.defineProperty(window, 'top', {
-                                        get: function() {
-                                            return {
-                                                location: {
-                                                    hostname: 'abyss.to',
-                                                    href: 'https://abyss.to/',
-                                                    toString: function() { return 'https://abyss.to/'; }
-                                                }
-                                            };
-                                        }
-                                    });
-                                } catch(e) {}
-
                                 function autoPlay() {
                                     try {
                                         const docs = [document];
@@ -343,6 +293,28 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
 
+                        if (reqUrl.contains("cdn.sinematv.az") || reqUrl.contains("cdn1.sinematv.az") || reqUrl.contains("cdn2.sinematv.az")) {
+                            if (request?.method?.equals("GET", ignoreCase = true) == true && (reqUrl.contains("?v=") || reqUrl.contains("/?v="))) {
+                                try {
+                                    val html = runBlocking {
+                                        app.get(reqUrl, headers = mapOf("User-Agent" to defaultUserAgent, "Referer" to "$mainUrl/")).text
+                                    }
+                                    var cleanHtml = html
+                                    if (cleanHtml.contains("window.location")) {
+                                        cleanHtml = cleanHtml.replace("window.location = \"https://abyss.to\";", "// bypassed redirect")
+                                            .replace(Regex("""window\.location\s*=\s*["']https?://abyss\.to["'];?"""), "// bypassed redirect")
+                                    }
+                                    return WebResourceResponse(
+                                        "text/html",
+                                        "UTF-8",
+                                        cleanHtml.byteInputStream(Charsets.UTF_8)
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e("SinemaTvAzWebView", "Failed to intercept and clean player HTML", e)
+                                }
+                            }
+                        }
+
                         if (!isJunkUrl(reqUrl)) {
                             val path = reqUrl.substringBefore("?").lowercase()
                             if (path.endsWith(".m3u8") || path.endsWith(".mp4") || path.contains("master.m3u8") || path.contains("index.m3u8") || path.contains("playlist") || path.contains("manifest") || reqUrl.contains("parsed.json") || reqUrl.contains("catalog-api") || reqUrl.contains("balancer-api") || reqUrl.contains("proxy/playlists") || reqUrl.contains("vv-api.php") || reqUrl.contains("api/v1/player")) {
@@ -354,7 +326,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     }
                 }
 
-                loadDataWithBaseURL("https://sinematv.az/", htmlData, "text/html", "UTF-8", null)
+                loadUrl(finalUrl, mapOf("Referer" to (referer ?: "$mainUrl/")))
             }
         }
 
