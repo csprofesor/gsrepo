@@ -244,14 +244,16 @@ class DiziGom : MainAPI() {
                     ?: element.attr("data-frame")
             )
             if (!src.isNullOrBlank()) {
-                candidates.add(src)
+                candidates.add(src.replace("vidmoly.org", "vidmoly.to").replace("vidmoly.net", "vidmoly.to"))
             }
         }
 
         val htmlMatches = Regex(
             """https?://[^\s"'<>]+(?:/s\.php|pilavyer|pilayer|spidypro|vidmoly|sibnet|fembed|dood|filemoon|vOE|streamtape|play2)[^\s"'<>]*""",
             RegexOption.IGNORE_CASE
-        ).findAll(document.html()).mapNotNull { cleanUrl(it.value) }
+        ).findAll(document.html()).mapNotNull { 
+            cleanUrl(it.value)?.replace("vidmoly.org", "vidmoly.to")?.replace("vidmoly.net", "vidmoly.to") 
+        }
 
         candidates.addAll(htmlMatches)
 
@@ -310,7 +312,7 @@ class DiziGom : MainAPI() {
                     }
                 }
 
-                val playerHtml = runCatching { app.get(playerUrl, referer = "$mainUrl/", interceptor = interceptor).text }.getOrNull()
+                val playerHtml = runCatching { app.get(playerUrl, referer = data, interceptor = interceptor).text }.getOrNull()
                 val streamUrl = playerHtml?.let { extractPlayerStream(it) }
 
                 if (!streamUrl.isNullOrBlank()) {
