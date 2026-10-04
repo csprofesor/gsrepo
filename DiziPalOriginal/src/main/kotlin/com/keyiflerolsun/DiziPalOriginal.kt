@@ -70,16 +70,11 @@ class DiziPalOriginal : MainAPI() {
         "$mainUrl/filmler"               to "Filmler",
         "$mainUrl/yeni-eklenen-bolumler" to "Son Eklenen Bölümler",
         "$mainUrl/anime"                 to "Anime",
-        "$mainUrl/kanal/netflix"         to "Netflix",
-        "$mainUrl/kanal/blutv"           to "BluTV",
-        "$mainUrl/kanal/exxen"           to "Exxen",
-        "$mainUrl/kanal/amazon-prime"    to "Amazon Prime",
-        "$mainUrl/kanal/disney-plus"     to "Disney+",
-        "$mainUrl/kanal/apple-tv"        to "Apple TV+",
-        "$mainUrl/kanal/hbo-max"         to "HBO Max",
-        "$mainUrl/kanal/hulu"            to "Hulu",
-        "$mainUrl/kanal/gain"            to "GAİN",
-        "$mainUrl/kanal/tabii"           to "tabii"
+        "$mainUrl/api-kanal/1"           to "Exxen",
+        "$mainUrl/api-kanal/2"           to "GAİN",
+        "$mainUrl/api-kanal/66"          to "Max",
+        "$mainUrl/api-kanal/174"         to "Prime Video",
+        "$mainUrl/api-kanal/242"         to "tabii"
     )
 
     private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
@@ -99,6 +94,7 @@ class DiziPalOriginal : MainAPI() {
             || href.endsWith("/anime")
             || href.contains("/tur/")
             || href.contains("/kategori/")
+            || href.contains("/api-kanal/")
             || href == mainUrl
             || href == "$mainUrl/"
             || href.contains("javascript:")
@@ -189,17 +185,8 @@ class DiziPalOriginal : MainAPI() {
                 request.data
             }
 
-            val document = app.get(
-                url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
-            ).document
-
-            val cardElements = document.select(cardSelector)
-            home.addAll(cardElements.mapNotNull { it.diziler() })
-
-            if (request.data.contains("/kanal/")) {
-                val channelIdFromDoc = document.selectFirst("input[name=channelId]")?.attr("value")
-                    ?: Regex("""channelId\s*[:=]\s*(\d+)""").find(document.html())?.groupValues?.get(1)
-                val channelSlug = request.data.substringAfterLast("/")
+            if (request.data.contains("/api-kanal/")) {
+                val channelId = request.data.substringAfterLast("/")
 
                 try {
                     val apiResponse = app.post(
@@ -208,14 +195,14 @@ class DiziPalOriginal : MainAPI() {
                             "Accept" to "application/json, text/javascript, */*; q=0.01",
                             "X-Requested-With" to "XMLHttpRequest"
                         ),
-                        referer = request.data,
+                        referer = mainUrl,
                         data = mapOf(
                             "cKey"       to "c61f91c5141d178450934fe81c0a2029",
                             "cValue"     to "MTc4NDQwNzIwMDhkMzJhNTc1YzUwOGU1ZjQwMjdjMjIyOWVjOGVhMTcwNGQyM2FjODM2YTI4YTU0NjUyMjI2ZmVjMzFkYzBkMWQyMWY4YzdiNA==",
                             "curPage"    to page.toString(),
-                            "channelId"  to (channelIdFromDoc ?: "1"),
+                            "channelId"  to channelId,
                             "languageId" to "2,3,4",
-                            "slug"       to channelSlug
+                            "slug"       to "none"
                         )
                     )
 
@@ -234,10 +221,50 @@ class DiziPalOriginal : MainAPI() {
                             }
                         }
                     }
+                    
+                    val resultArrayNode = rootNode.at("/data/result")
+                    if (!resultArrayNode.isMissingNode && resultArrayNode.isArray) {
+                        try {
+                            val searchItems: List<DizipalSearchResult> = mapper.readValue(resultArrayNode.traverse())
+                            searchItems.mapNotNull { item ->
+                                val title = item.title?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                                val slugStr = item.slug?.trim()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                                val href = if (slugStr.startsWith("http")) slugStr else "$mainUrl/$slugStr"
+                                val posterUrl = fixUrlNull(item.poster?.takeIf { it.isNotBlank() && !it.startsWith("data:") })
+                                val imdbScore = item.imdb?.toString()?.trim()?.takeIf { it.isNotBlank() }
+                
+                                if (item.type.equals("series", ignoreCase = true) || href.contains("/series/") || href.contains("/dizi/")) {
+                                    newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                                        this.posterUrl = posterUrl
+                                        this.score     = Score.from10(imdbScore)
+                                    }
+                                } else {
+                                    newMovieSearchResponse(title, href, TvType.Movie) {
+                                        this.posterUrl = posterUrl
+                                        this.score     = Score.from10(imdbScore)
+                                    }
+                                }
+                            }.forEach { res ->
+                                if (home.none { it.url == res.url }) {
+                                    home.add(res)
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
                 } catch (e: Exception) {
                     Log.e("DiziPalOriginal", "API Hatası: ${e.message}")
                 }
+                
+                val items = home.distinctBy { it.url }
+                return newHomePageResponse(request.name, items, items.isNotEmpty())
             }
+
+            val document = app.get(
+                url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
+            ).document
+
+            val cardElements = document.select(cardSelector)
+            home.addAll(cardElements.mapNotNull { it.diziler() })
         } catch (e: Exception) {
             Log.e("DiziPalOriginal", "getMainPage Hatası: ${e.message}")
         }

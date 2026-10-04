@@ -72,16 +72,11 @@ class DiziPal : MainAPI() {
         "${mainUrl}/filmler"                           to "Filmler",
         "${mainUrl}/yeni-eklenen-bolumler"             to "Son Eklenen Bölümler",
         "${mainUrl}/anime"                             to "Anime",
-        "${mainUrl}/kanal/netflix"                     to "Netflix",
-        "${mainUrl}/kanal/blutv"                       to "BluTV",
-        "${mainUrl}/kanal/exxen"                       to "Exxen",
-        "${mainUrl}/kanal/amazon-prime"                to "Amazon Prime",
-        "${mainUrl}/kanal/disney-plus"                 to "Disney+",
-        "${mainUrl}/kanal/apple-tv"                    to "Apple TV+",
-        "${mainUrl}/kanal/hbo-max"                     to "HBO Max",
-        "${mainUrl}/kanal/hulu"                        to "Hulu",
-        "${mainUrl}/kanal/gain"                        to "GAİN",
-        "${mainUrl}/kanal/tabii"                       to "tabii"
+        "${mainUrl}/api-kanal/1"                       to "Exxen",
+        "${mainUrl}/api-kanal/2"                       to "GAİN",
+        "${mainUrl}/api-kanal/66"                      to "Max",
+        "${mainUrl}/api-kanal/174"                     to "Prime Video",
+        "${mainUrl}/api-kanal/242"                     to "tabii"
     )
 
     private val cardSelector = "a[data-dizipal-pageloader], a[data-dizipalx-pageloader], a[href*='/series/'], a[href*='/movies/'], a[href*='/dizi/'], a[href*='/film/'], article.dp-card, article, div.dp-card, div.bg-\\[\\#22232a\\], div.poster, div.movie-item, div.serie-item, div.content-item, div.card"
@@ -96,19 +91,9 @@ class DiziPal : MainAPI() {
                 request.data
             }
 
-            val document = app.get(
-                url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
-            ).document
-
-            // 1. HTML içindeki mevcut dizileri / filmleri al
-            val cardElements = document.select(cardSelector)
-            home.addAll(cardElements.mapNotNull { it.diziler() })
-
-            // 2. Eğer bir kanal sayfasındaysak API'den verileri çek
-            if (request.data.contains("/kanal/")) {
-                val channelIdFromDoc = document.selectFirst("input[name=channelId]")?.attr("value")
-                    ?: Regex("""channelId\s*[:=]\s*(\d+)""").find(document.html())?.groupValues?.get(1)
-                val channelSlug = request.data.substringAfterLast("/")
+            // 1. Eğer bir kanal sayfasındaysak (api-kanal üzerinden özel ID ile) sadece API'den verileri çek
+            if (request.data.contains("/api-kanal/")) {
+                val channelId = request.data.substringAfterLast("/")
 
                 try {
                     val apiResponse = app.post(
@@ -117,21 +102,20 @@ class DiziPal : MainAPI() {
                             "Accept" to "application/json, text/javascript, */*; q=0.01",
                             "X-Requested-With" to "XMLHttpRequest"
                         ),
-                        referer = request.data,
+                        referer = mainUrl,
                         data = mapOf(
                             "cKey"       to "c61f91c5141d178450934fe81c0a2029",
                             "cValue"     to "MTc4NDQwNzIwMDhkMzJhNTc1YzUwOGU1ZjQwMjdjMjIyOWVjOGVhMTcwNGQyM2FjODM2YTI4YTU0NjUyMjI2ZmVjMzFkYzBkMWQyMWY4YzdiNA==",
                             "curPage"    to page.toString(),
-                            "channelId"  to (channelIdFromDoc ?: "1"),
+                            "channelId"  to channelId,
                             "languageId" to "2,3,4",
-                            "slug"       to channelSlug
+                            "slug"       to "none"
                         )
                     )
 
                     val mapper = jacksonObjectMapper()
                     val rootNode = mapper.readTree(apiResponse.text)
 
-                    // A) HTML node parsing
                     val htmlNode = rootNode.at("/data/html")
                     if (!htmlNode.isMissingNode) {
                         val htmlContent = htmlNode.asText()
@@ -145,7 +129,6 @@ class DiziPal : MainAPI() {
                         }
                     }
 
-                    // B) Result array node parsing
                     val resultArrayNode = rootNode.at("/data/result")
                     if (!resultArrayNode.isMissingNode && resultArrayNode.isArray) {
                         try {
@@ -160,7 +143,19 @@ class DiziPal : MainAPI() {
                 } catch (e: Exception) {
                     Log.e("DiziPal", "API Hatası: ${e.message}")
                 }
+                
+                val distinctHome = home.distinctBy { it.url }
+                return newHomePageResponse(request.name, distinctHome, hasNext = distinctHome.isNotEmpty())
             }
+
+            // Normal Sayfalar için HTML üzerinden veri çekme
+            val document = app.get(
+                url, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
+            ).document
+
+            val cardElements = document.select(cardSelector)
+            home.addAll(cardElements.mapNotNull { it.diziler() })
+
         } catch (e: Exception) {
             Log.e("DiziPal", "getMainPage Hatası: ${e.message}")
         }
