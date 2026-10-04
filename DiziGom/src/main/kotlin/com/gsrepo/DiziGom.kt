@@ -21,6 +21,7 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.M3u8Helper
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
@@ -318,23 +319,57 @@ class DiziGom : MainAPI() {
                 if (!streamUrl.isNullOrBlank()) {
                     Log.d("DiziGom", "Extracted stream from HTML: $streamUrl")
                     val domain = Regex("""(https?://[^/]+)""").find(playerUrl)?.groupValues?.get(1) ?: "https://play2.pilavyerplay.top"
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = "DiziGom",
-                            url = streamUrl,
-                            type = if (streamUrl.contains(".m3u8", true) || streamUrl.contains("stream.php", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                        ) {
-                            referer = playerUrl
-                            headers = mapOf(
-                                "Referer" to playerUrl,
-                                "Origin" to domain,
-                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                            )
-                            quality = Qualities.P1080.value
-                        }
+                    val reqHeaders = mapOf(
+                        "Referer" to playerUrl,
+                        "Origin" to domain,
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
                     )
-                    found = true
+
+                    if (streamUrl.contains(".m3u8", true) || streamUrl.contains("stream.php", true)) {
+                        val m3u8Links = runCatching {
+                            M3u8Helper.generateM3u8(
+                                source = name,
+                                streamUrl = streamUrl,
+                                referer = playerUrl,
+                                headers = reqHeaders
+                            )
+                        }.getOrNull()
+
+                        if (!m3u8Links.isNullOrEmpty()) {
+                            m3u8Links.forEach { link ->
+                                callback(link)
+                                found = true
+                            }
+                        } else {
+                            callback(
+                                newExtractorLink(
+                                    source = name,
+                                    name = "DiziGom",
+                                    url = streamUrl,
+                                    type = ExtractorLinkType.M3U8
+                                ) {
+                                    referer = playerUrl
+                                    headers = reqHeaders
+                                    quality = Qualities.P1080.value
+                                }
+                            )
+                            found = true
+                        }
+                    } else {
+                        callback(
+                            newExtractorLink(
+                                source = name,
+                                name = "DiziGom",
+                                url = streamUrl,
+                                type = ExtractorLinkType.VIDEO
+                            ) {
+                                referer = playerUrl
+                                headers = reqHeaders
+                                quality = Qualities.P1080.value
+                            }
+                        )
+                        found = true
+                    }
                 } else {
                     DiziGomPlugin.pluginContext?.let { ctx ->
                         val webExtractor = DiziGomWebViewExtractor(ctx, name)
