@@ -599,26 +599,6 @@
     "fileHash": "sha256-478053e06dc7b157b15cc02232582ba2a043ebcc8d289d7a525b73e316c3e313"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/XPrime.cs3",
-    "status": 1,
-    "version": 6,
-    "name": "XPrime",
-    "internalName": "XPrime",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "XPrime.Tv",
-    "fileSize": 31025,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=xprime.tv&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a"
-  },
-  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3",
     "status": 1,
     "version": 10,

@@ -35,7 +35,6 @@ gsrepo Türkçe CloudStream eklentilerini içeren sağlayıcı deposudur.
 | **SinemaTvAz** | Film, Dizi | Azerbaycan | Active |
 | **Watch2Movies** | Film, Dizi | Türkçe | Active |
 | **WebteIzle** | Film | Türkçe | Active |
-| **XPrime** | Film, Dizi | Türkçe | Active |
 | **YabanciDizi** | Dizi, Film | Türkçe | Active |
 
 ---
