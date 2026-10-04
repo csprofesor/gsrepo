@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() {
     override val name = "SinemaTvAz Özel"
@@ -86,6 +87,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         callback: (ExtractorLink) -> Unit,
     ) {
         val defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+        val foundStream = AtomicBoolean(false)
 
         fun getHeadersForStream(streamUrl: String): Map<String, String> {
             val lower = streamUrl.lowercase()
@@ -142,6 +144,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                         Log.e("SinemaTvAzWebView", "API JSON fetch failed for $fixStream", e)
                     }
                 } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || lower.contains(".m3u8") || lower.contains("playlist")) {
+                    foundStream.set(true)
                     callback.invoke(
                         newExtractorLink(
                             source = "SinemaTvAzWebView",
@@ -158,6 +161,22 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         }
 
         val finalUrl = if (url.startsWith("http")) url else "$mainUrl${if (url.startsWith("/")) "" else "/"}$url"
+
+        val htmlData = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; }
+                    iframe { width: 100%; height: 100%; border: none; }
+                </style>
+            </head>
+            <body>
+                <iframe src="$finalUrl" allowfullscreen></iframe>
+            </body>
+            </html>
+        """.trimIndent()
 
         withContext(Dispatchers.Main) {
             webView = WebView(context).apply {
@@ -287,6 +306,31 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                     } catch(e) {}
                                 }
 
+                                const originalFetch = window.fetch;
+                                window.fetch = async function(...args) {
+                                    const response = await originalFetch.apply(this, args);
+                                    try {
+                                        const clone = response.clone();
+                                        const text = await clone.text();
+                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('mp4') || text.includes('manifest')) {
+                                            window.AndroidBridge.onStreamFound(text, response.url);
+                                        }
+                                    } catch(e) {}
+                                    return response;
+                                };
+                                
+                                const originalXHR = window.XMLHttpRequest.prototype.open;
+                                window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                                    this.addEventListener('load', function() {
+                                        try {
+                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('mp4') || this.responseText.includes('manifest'))) {
+                                                window.AndroidBridge.onStreamFound(this.responseText, url);
+                                            }
+                                        } catch(e) {}
+                                    });
+                                    return originalXHR.apply(this, [method, url, ...args]);
+                                };
+
                                 setInterval(autoPlay, 200);
                             })();
                         """.trimIndent()
@@ -310,11 +354,18 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     }
                 }
 
-                loadUrl(finalUrl, mapOf("Referer" to (referer ?: "$mainUrl/")))
+                loadDataWithBaseURL("https://sinematv.az/", htmlData, "text/html", "UTF-8", null)
             }
         }
 
-        delay(15_000L)
+        var elapsed = 0L
+        while (elapsed < 15000L) {
+            delay(300L)
+            elapsed += 300L
+            if (foundStream.get() && elapsed >= 2000L) {
+                break
+            }
+        }
 
         withContext(Dispatchers.Main) {
             try {

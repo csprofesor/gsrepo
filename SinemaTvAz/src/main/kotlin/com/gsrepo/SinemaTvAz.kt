@@ -187,13 +187,22 @@ class SinemaTvAz : MainAPI() {
                 return@forEach
             }
 
-            val playerUrl = fixUrl(src) ?: return@forEach
+            val playerUrl = fixUrl(src)
+            if (playerUrl.isEmpty()) return@forEach
             foundAny = true
             val context = SinemaTvAzPlugin.pluginContext
             if (context != null) {
                 SinemaTvAzWebViewExtractor(context).getUrl(playerUrl, data, subtitleCallback, callback)
             } else {
                 loadExtractor(playerUrl, data, subtitleCallback, callback)
+            }
+        }
+
+        if (!foundAny) {
+            val context = SinemaTvAzPlugin.pluginContext
+            if (context != null) {
+                SinemaTvAzWebViewExtractor(context).getUrl(data, data, subtitleCallback, callback)
+                foundAny = true
             }
         }
 
