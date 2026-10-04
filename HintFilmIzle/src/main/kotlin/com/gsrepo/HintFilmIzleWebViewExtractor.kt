@@ -2,7 +2,6 @@ package com.gsrepo
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -23,7 +22,70 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+
+object LocalM3u8Server {
+    private var serverSocket: ServerSocket? = null
+    private var activePort: Int = 0
+    private val playlists = ConcurrentHashMap<String, String>()
+
+    @Synchronized
+    fun registerPlaylist(id: String, m3u8Content: String): String {
+        if (serverSocket == null || serverSocket!!.isClosed) {
+            runCatching {
+                serverSocket = ServerSocket(0) // bind auto open port
+                activePort = serverSocket!!.localPort
+                Log.d("LocalM3u8Server", "SERVER_STARTED_PORT=$activePort")
+                GlobalScope.launch(Dispatchers.IO) {
+                    while (serverSocket != null && !serverSocket!!.isClosed) {
+                        try {
+                            val socket = serverSocket!!.accept()
+                            GlobalScope.launch(Dispatchers.IO) {
+                                handleClient(socket)
+                            }
+                        } catch (e: Exception) {
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        playlists[id] = m3u8Content
+        return "http://127.0.0.1:$activePort/m3u8/$id.m3u8"
+    }
+
+    private fun handleClient(socket: Socket) {
+        runCatching {
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+            val firstLine = reader.readLine() ?: return
+            val path = firstLine.substringAfter("GET ").substringBefore(" HTTP")
+            val id = path.substringAfter("/m3u8/").substringBefore(".m3u8")
+            val content = playlists[id]
+
+            val out = socket.getOutputStream()
+            if (content != null) {
+                val bytes = content.toByteArray(Charsets.UTF_8)
+                val head = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: application/vnd.apple.mpegurl\r\n" +
+                        "Content-Length: ${bytes.size}\r\n" +
+                        "Access-Control-Allow-Origin: *\r\n" +
+                        "Connection: close\r\n\r\n"
+                out.write(head.toByteArray(Charsets.UTF_8))
+                out.write(bytes)
+            } else {
+                val head = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                out.write(head.toByteArray(Charsets.UTF_8))
+            }
+            out.flush()
+            socket.close()
+        }
+    }
+}
 
 class HintFilmIzleWebViewExtractor(private val context: Context, private val pluginName: String) : ExtractorApi() {
     override val name = "HintFilmİzle WebView"
@@ -62,8 +124,8 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
 
                         if (!foundStream.getAndSet(true)) {
                             val streamUrl = if (body.startsWith("#EXTM3U")) {
-                                val base64 = Base64.encodeToString(body.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-                                "data:application/vnd.apple.mpegurl;base64,$base64"
+                                val id = System.currentTimeMillis().toString()
+                                LocalM3u8Server.registerPlaylist(id, body)
                             } else {
                                 body
                             }
@@ -220,14 +282,14 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                     val respText = app.get(reqUrl, headers = mapOf("Referer" to "$mainUrl/", "Origin" to mainUrl)).text
                                     if (respText.startsWith("#EXTM3U")) {
                                         if (!foundStream.getAndSet(true)) {
-                                            val base64 = Base64.encodeToString(respText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-                                            val dataUri = "data:application/vnd.apple.mpegurl;base64,$base64"
-                                            Log.d("HintFilmIzleWebView", "EMITTING_DIRECT_EXTM3U_STREAM=$reqUrl")
+                                            val id = System.currentTimeMillis().toString()
+                                            val proxyUrl = LocalM3u8Server.registerPlaylist(id, respText)
+                                            Log.d("HintFilmIzleWebView", "EMITTING_DIRECT_EXTM3U_PROXY_STREAM=$proxyUrl")
                                             callback.invoke(
                                                 newExtractorLink(
                                                     source = pluginName,
                                                     name = pluginName,
-                                                    url = dataUri,
+                                                    url = proxyUrl,
                                                     type = ExtractorLinkType.M3U8
                                                 ) {
                                                     this.quality = Qualities.P1080.value
