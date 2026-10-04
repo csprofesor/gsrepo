@@ -83,6 +83,7 @@ class DiziGom : MainAPI() {
 
     private fun cleanUrl(value: String?): String? = value
         ?.replace("\\/", "/")
+        ?.replace("\\\\u0026", "&")
         ?.replace("\\u0026", "&")
         ?.replace("&amp;", "&")
         ?.trim()
@@ -249,6 +250,24 @@ class DiziGom : MainAPI() {
 
     private fun extractPlayerUrls(document: Document): List<String> {
         val candidates = mutableListOf<String>()
+
+        document.select("[data-pv]").forEach { element ->
+            val pv = element.attr("data-pv")
+            if (pv.isNotBlank()) {
+                var domain = "https://play2.pilavyerplay.top"
+                for (s in document.select("script[src]")) {
+                    val src = s.attr("src")
+                    if (src.contains("pilavyer") || src.contains("play2") || src.contains("core.js") || src.contains("c.js")) {
+                        val match = Regex("""(https?://[^/]+)""").find(src)
+                        if (match != null) {
+                            domain = match.groupValues[1]
+                            break
+                        }
+                    }
+                }
+                candidates.add("$domain/assets/js/s.php?s=$pv")
+            }
+        }
 
         document.select("iframe[src], iframe[data-src], iframe[data-lazy-src], frame[src], [data-embed], [data-player], [data-url], [data-frame]").forEach { element ->
             val src = cleanUrl(
