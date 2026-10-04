@@ -167,16 +167,20 @@ class XPrime : MainAPI() {
         val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         val movie: XMovie = objectMapper.readValue(document.text)
-        val subtitleUrl = "https://sub.wyzie.ru/search?id=$id"
-        val subtitleDocument = app.get(subtitleUrl)
-        val subtitles: List<Subtitle> = objectMapper.readValue(subtitleDocument.text)
-        subtitles.forEach { it ->
-            subtitleCallback.invoke(
-                SubtitleFile(
-                    lang = it.display,
-                    url = it.url
+        try {
+            val subtitleUrl = "https://sub.wyzie.ru/search?id=$id"
+            val subtitleDocument = app.get(subtitleUrl)
+            val subtitles: List<Subtitle> = objectMapper.readValue(subtitleDocument.text)
+            subtitles.forEach { it ->
+                subtitleCallback.invoke(
+                    SubtitleFile(
+                        lang = it.display,
+                        url = it.url
+                    )
                 )
-            )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         val serversUrl = "https://backend.xprime.tv/servers"
         val servers = app.get(serversUrl).parsedSafe<Servers>()
