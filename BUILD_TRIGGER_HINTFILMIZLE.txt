@@ -1,1 +1,1 @@
-Decrypt Kinescope encrypted index.m3u8 JSON using in-page window.decryptM3U8Content and emit data URI for ExoPlayer (v44).
+Inject JS bridge directly into iframe's embed.js in shouldInterceptRequest to decrypt Kinescope M3U8 in iframe context (v45).
