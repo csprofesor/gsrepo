@@ -521,21 +521,29 @@ class HintFilmIzle : MainAPI() {
         val ctx = HintFilmIzlePlugin.pluginContext
         for(p in players){
             if (linkCount > 0) break
-            val isKine = p.contains("kinescope", true) || p.contains("kinescopecdn", true) || p.contains("player.hintfilmizle.com", true)
+            val kineId = extractKinescopeId(p)
+            val voParam = Regex("[?&]voiceover=([^&]+)").find(p)?.groupValues?.get(1)
+            val voQuery = if (!voParam.isNullOrBlank()) "&voiceover=$voParam" else ""
+
+            val realUrl = if (!kineId.isNullOrBlank() && (p.contains("kinescope", true) || p.contains("kinescopecdn", true) || p.contains("player.hintfilmizle.com", true))) {
+                "https://river-3-329.kinescopecdn.net/677113747/embed/$kineId?design=3&lang=tr$voQuery"
+            } else p
+
+            val isKine = realUrl.contains("kinescope", true) || realUrl.contains("kinescopecdn", true) || realUrl.contains("player.hintfilmizle.com", true)
             if (isKine) {
                 if (ctx != null) {
                     runCatching {
-                        HintFilmIzleWebViewExtractor(ctx, name).getUrl(p, data, subtitleCallback, wrappedCallback)
+                        HintFilmIzleWebViewExtractor(ctx, name).getUrl(realUrl, data, subtitleCallback, wrappedCallback)
                     }
                 }
                 if (linkCount > 0) break
                 runCatching {
-                    kinescope(p, data, subtitleCallback, wrappedCallback)
+                    kinescope(realUrl, data, subtitleCallback, wrappedCallback)
                 }
                 if (linkCount > 0) break
             } else {
                 runCatching {
-                    loadExtractor(p, data, subtitleCallback, wrappedCallback)
+                    loadExtractor(realUrl, data, subtitleCallback, wrappedCallback)
                 }
                 if (linkCount > 0) break
             }
@@ -598,13 +606,23 @@ class HintFilmIzle : MainAPI() {
             if (scriptData.contains("var cfg =") && scriptData.contains("playerId")) {
                 val idMatch = Regex(""""playerId"\s*:\s*"([^"]+)"""").find(scriptData)
                 val pubMatch = Regex("""setAttribute\('data-publisher-id',\s*'([^']+)'\)""").find(scriptData)
+                    ?: Regex(""""publisherId"\s*:\s*"([^"]+)"""").find(scriptData)
+                val subMatch = Regex(""""voiceoverSub"\s*:\s*"([^"]+)"""").find(scriptData)
+                val dubMatch = Regex(""""voiceoverDub"\s*:\s*"([^"]+)"""").find(scriptData)
+
                 val id = idMatch?.groupValues?.get(1)
                 val pub = pubMatch?.groupValues?.get(1) ?: "677113747"
+                val sub = subMatch?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+                val dub = dubMatch?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+
                 if (!id.isNullOrBlank()) {
+                    if (sub != null) {
+                        add("https://river-3-329.kinescopecdn.net/$pub/embed/$id?voiceover=$sub&design=3&lang=tr")
+                    }
+                    if (dub != null) {
+                        add("https://river-3-329.kinescopecdn.net/$pub/embed/$id?voiceover=$dub&design=3&lang=tr")
+                    }
                     add("https://river-3-329.kinescopecdn.net/$pub/embed/$id?design=3&lang=tr")
-                    add("https://kinescope.io/$id")
-                    add("https://embed.kinescope.io/$id")
-                    add("https://player.hintfilmizle.com/embed/$id")
                 }
             }
         }

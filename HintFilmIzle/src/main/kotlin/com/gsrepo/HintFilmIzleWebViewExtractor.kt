@@ -56,11 +56,11 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                     @JavascriptInterface
                     fun onStreamFound(body: String, reqUrl: String) {
                         Log.d("HintFilmIzleWebView", "BRIDGE_FOUND: $reqUrl")
-                        val m3u8 = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|playlist|manifest|hls)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(body)?.value 
-                            ?: Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|playlist|manifest|hls)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(reqUrl)?.value
+                        val m3u8 = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|/hls/|playlist|manifest)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(body)?.value 
+                            ?: Regex("https?://[^\"'\\s<>]+(?:\\.m3u8|/hls/|playlist|manifest)[^\"'\\s<>]*", RegexOption.IGNORE_CASE).find(reqUrl)?.value
                             ?: reqUrl
 
-                        if ((m3u8.contains("m3u8", true) || m3u8.contains("playlist", true) || m3u8.contains("manifest", true) || m3u8.contains("hls", true)) && !foundStream.getAndSet(true)) {
+                        if ((m3u8.contains("m3u8", true) || m3u8.contains("/hls/", true) || m3u8.contains("playlist", true) || m3u8.contains("manifest", true)) && !foundStream.getAndSet(true)) {
                             Log.d("HintFilmIzleWebView", "EMITTING_STREAM=$m3u8")
                             GlobalScope.launch(Dispatchers.IO) {
                                 callback.invoke(
@@ -71,7 +71,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                         type = ExtractorLinkType.M3U8
                                     ) {
                                         this.quality = Qualities.P1080.value
-                                        this.headers = mapOf("Referer" to "https://kinescope.io/", "Origin" to "https://kinescope.io")
+                                        this.headers = mapOf("Referer" to "$mainUrl/", "Origin" to mainUrl)
                                     }
                                 )
                             }
@@ -88,7 +88,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                     try {
                                         const v = document.querySelector('video');
                                         if (v && v.paused) { v.muted = true; v.play(); }
-                                        const btn = document.querySelector('[role="button"], .kinescope-player button, .play-button');
+                                        const btn = document.querySelector('[role="button"], .kinescope-player button, .play-button, #loading-overlay, #noads-overlay, .loader');
                                         if (btn) btn.click();
                                     } catch(e) {}
                                 }, 300);
@@ -99,7 +99,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                     try {
                                         const clone = response.clone();
                                         const text = await clone.text();
-                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('manifest') || text.includes('hls')) {
+                                        if (response.url.includes('.m3u8') || response.url.includes('/hls/') || text.includes('m3u8') || text.includes('playlist') || text.includes('manifest')) {
                                             window.AndroidBridge.onStreamFound(text, response.url);
                                         }
                                     } catch(e) {}
@@ -110,7 +110,9 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                 window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
                                     this.addEventListener('load', function() {
                                         try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('manifest'))) {
+                                            if (url && (url.includes('.m3u8') || url.includes('/hls/') || url.includes('playlist') || url.includes('manifest'))) {
+                                                window.AndroidBridge.onStreamFound(this.responseText || '', url);
+                                            } else if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('manifest'))) {
                                                 window.AndroidBridge.onStreamFound(this.responseText, url);
                                             }
                                         } catch(e) {}
@@ -122,13 +124,13 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                     try {
                                         const entries = performance.getEntriesByType('resource');
                                         for (let e of entries) {
-                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('playlist') || e.name.includes('manifest'))) {
+                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('/hls/') || e.name.includes('playlist') || e.name.includes('manifest'))) {
                                                 window.AndroidBridge.onStreamFound(e.name, e.name);
                                             }
                                         }
                                     } catch(e) {}
                                 }
-                                setInterval(scanRes, 1000);
+                                setInterval(scanRes, 500);
                             })();
                         """.trimIndent()
                         view?.evaluateJavascript(js, null)
@@ -139,11 +141,11 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                         request: WebResourceRequest?
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
-                        if (reqUrl.contains("ads", true) || reqUrl.contains("analytics", true) || reqUrl.contains("vast", true) || reqUrl.contains("banner", true) || reqUrl.contains("popunder", true) || reqUrl.contains("tracker", true) || reqUrl.contains("pixel", true) || reqUrl.contains("yandex.ru", true)) {
+                        if (reqUrl.contains("ads", true) || reqUrl.contains("analytics", true) || reqUrl.contains("vast", true) || reqUrl.contains("banner", true) || reqUrl.contains("popunder", true) || reqUrl.contains("tracker", true) || reqUrl.contains("pixel", true) || reqUrl.contains("yandex.ru", true) || reqUrl.contains("googletagmanager", true)) {
                             return WebResourceResponse("text/plain", "UTF-8", null)
                         }
 
-                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true) || reqUrl.contains("hls", true)) {
+                        if (reqUrl.contains(".m3u8", true) || reqUrl.contains("/hls/", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true)) {
                             Log.d("HintFilmIzleWebView", "INTERCEPTED_REQ=$reqUrl")
                             if (!foundStream.getAndSet(true)) {
                                 GlobalScope.launch(Dispatchers.IO) {
@@ -155,7 +157,7 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                                             type = ExtractorLinkType.M3U8
                                         ) {
                                             this.quality = Qualities.P1080.value
-                                            this.headers = mapOf("Referer" to "https://kinescope.io/", "Origin" to "https://kinescope.io")
+                                            this.headers = mapOf("Referer" to "$mainUrl/", "Origin" to mainUrl)
                                         }
                                     )
                                 }
@@ -165,12 +167,12 @@ class HintFilmIzleWebViewExtractor(private val context: Context, private val plu
                     }
                 }
 
-                loadUrl(targetUrl, mapOf("Referer" to "$mainUrl/"))
+                loadUrl(targetUrl, mapOf("Referer" to "$mainUrl/", "Origin" to mainUrl))
             }
         }
 
         var elapsed = 0L
-        while (!foundStream.get() && elapsed < 8000L) {
+        while (!foundStream.get() && elapsed < 12000L) {
             delay(200L)
             elapsed += 200L
         }

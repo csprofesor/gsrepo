@@ -1,1 +1,1 @@
-Trigger temporary Kotlin escape fix.
+Fix Kinescope embed DNS and player extraction for HintFilmIzle.
