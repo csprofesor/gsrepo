@@ -9,7 +9,6 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import org.json.JSONObject
-import okhttp3.*
 
 class SetFilmIzle : MainAPI() {
     override var mainUrl              = "https://www.setfilmizle.ltd"
@@ -185,33 +184,6 @@ class SetFilmIzle : MainAPI() {
         }
     }
 
-    private fun sendMultipartRequest(nonce: String, postId: String, playerName: String, partKey: String, referer: String): Response {
-        val formData = mapOf(
-            "action"      to "get_video_url",
-            "nonce"       to nonce,
-            "post_id"     to postId,
-            "player_name" to playerName,
-            "part_key"    to partKey
-        )
-
-        val requestBody = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
-            formData.forEach { (key, value) -> addFormDataPart(key, value) }
-        }.build()
-
-        val headers = mapOf(
-            "Referer"          to referer,
-            "X-Requested-With" to "XMLHttpRequest"
-        )
-
-        val request = Request.Builder().url("${mainUrl}/wp-admin/admin-ajax.php").post(requestBody).apply {
-            headers.forEach { (key, value) -> addHeader(key, value) }
-        }.build()
-
-        val client = OkHttpClient()
-
-        return client.newCall(request).execute()
-    }
-
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -246,8 +218,25 @@ class SetFilmIzle : MainAPI() {
             if (sourceId.contains("event")) return@forEach
             if (sourceId.isEmpty()) return@forEach
 
-            val multiPart = sendMultipartRequest(nonce, sourceId, name, partKey ?: "", data)
-            val sourceBody = multiPart.body.string()
+            val sourceBody = try {
+                app.post(
+                    url = "${mainUrl}/wp-admin/admin-ajax.php",
+                    data = mapOf(
+                        "action" to "get_video_url",
+                        "nonce" to nonce,
+                        "post_id" to sourceId,
+                        "player_name" to name,
+                        "part_key" to (partKey ?: "")
+                    ),
+                    headers = mapOf(
+                        "Referer" to data,
+                        "X-Requested-With" to "XMLHttpRequest"
+                    )
+                ).text
+            } catch (e: Exception) {
+                Log.e("STF", "Ajax error: ${e.message}")
+                ""
+            }
 
             val json = try { JSONObject(sourceBody) } catch (_: Exception) { null }
             val dataObj = json?.optJSONObject("data")

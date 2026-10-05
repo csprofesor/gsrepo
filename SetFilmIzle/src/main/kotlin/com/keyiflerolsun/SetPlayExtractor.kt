@@ -11,7 +11,7 @@ open class SetPlay : ExtractorApi() {
     override val mainUrl         = "https://setplay.shop"
     override val requiresReferer = true
 
-    private fun calcXSp(sp: String, spT: Long): String {
+    private fun calcXSp(sp: String, spT: Long, offsetSeconds: Long = 0): String {
         val chars = "0123456789abcdefghijklmnopqrstuvwxyz"
         var num = (Math.random() * 2176782336).toLong()
         var r = ""
@@ -21,18 +21,21 @@ open class SetPlay : ExtractorApi() {
         }
         if (r.isEmpty()) r = "0"
 
-        val s = "$sp|$spT|$r"
+        val tNow = spT + offsetSeconds
+        val s = "$sp|$tNow|$r"
         var t = 2166136261L
         for (char in s) {
             t = t xor char.code.toLong()
             t = (t * 16777619L) and 0xFFFFFFFFL
         }
         val hashHex = (t and 0xFFFFFFFFL).toString(16)
-        return "$spT.$r.$hashHex"
+        return "$tNow.$r.$hashHex"
     }
 
     override suspend fun getUrl(url: String, referer: String?, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
         val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        val startTime = System.currentTimeMillis()
+
         val response = app.get(
             url = url,
             headers = mapOf(
@@ -106,14 +109,16 @@ open class SetPlay : ExtractorApi() {
             }
         }
 
-        val xSp1 = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
+        fun elapsedSec(): Long = (System.currentTimeMillis() - startTime) / 1000
+
+        val xSpNow = if (sp.isNotEmpty()) calcXSp(sp, spT, elapsedSec()) else ""
         val masterText = try {
             app.get(
                 url = m3uLink,
                 headers = mapOf(
                     "Referer" to targetUrl,
                     "User-Agent" to userAgent,
-                    "X-Sp" to xSp1
+                    "X-Sp" to xSpNow
                 )
             ).text
         } catch (_: Exception) {
@@ -133,38 +138,14 @@ open class SetPlay : ExtractorApi() {
         var foundStream = false
         if (subUrls.isNotEmpty()) {
             subUrls.forEach { subUrl ->
-                val xSp2 = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
-                val subHeaders = mapOf(
-                    "Referer" to targetUrl,
-                    "User-Agent" to userAgent,
-                    "X-Sp" to xSp2
-                )
+                val currentElapsed = elapsedSec()
 
-                val subText = try {
-                    app.get(subUrl, headers = subHeaders).text
-                } catch (_: Exception) {
-                    ""
-                }
-
-                if (subText.contains("#EXTM3U") && (subText.contains("http") || subText.contains(".png") || subText.contains(".ts"))) {
-                    foundStream = true
-
-                    val dataB64 = Base64.encodeToString(subText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-                    val dataUri = "data:application/vnd.apple.mpegurl;base64,$dataB64"
-
-                    callback.invoke(
-                        newExtractorLink(
-                            source = this.name,
-                            name = "${this.name} (Direct)",
-                            url = dataUri,
-                            type = ExtractorLinkType.M3U8
-                        ) {
-                            quality = Qualities.Unknown.value
-                            headers = mapOf(
-                                "Referer" to "https://fastplay.mom/",
-                                "User-Agent" to userAgent
-                            )
-                        }
+                listOf(3L, 6L, 0L).forEach { offset ->
+                    val xSpFuture = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed + offset) else ""
+                    val subHeaders = mapOf(
+                        "Referer" to targetUrl,
+                        "User-Agent" to userAgent,
+                        "X-Sp" to xSpFuture
                     )
 
                     val links = M3u8Helper.generateM3u8(
@@ -173,38 +154,44 @@ open class SetPlay : ExtractorApi() {
                         referer = targetUrl,
                         headers = subHeaders
                     )
-                    links.forEach(callback)
+                    if (links.isNotEmpty()) {
+                        foundStream = true
+                        links.forEach(callback)
+                    }
                 }
             }
         }
 
         if (!foundStream) {
-            val xSpFallback = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
-            val fallbackHeaders = mapOf(
-                "Referer" to targetUrl,
-                "User-Agent" to userAgent,
-                "X-Sp" to xSpFallback
-            )
-            val links = M3u8Helper.generateM3u8(
-                source = this.name,
-                streamUrl = m3uLink,
-                referer = targetUrl,
-                headers = fallbackHeaders
-            )
-            if (links.isNotEmpty()) {
-                links.forEach(callback)
-            } else {
-                callback.invoke(
-                    newExtractorLink(
-                        source = this.name,
-                        name = this.name,
-                        url = m3uLink,
-                        type = ExtractorLinkType.M3U8
-                    ) {
-                        quality = Qualities.Unknown.value
-                        headers = fallbackHeaders
-                    }
+            val currentElapsed = elapsedSec()
+            listOf(3L, 0L).forEach { offset ->
+                val xSpFallback = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed + offset) else ""
+                val fallbackHeaders = mapOf(
+                    "Referer" to targetUrl,
+                    "User-Agent" to userAgent,
+                    "X-Sp" to xSpFallback
                 )
+                val links = M3u8Helper.generateM3u8(
+                    source = this.name,
+                    streamUrl = m3uLink,
+                    referer = targetUrl,
+                    headers = fallbackHeaders
+                )
+                if (links.isNotEmpty()) {
+                    links.forEach(callback)
+                } else {
+                    callback.invoke(
+                        newExtractorLink(
+                            source = this.name,
+                            name = this.name,
+                            url = m3uLink,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = fallbackHeaders
+                        }
+                    )
+                }
             }
         }
     }
