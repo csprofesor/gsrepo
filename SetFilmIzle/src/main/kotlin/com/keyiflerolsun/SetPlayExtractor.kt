@@ -108,17 +108,17 @@ open class SetPlay : ExtractorApi() {
 
         val xSp = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
         val headersMap = mapOf(
-            "Referer" to "https://fastplay.mom/",
+            "Referer" to targetUrl,
             "User-Agent" to userAgent,
             "X-Sp" to xSp
         )
 
-        Log.d("SetPlay", "M3U8 Link » $m3uLink")
+        Log.d("SetPlay", "M3U8 Link » $m3uLink with referer » $targetUrl")
 
         val links = M3u8Helper.generateM3u8(
             source = this.name,
             streamUrl = m3uLink,
-            referer = "https://fastplay.mom/",
+            referer = targetUrl,
             headers = headersMap
         )
 
