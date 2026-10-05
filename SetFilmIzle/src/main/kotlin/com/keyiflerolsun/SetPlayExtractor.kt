@@ -125,66 +125,73 @@ open class SetPlay : ExtractorApi() {
             ""
         }
 
-        val subUrls = mutableListOf<String>()
+        val streams = mutableListOf<Pair<String, Int>>()
+
         if (masterText.isNotEmpty()) {
-            masterText.split("\n").forEach { line ->
-                val trimmed = line.trim()
-                if (trimmed.startsWith("http") && (trimmed.contains("video~") || trimmed.contains("master"))) {
-                    subUrls.add(trimmed)
+            if (masterText.contains("#EXTINF")) {
+                val qual = getQualityFromUrl(m3uLink)
+                streams.add(Pair(m3uLink, qual))
+            } else {
+                val lines = masterText.split("\n")
+                var lastQuality = Qualities.Unknown.value
+
+                for (line in lines) {
+                    val trimmed = line.trim()
+                    if (trimmed.isEmpty()) continue
+
+                    if (trimmed.startsWith("#EXT-X-STREAM-INF")) {
+                        val resMatch = Regex("""RESOLUTION=\d+x(\d+)""", RegexOption.IGNORE_CASE).find(trimmed)
+                        if (resMatch != null) {
+                            val height = resMatch.groupValues[1].toIntOrNull()
+                            if (height != null) {
+                                lastQuality = height
+                            }
+                        }
+                    } else if (!trimmed.startsWith("#")) {
+                        val absoluteUrl = when {
+                            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+                            trimmed.startsWith("/") -> "https://fastplay.mom$trimmed"
+                            else -> m3uLink.substringBeforeLast("/") + "/" + trimmed
+                        }
+
+                        val quality = if (lastQuality != Qualities.Unknown.value) {
+                            lastQuality
+                        } else {
+                            getQualityFromUrl(absoluteUrl)
+                        }
+
+                        streams.add(Pair(absoluteUrl, quality))
+                        lastQuality = Qualities.Unknown.value
+                    }
                 }
             }
         }
 
-        var foundStream = false
-        if (subUrls.isNotEmpty()) {
-            subUrls.forEach { subUrl ->
+        if (streams.isNotEmpty()) {
+            streams.forEach { (streamUrl, quality) ->
                 val currentElapsed = elapsedSec()
                 val xSpFuture = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed) else ""
-                val subHeaders = mapOf(
+                val headersMap = mapOf(
                     "Referer" to targetUrl,
                     "User-Agent" to userAgent,
                     "X-Sp" to xSpFuture
                 )
 
-                val subText = try {
-                    app.get(subUrl, headers = subHeaders).text
-                } catch (_: Exception) {
-                    ""
-                }
-
-                if (subText.contains("#EXTM3U") && (subText.contains(".png") || subText.contains(".ts"))) {
-                    foundStream = true
-                    
-                    val dataB64 = Base64.encodeToString(subText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-                    val dataUri = "data:application/vnd.apple.mpegurl;base64,$dataB64"
-
-                    callback.invoke(
-                        newExtractorLink(
-                            source = this.name,
-                            name = this.name,
-                            url = dataUri,
-                            type = ExtractorLinkType.M3U8
-                        ) {
-                            quality = Qualities.Unknown.value
-                            headers = mapOf(
-                                "Referer" to "https://fastplay.mom/",
-                                "User-Agent" to userAgent
-                            )
-                        }
-                    )
-                }
+                callback.invoke(
+                    newExtractorLink(
+                        source = this.name,
+                        name = this.name,
+                        url = streamUrl,
+                        type = ExtractorLinkType.M3U8
+                    ) {
+                        this.quality = quality
+                        this.headers = headersMap
+                    }
+                )
             }
-        }
-
-        if (!foundStream) {
+        } else {
             val currentElapsed = elapsedSec()
             val xSpFallback = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed) else ""
-            val fallbackHeaders = mapOf(
-                "Referer" to targetUrl,
-                "User-Agent" to userAgent,
-                "X-Sp" to xSpFallback
-            )
-            
             callback.invoke(
                 newExtractorLink(
                     source = this.name,
@@ -192,10 +199,24 @@ open class SetPlay : ExtractorApi() {
                     url = m3uLink,
                     type = ExtractorLinkType.M3U8
                 ) {
-                    quality = Qualities.Unknown.value
-                    headers = fallbackHeaders
+                    this.quality = Qualities.Unknown.value
+                    this.headers = mapOf(
+                        "Referer" to targetUrl,
+                        "User-Agent" to userAgent,
+                        "X-Sp" to xSpFallback
+                    )
                 }
             )
+        }
+    }
+
+    private fun getQualityFromUrl(url: String): Int {
+        return when {
+            url.contains("1080") -> Qualities.P1080.value
+            url.contains("720") -> Qualities.P720.value
+            url.contains("480") -> Qualities.P480.value
+            url.contains("360") -> Qualities.P360.value
+            else -> Qualities.Unknown.value
         }
     }
 }
