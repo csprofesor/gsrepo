@@ -19,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -35,10 +34,22 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
 
     private fun isJunkUrl(url: String): Boolean {
         val lower = url.lowercase()
+        val path = lower.substringBefore("?").substringBefore("#")
+
+        if (path.endsWith(".m3u8") ||
+            path.endsWith(".mp4") ||
+            lower.contains(".m3u8") ||
+            lower.contains("storage.googleapis.com") ||
+            lower.contains("vkvideo.cloud") ||
+            lower.contains("vk.com") ||
+            lower.contains("vk.ru")
+        ) {
+            return false
+        }
+
         if (lower.contains("google-analytics") ||
             lower.contains("googletagmanager") ||
             lower.contains("google.com/g/collect") ||
-            lower.contains("googleapis.com") ||
             lower.contains("yandex") ||
             lower.contains("mc.yandex") ||
             lower.contains("metrika") ||
@@ -62,7 +73,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
             return true
         }
 
-        val path = lower.substringBefore("?")
         if (path.endsWith(".js") ||
             path.endsWith(".css") ||
             path.endsWith(".png") ||
@@ -93,6 +103,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
             val lower = streamUrl.lowercase()
             val streamReferer = when {
                 lower.contains("vkvideo") || lower.contains("vk.com") || lower.contains("vk.ru") -> "https://vk.com/"
+                lower.contains("storage.googleapis.com") -> "https://cdn1.sinematv.az/"
                 lower.contains("abyss.to") -> "https://abyss.to/"
                 lower.contains("cdn2.sinematv.az") -> "https://cdn2.sinematv.az/"
                 lower.contains("cdn.sinematv.az") || lower.contains("cdn1.sinematv.az") -> "https://sinematv.az/"
@@ -143,14 +154,14 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     } catch (e: Exception) {
                         Log.e("SinemaTvAzWebView", "API JSON fetch failed for $fixStream", e)
                     }
-                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || lower.contains(".m3u8") || lower.contains("playlist")) {
+                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || lower.contains(".m3u8") || lower.contains("storage.googleapis.com") || lower.contains("vkvideo.cloud") || lower.contains("playlist")) {
                     foundStream.set(true)
                     callback.invoke(
                         newExtractorLink(
                             source = "SinemaTvAzWebView",
                             name = "SinemaTvAz",
                             url = fixStream,
-                            type = if (path.endsWith(".mp4")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
+                            type = if (path.endsWith(".mp4") || lower.contains("storage.googleapis.com")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
                         ) {
                             this.quality = Qualities.Unknown.value
                             this.headers = getHeadersForStream(fixStream)
@@ -200,6 +211,10 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                         const iframes = document.querySelectorAll('iframe');
                                         iframes.forEach(f => {
                                             try {
+                                                const ds = f.getAttribute('data-src');
+                                                if (ds && (!f.src || f.src === 'about:blank')) {
+                                                    f.src = ds;
+                                                }
                                                 if (f.contentDocument) docs.push(f.contentDocument);
                                                 else if (f.contentWindow && f.contentWindow.document) docs.push(f.contentWindow.document);
                                             } catch(e) {}
@@ -293,31 +308,23 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     ): WebResourceResponse? {
                         val reqUrl = request?.url?.toString() ?: ""
 
-                        if (reqUrl.contains("cdn.sinematv.az") || reqUrl.contains("cdn1.sinematv.az") || reqUrl.contains("cdn2.sinematv.az")) {
-                            if (request?.method?.equals("GET", ignoreCase = true) == true && (reqUrl.contains("?v=") || reqUrl.contains("/?v="))) {
-                                try {
-                                    val html = runBlocking {
-                                        app.get(reqUrl, headers = mapOf("User-Agent" to defaultUserAgent, "Referer" to "$mainUrl/")).text
-                                    }
-                                    var cleanHtml = html
-                                    if (cleanHtml.contains("window.location")) {
-                                        cleanHtml = cleanHtml.replace("window.location = \"https://abyss.to\";", "// bypassed redirect")
-                                            .replace(Regex("""window\.location\s*=\s*["']https?://abyss\.to["'];?"""), "// bypassed redirect")
-                                    }
-                                    return WebResourceResponse(
-                                        "text/html",
-                                        "UTF-8",
-                                        cleanHtml.byteInputStream(Charsets.UTF_8)
-                                    )
-                                } catch (e: Exception) {
-                                    Log.e("SinemaTvAzWebView", "Failed to intercept and clean player HTML", e)
-                                }
-                            }
-                        }
-
                         if (!isJunkUrl(reqUrl)) {
                             val path = reqUrl.substringBefore("?").lowercase()
-                            if (path.endsWith(".m3u8") || path.endsWith(".mp4") || path.contains("master.m3u8") || path.contains("index.m3u8") || path.contains("playlist") || path.contains("manifest") || reqUrl.contains("parsed.json") || reqUrl.contains("catalog-api") || reqUrl.contains("balancer-api") || reqUrl.contains("proxy/playlists") || reqUrl.contains("vv-api.php") || reqUrl.contains("api/v1/player")) {
+                            if (path.endsWith(".m3u8") ||
+                                path.endsWith(".mp4") ||
+                                path.contains("master.m3u8") ||
+                                path.contains("index.m3u8") ||
+                                path.contains("playlist") ||
+                                path.contains("manifest") ||
+                                reqUrl.contains("storage.googleapis.com") ||
+                                reqUrl.contains("vkvideo.cloud") ||
+                                reqUrl.contains("parsed.json") ||
+                                reqUrl.contains("catalog-api") ||
+                                reqUrl.contains("balancer-api") ||
+                                reqUrl.contains("proxy/playlists") ||
+                                reqUrl.contains("vv-api.php") ||
+                                reqUrl.contains("api/v1/player")
+                            ) {
                                 emitStream(reqUrl)
                             }
                         }

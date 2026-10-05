@@ -170,8 +170,13 @@ class SinemaTvAz : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data, headers = browserHeaders, referer = "$mainUrl/").document
+        val context = SinemaTvAzPlugin.pluginContext
+        if (context != null) {
+            SinemaTvAzWebViewExtractor(context).getUrl(data, data, subtitleCallback, callback)
+            return true
+        }
 
+        val document = app.get(data, headers = browserHeaders, referer = "$mainUrl/").document
         val iframes = document.select("iframe")
         var foundAny = false
 
@@ -190,20 +195,7 @@ class SinemaTvAz : MainAPI() {
             val playerUrl = fixUrl(src)
             if (playerUrl.isEmpty()) return@forEach
             foundAny = true
-            val context = SinemaTvAzPlugin.pluginContext
-            if (context != null) {
-                SinemaTvAzWebViewExtractor(context).getUrl(playerUrl, data, subtitleCallback, callback)
-            } else {
-                loadExtractor(playerUrl, data, subtitleCallback, callback)
-            }
-        }
-
-        if (!foundAny) {
-            val context = SinemaTvAzPlugin.pluginContext
-            if (context != null) {
-                SinemaTvAzWebViewExtractor(context).getUrl(data, data, subtitleCallback, callback)
-                foundAny = true
-            }
+            loadExtractor(playerUrl, data, subtitleCallback, callback)
         }
 
         return foundAny
