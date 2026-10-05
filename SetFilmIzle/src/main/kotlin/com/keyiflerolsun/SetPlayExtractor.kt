@@ -106,36 +106,80 @@ open class SetPlay : ExtractorApi() {
             }
         }
 
-        val xSp = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
-        val headersMap = mapOf(
-            "Referer" to targetUrl,
-            "User-Agent" to userAgent,
-            "X-Sp" to xSp
-        )
+        val xSp1 = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
+        val masterText = try {
+            app.get(
+                url = m3uLink,
+                headers = mapOf(
+                    "Referer" to targetUrl,
+                    "User-Agent" to userAgent,
+                    "X-Sp" to xSp1
+                )
+            ).text
+        } catch (_: Exception) {
+            ""
+        }
 
-        Log.d("SetPlay", "M3U8 Link » $m3uLink with referer » $targetUrl")
-
-        val links = M3u8Helper.generateM3u8(
-            source = this.name,
-            streamUrl = m3uLink,
-            referer = targetUrl,
-            headers = headersMap
-        )
-
-        if (links.isNotEmpty()) {
-            links.forEach(callback)
-        } else {
-            callback.invoke(
-                newExtractorLink(
-                    source = this.name,
-                    name = this.name,
-                    url = m3uLink,
-                    type = ExtractorLinkType.M3U8
-                ) {
-                    quality = Qualities.Unknown.value
-                    headers = headersMap
+        val subUrls = mutableListOf<String>()
+        if (masterText.isNotEmpty()) {
+            masterText.split("\n").forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.startsWith("http") && (trimmed.contains("video~") || trimmed.contains("master"))) {
+                    subUrls.add(trimmed)
                 }
+            }
+        }
+
+        var foundStream = false
+        if (subUrls.isNotEmpty()) {
+            subUrls.forEach { subUrl ->
+                val xSp2 = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
+                val subHeaders = mapOf(
+                    "Referer" to targetUrl,
+                    "User-Agent" to userAgent,
+                    "X-Sp" to xSp2
+                )
+                val links = M3u8Helper.generateM3u8(
+                    source = this.name,
+                    streamUrl = subUrl,
+                    referer = targetUrl,
+                    headers = subHeaders
+                )
+                if (links.isNotEmpty()) {
+                    foundStream = true
+                    links.forEach(callback)
+                }
+            }
+        }
+
+        if (!foundStream) {
+            val xSpFallback = if (sp.isNotEmpty()) calcXSp(sp, spT) else ""
+            val fallbackHeaders = mapOf(
+                "Referer" to targetUrl,
+                "User-Agent" to userAgent,
+                "X-Sp" to xSpFallback
             )
+            val links = M3u8Helper.generateM3u8(
+                source = this.name,
+                streamUrl = m3uLink,
+                referer = targetUrl,
+                headers = fallbackHeaders
+            )
+            if (links.isNotEmpty()) {
+                links.forEach(callback)
+            } else {
+                callback.invoke(
+                    newExtractorLink(
+                        source = this.name,
+                        name = this.name,
+                        url = m3uLink,
+                        type = ExtractorLinkType.M3U8
+                    ) {
+                        quality = Qualities.Unknown.value
+                        headers = fallbackHeaders
+                    }
+                )
+            }
         }
     }
 }
