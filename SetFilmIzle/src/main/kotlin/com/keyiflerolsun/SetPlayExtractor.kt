@@ -139,60 +139,63 @@ open class SetPlay : ExtractorApi() {
         if (subUrls.isNotEmpty()) {
             subUrls.forEach { subUrl ->
                 val currentElapsed = elapsedSec()
+                val xSpFuture = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed) else ""
+                val subHeaders = mapOf(
+                    "Referer" to targetUrl,
+                    "User-Agent" to userAgent,
+                    "X-Sp" to xSpFuture
+                )
 
-                listOf(3L, 6L, 0L).forEach { offset ->
-                    val xSpFuture = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed + offset) else ""
-                    val subHeaders = mapOf(
-                        "Referer" to targetUrl,
-                        "User-Agent" to userAgent,
-                        "X-Sp" to xSpFuture
-                    )
+                val subText = try {
+                    app.get(subUrl, headers = subHeaders).text
+                } catch (_: Exception) {
+                    ""
+                }
 
-                    val links = M3u8Helper.generateM3u8(
-                        source = this.name,
-                        streamUrl = subUrl,
-                        referer = targetUrl,
-                        headers = subHeaders
+                if (subText.contains("#EXTM3U") && (subText.contains(".png") || subText.contains(".ts"))) {
+                    foundStream = true
+                    
+                    val dataB64 = Base64.encodeToString(subText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                    val dataUri = "data:application/vnd.apple.mpegurl;base64,$dataB64"
+
+                    callback.invoke(
+                        newExtractorLink(
+                            source = this.name,
+                            name = this.name,
+                            url = dataUri,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = mapOf(
+                                "Referer" to "https://fastplay.mom/",
+                                "User-Agent" to userAgent
+                            )
+                        }
                     )
-                    if (links.isNotEmpty()) {
-                        foundStream = true
-                        links.forEach(callback)
-                    }
                 }
             }
         }
 
         if (!foundStream) {
             val currentElapsed = elapsedSec()
-            listOf(3L, 0L).forEach { offset ->
-                val xSpFallback = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed + offset) else ""
-                val fallbackHeaders = mapOf(
-                    "Referer" to targetUrl,
-                    "User-Agent" to userAgent,
-                    "X-Sp" to xSpFallback
-                )
-                val links = M3u8Helper.generateM3u8(
+            val xSpFallback = if (sp.isNotEmpty()) calcXSp(sp, spT, currentElapsed) else ""
+            val fallbackHeaders = mapOf(
+                "Referer" to targetUrl,
+                "User-Agent" to userAgent,
+                "X-Sp" to xSpFallback
+            )
+            
+            callback.invoke(
+                newExtractorLink(
                     source = this.name,
-                    streamUrl = m3uLink,
-                    referer = targetUrl,
+                    name = this.name,
+                    url = m3uLink,
+                    type = ExtractorLinkType.M3U8
+                ) {
+                    quality = Qualities.Unknown.value
                     headers = fallbackHeaders
-                )
-                if (links.isNotEmpty()) {
-                    links.forEach(callback)
-                } else {
-                    callback.invoke(
-                        newExtractorLink(
-                            source = this.name,
-                            name = this.name,
-                            url = m3uLink,
-                            type = ExtractorLinkType.M3U8
-                        ) {
-                            quality = Qualities.Unknown.value
-                            headers = fallbackHeaders
-                        }
-                    )
                 }
-            }
+            )
         }
     }
 }
