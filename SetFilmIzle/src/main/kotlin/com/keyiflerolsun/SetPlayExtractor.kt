@@ -139,14 +139,40 @@ open class SetPlay : ExtractorApi() {
                     "User-Agent" to userAgent,
                     "X-Sp" to xSp2
                 )
-                val links = M3u8Helper.generateM3u8(
-                    source = this.name,
-                    streamUrl = subUrl,
-                    referer = targetUrl,
-                    headers = subHeaders
-                )
-                if (links.isNotEmpty()) {
+
+                val subText = try {
+                    app.get(subUrl, headers = subHeaders).text
+                } catch (_: Exception) {
+                    ""
+                }
+
+                if (subText.contains("#EXTM3U") && (subText.contains("http") || subText.contains(".png") || subText.contains(".ts"))) {
                     foundStream = true
+
+                    val dataB64 = Base64.encodeToString(subText.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+                    val dataUri = "data:application/vnd.apple.mpegurl;base64,$dataB64"
+
+                    callback.invoke(
+                        newExtractorLink(
+                            source = this.name,
+                            name = "${this.name} (Direct)",
+                            url = dataUri,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            quality = Qualities.Unknown.value
+                            headers = mapOf(
+                                "Referer" to "https://fastplay.mom/",
+                                "User-Agent" to userAgent
+                            )
+                        }
+                    )
+
+                    val links = M3u8Helper.generateM3u8(
+                        source = this.name,
+                        streamUrl = subUrl,
+                        referer = targetUrl,
+                        headers = subHeaders
+                    )
                     links.forEach(callback)
                 }
             }
