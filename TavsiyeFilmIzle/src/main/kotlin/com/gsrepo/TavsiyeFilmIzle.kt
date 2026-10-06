@@ -15,6 +15,10 @@ class TavsiyeFilmIzle : MainAPI() {
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.Movie, TvType.TvSeries)
 
+    companion object {
+        private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
     override val mainPage = mainPageOf(
         "${mainUrl}/category/tavsiye-filmler"             to "Tavsiye Filmler",
         "${mainUrl}/category/trendler"                     to "Popüler Filmler",
@@ -44,7 +48,7 @@ class TavsiyeFilmIzle : MainAPI() {
         } else {
             "${request.data}/page/$page/"
         }
-        val document = app.get(pageUrl).document
+        val document = app.get(pageUrl, headers = mapOf("User-Agent" to DESKTOP_UA)).document
         val home     = document.select("div.movie-preview").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(request.name, home)
@@ -65,14 +69,14 @@ class TavsiyeFilmIzle : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("${mainUrl}/?s=${query}").document
+        val document = app.get("${mainUrl}/?s=${query}", headers = mapOf("User-Agent" to DESKTOP_UA)).document
         return document.select("div.movie-preview").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val response = app.get(url)
+        val response = app.get(url, headers = mapOf("User-Agent" to DESKTOP_UA))
         val document = response.document
 
         val rawTitle = document.selectFirst("h1")?.text()?.trim()
@@ -165,12 +169,12 @@ class TavsiyeFilmIzle : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         Log.d("TavsiyeFilmIzle", "loadLinks data » $data")
-        val document = app.get(data).document
+        val document = app.get(data, headers = mapOf("User-Agent" to DESKTOP_UA)).document
 
         val candidatePages = mutableListOf<String>()
         candidatePages.add(data)
 
-        val partLinks = document.select("div.keremiya_part a, div.source-popup a, div.parts a, ul.parts a, div.flexcroll a")
+        val partLinks = document.select("div.keremiya_part a, div.source-popup a, div.parts a, ul.parts a, div.flexcroll a, a.part, span.part a")
         partLinks.forEach { a ->
             val href = fixUrlNull(a.attr("href"))
             if (href != null && !candidatePages.contains(href) && href.startsWith(mainUrl)) {
@@ -182,7 +186,7 @@ class TavsiyeFilmIzle : MainAPI() {
 
         for (pageUrl in candidatePages) {
             try {
-                val doc = if (pageUrl == data) document else app.get(pageUrl).document
+                val doc = if (pageUrl == data) document else app.get(pageUrl, headers = mapOf("User-Agent" to DESKTOP_UA)).document
 
                 doc.select("iframe").forEach { iframe ->
                     val src = fixUrlNull(iframe.attr("src")?.ifEmpty { null } ?: iframe.attr("data-src")) ?: return@forEach
@@ -193,6 +197,16 @@ class TavsiyeFilmIzle : MainAPI() {
                         HotStream().getUrl(src, pageUrl, subtitleCallback, callback)
                     } else {
                         loadExtractor(src, pageUrl, subtitleCallback, callback)
+                    }
+                }
+
+                val html = doc.html()
+                val iframeMatches = Regex("""src=["'](https?://[^"']+)["']""").findAll(html)
+                for (match in iframeMatches) {
+                    val src = fixUrlNull(match.groupValues[1]) ?: continue
+                    if (src.contains("hotstream.club") && !extractedIframes.contains(src)) {
+                        extractedIframes.add(src)
+                        HotStream().getUrl(src, pageUrl, subtitleCallback, callback)
                     }
                 }
             } catch (e: Exception) {
