@@ -1,9 +1,18 @@
 package com.gsrepo
 
+import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
+import org.json.JSONObject
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class SinemaTvAz : MainAPI() {
     override var mainUrl = "https://sinematv.az"
@@ -24,7 +33,6 @@ class SinemaTvAz : MainAPI() {
 
     override val mainPage = mainPageOf(
         "$mainUrl/xarici-filmler/" to "Xarici Filmlər",
-        "$mainUrl/turkce-filmler/" to "Türkcə Filmlər",
         "$mainUrl/hind-filmleri/" to "Hind Filmləri",
         "$mainUrl/serial/" to "Seriallar",
         "$mainUrl/rus-filmleri/" to "Rus Filmləri",
@@ -164,38 +172,139 @@ class SinemaTvAz : MainAPI() {
         }
     }
 
+    private suspend fun extractSinemaTvAzCdn(
+        embedUrl: String,
+        referer: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        try {
+            val embedDoc = app.get(embedUrl, headers = mapOf("Referer" to referer)).text
+            val datasMatch = Regex("""const\s+datas\s*=\s*"([^"]+)"""").find(embedDoc)?.groupValues?.get(1) ?: return false
+
+            val base64Bytes = Base64.decode(datasMatch, Base64.DEFAULT)
+            val jsonStr = String(base64Bytes, Charsets.ISO_8859_1)
+
+            val json = JSONObject(jsonStr)
+            val slug = json.optString("slug")
+            val userId = json.opt("user_id")?.toString() ?: ""
+            val md5Id = json.opt("md5_id")?.toString() ?: ""
+            val mediaStr = json.optString("media")
+
+            if (slug.isEmpty() || userId.isEmpty() || md5Id.isEmpty() || mediaStr.isEmpty()) return false
+
+            val keyStr = "$userId:$slug:$md5Id"
+            val md5Bytes = MessageDigest.getInstance("MD5").digest(keyStr.toByteArray(Charsets.UTF_8))
+            val md5Hex = md5Bytes.joinToString("") { "%02x".format(it) }
+
+            val keyBytes = md5Hex.toByteArray(Charsets.UTF_8)
+            val counterBytes = keyBytes.copyOfRange(0, 16)
+
+            val secretKey = SecretKeySpec(keyBytes, "AES")
+            val ivSpec = IvParameterSpec(counterBytes)
+            val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+
+            val mediaBytes = mediaStr.map { it.code.toByte() }.toByteArray()
+            val decryptedBytes = cipher.doFinal(mediaBytes)
+            val decryptedText = String(decryptedBytes, Charsets.UTF_8)
+
+            val decryptedJson = JSONObject(decryptedText)
+            val section = decryptedJson.optJSONObject("mp4") ?: decryptedJson.optJSONObject("hls") ?: return false
+            val fristDatas = section.optJSONArray("fristDatas")
+
+            val embedDomain = fixUrl(embedUrl).substringBefore("/?").trimEnd('/') + "/"
+            val streamHeaders = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                "Referer" to embedDomain
+            )
+
+            var foundAny = false
+
+            if (fristDatas != null) {
+                for (i in 0 until fristDatas.length()) {
+                    val item = fristDatas.getJSONObject(i)
+                    val streamUrl = item.optString("url")
+                    if (streamUrl.isNotEmpty()) {
+                        val resId = item.optInt("res_id")
+                        val codec = item.optString("codec")
+                        val quality = when (resId) {
+                            1 -> Qualities.P144.value
+                            2 -> Qualities.P360.value
+                            3 -> Qualities.P480.value
+                            4 -> Qualities.P720.value
+                            5 -> Qualities.P1080.value
+                            7 -> Qualities.P1440.value
+                            8 -> Qualities.P2160.value
+                            else -> Qualities.Unknown.value
+                        }
+                        val codecLabel = if (codec.isNotEmpty()) " [$codec]" else ""
+
+                        callback.invoke(
+                            newExtractorLink(
+                                source = "SinemaTvAz",
+                                name = "SinemaTvAz$codecLabel",
+                                url = streamUrl,
+                                type = ExtractorLinkType.VIDEO,
+                            ) {
+                                this.quality = quality
+                                this.headers = streamHeaders
+                            }
+                        )
+                        foundAny = true
+                    }
+                }
+            }
+
+            return foundAny
+        } catch (e: Exception) {
+            return false
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val context = SinemaTvAzPlugin.pluginContext
-        if (context != null) {
-            SinemaTvAzWebViewExtractor(context).getUrl(data, data, subtitleCallback, callback)
-            return true
-        }
-
         val document = app.get(data, headers = browserHeaders, referer = "$mainUrl/").document
         val iframes = document.select("iframe")
         var foundAny = false
 
-        iframes.forEach { iframe ->
+        for (iframe in iframes) {
             val src = iframe.attr("data-src").ifEmpty { iframe.attr("src") }
             val title = iframe.attr("title")
 
             if (title.contains("Трейлер", ignoreCase = true) || title.contains("Trailer", ignoreCase = true)) {
-                return@forEach
+                continue
             }
 
             if (src.isEmpty() || src.contains("googletagmanager") || src.contains("yandex") || src.contains("facebook") || src.contains("/t?token=") || src.contains("allarknow") || src.contains("/t/")) {
-                return@forEach
+                continue
             }
 
             val playerUrl = fixUrl(src)
-            if (playerUrl.isEmpty()) return@forEach
-            foundAny = true
-            loadExtractor(playerUrl, data, subtitleCallback, callback)
+            if (playerUrl.isEmpty()) continue
+
+            if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) {
+                if (extractSinemaTvAzCdn(playerUrl, data, subtitleCallback, callback)) {
+                    foundAny = true
+                    continue
+                }
+            }
+
+            if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
+                foundAny = true
+            }
+        }
+
+        if (!foundAny) {
+            val context = SinemaTvAzPlugin.pluginContext
+            if (context != null) {
+                SinemaTvAzWebViewExtractor(context).getUrl(data, data, subtitleCallback, callback)
+                return true
+            }
         }
 
         return foundAny

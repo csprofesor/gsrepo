@@ -38,11 +38,13 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
 
         if (path.endsWith(".m3u8") ||
             path.endsWith(".mp4") ||
+            path.endsWith(".fd") ||
             lower.contains(".m3u8") ||
             lower.contains("storage.googleapis.com") ||
             lower.contains("vkvideo.cloud") ||
             lower.contains("vk.com") ||
-            lower.contains("vk.ru")
+            lower.contains("vk.ru") ||
+            lower.contains("sssrr.org")
         ) {
             return false
         }
@@ -105,6 +107,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 lower.contains("vkvideo") || lower.contains("vk.com") || lower.contains("vk.ru") -> "https://vk.com/"
                 lower.contains("storage.googleapis.com") -> "https://cdn1.sinematv.az/"
                 lower.contains("abyss.to") -> "https://abyss.to/"
+                lower.contains("sssrr.org") -> "https://cdn.sinematv.az/"
                 lower.contains("cdn2.sinematv.az") -> "https://cdn2.sinematv.az/"
                 lower.contains("cdn.sinematv.az") || lower.contains("cdn1.sinematv.az") -> "https://sinematv.az/"
                 else -> referer ?: "$mainUrl/"
@@ -142,7 +145,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 if (lower.contains("parsed.json") || lower.contains("catalog-api") || lower.contains("balancer-api") || lower.contains("proxy/playlists") || lower.contains("vv-api.php") || lower.contains("api/v1/player")) {
                     try {
                         val jsonStr = app.get(fixStream, headers = getHeadersForStream(fixStream)).text
-                        val streamUrls = Regex("https?://[^\"'\\s<>]+?\\.(?:m3u8|mp4)(?:\\?[^\"'\\s<>]*)?", RegexOption.IGNORE_CASE)
+                        val streamUrls = Regex("https?://[^\"'\\s<>]+?\\.(?:m3u8|mp4|fd)(?:\\?[^\"'\\s<>]*)?", RegexOption.IGNORE_CASE)
                             .findAll(jsonStr)
                             .map { it.value }
                             .distinct()
@@ -154,14 +157,14 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     } catch (e: Exception) {
                         Log.e("SinemaTvAzWebView", "API JSON fetch failed for $fixStream", e)
                     }
-                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || lower.contains(".m3u8") || lower.contains("storage.googleapis.com") || lower.contains("vkvideo.cloud") || lower.contains("playlist")) {
+                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || path.endsWith(".fd") || lower.contains(".m3u8") || lower.contains("storage.googleapis.com") || lower.contains("vkvideo.cloud") || lower.contains("sssrr.org") || lower.contains("playlist")) {
                     foundStream.set(true)
                     callback.invoke(
                         newExtractorLink(
                             source = "SinemaTvAzWebView",
                             name = "SinemaTvAz",
                             url = fixStream,
-                            type = if (path.endsWith(".mp4") || lower.contains("storage.googleapis.com")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
+                            type = if (path.endsWith(".mp4") || path.endsWith(".fd") || lower.contains("storage.googleapis.com") || lower.contains("sssrr.org")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
                         ) {
                             this.quality = Qualities.Unknown.value
                             this.headers = getHeadersForStream(fixStream)
@@ -188,7 +191,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     @JavascriptInterface
                     fun onStreamFound(body: String, reqUrl: String) {
                         Log.d("SinemaTvAzWebView", "BRIDGE_FOUND: $reqUrl")
-                        val urls = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8(?:\\?[^\"',\\s<>]*)?|\\.mp4(?:\\?[^\"',\\s<>]*)?|parsed\\.json(?:\\?[^\"',\\s<>]*)?)", RegexOption.IGNORE_CASE)
+                        val urls = Regex("https?://[^\"'\\s<>]+(?:\\.m3u8(?:\\?[^\"',\\s<>]*)?|\\.mp4(?:\\?[^\"',\\s<>]*)?|\\.fd(?:\\?[^\"',\\s<>]*)?|parsed\\.json(?:\\?[^\"',\\s<>]*)?)", RegexOption.IGNORE_CASE)
                             .findAll("$body $reqUrl")
                             .map { it.value }
                             .distinct()
@@ -262,7 +265,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
 
                                             try {
                                                 const html = d.documentElement.innerHTML;
-                                                const matches = html.match(/https?:\/\/[^\"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^\"'\s<>]*)?/gi);
+                                                const matches = html.match(/https?:\/\/[^\"'\s<>]+?\.(?:m3u8|mp4|fd)(?:\?[^\"'\s<>]*)?/gi);
                                                 if (matches) {
                                                     matches.forEach(m => window.AndroidBridge.onStreamFound(m, m));
                                                 }
@@ -277,7 +280,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                     try {
                                         const clone = response.clone();
                                         const text = await clone.text();
-                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('mp4') || text.includes('manifest')) {
+                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('mp4') || text.includes('manifest') || text.includes('sssrr.org')) {
                                             window.AndroidBridge.onStreamFound(text, response.url);
                                         }
                                     } catch(e) {}
@@ -288,7 +291,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                 window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
                                     this.addEventListener('load', function() {
                                         try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('mp4') || this.responseText.includes('manifest'))) {
+                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('mp4') || this.responseText.includes('manifest') || this.responseText.includes('sssrr.org'))) {
                                                 window.AndroidBridge.onStreamFound(this.responseText, url);
                                             }
                                         } catch(e) {}
@@ -312,12 +315,14 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                             val path = reqUrl.substringBefore("?").lowercase()
                             if (path.endsWith(".m3u8") ||
                                 path.endsWith(".mp4") ||
+                                path.endsWith(".fd") ||
                                 path.contains("master.m3u8") ||
                                 path.contains("index.m3u8") ||
                                 path.contains("playlist") ||
                                 path.contains("manifest") ||
                                 reqUrl.contains("storage.googleapis.com") ||
                                 reqUrl.contains("vkvideo.cloud") ||
+                                reqUrl.contains("sssrr.org") ||
                                 reqUrl.contains("parsed.json") ||
                                 reqUrl.contains("catalog-api") ||
                                 reqUrl.contains("balancer-api") ||
