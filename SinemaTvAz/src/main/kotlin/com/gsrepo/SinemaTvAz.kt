@@ -202,15 +202,12 @@ class SinemaTvAz : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        val url = if (page == 1) request.data else "${request.data}page/$page/"
+        val url = if (page == 1) request.data else "${request.data.trimEnd('/')}/page/$page/"
         val document = app.get(url, headers = browserHeaders).document
-        var items = document.select("div.sect:not(.sect--top) .poster-item, div.sect:not(.sect--top) .grid-item, div.sect:not(.sect--top) .shortstory, div.sect:not(.sect--top) article")
-        if (items.isEmpty()) {
-            items = document.select(".poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item")
-        }
+        val items = document.select("a.poster-item.grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory")
         val home = items.mapNotNull {
             it.toSearchResult()
-        }
+        }.distinctBy { it.url }
         return newHomePageResponse(request.name, home)
     }
 
@@ -263,9 +260,9 @@ class SinemaTvAz : MainAPI() {
             headers = browserHeaders
         ).document
 
-        return response.select("div.sect:not(.sect--top) .poster-item, div.sect:not(.sect--top) .grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory, div.movie-item, div.item").mapNotNull {
+        return response.select("a.poster-item.grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory").mapNotNull {
             it.toSearchResult()
-        }
+        }.distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse {
