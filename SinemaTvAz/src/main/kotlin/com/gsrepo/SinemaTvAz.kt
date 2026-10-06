@@ -11,7 +11,7 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import okhttp3.Request
 import org.jsoup.nodes.Element
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -90,15 +90,19 @@ object LocalSinemaTvAzServer {
             val keyBytes = md5Hex.toByteArray(Charsets.UTF_8)
             val ivBytes = keyBytes.copyOfRange(0, 16)
 
-            val reqHeaders = info.headers.toMutableMap()
+            val builder = Request.Builder()
+                .url(info.url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
+                .header("Referer", info.headers["Referer"] ?: "")
+
             if (rangeHeader != null) {
-                reqHeaders["Range"] = rangeHeader
+                builder.header("Range", rangeHeader)
             }
 
-            val call = runBlocking { app.get(info.url, headers = reqHeaders, interceptor = null) }
-            val responseCode = call.code
-            val responseHeaders = call.headers
-            val bodyStream = call.body.byteStream()
+            val response = app.baseClient.newCall(builder.build()).execute()
+            val responseCode = response.code
+            val responseBody = response.body
+            val bodyStream = responseBody.byteStream()
 
             var startByte = 0L
             if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
@@ -106,7 +110,7 @@ object LocalSinemaTvAzServer {
             }
 
             val blockIndex = startByte / 16
-            val skipBytesInBlock = (startByte % 16).toInt()
+            val keystreamOffset = (startByte % 16).toInt()
 
             val counterIv = ivBytes.clone()
             var carry = blockIndex
@@ -121,10 +125,14 @@ object LocalSinemaTvAzServer {
             val cipher = Cipher.getInstance("AES/CTR/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
 
+            if (keystreamOffset > 0) {
+                cipher.update(ByteArray(keystreamOffset))
+            }
+
             val out = socket.getOutputStream()
             val statusLine = if (responseCode == 206) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
-            val responseContentLength = responseHeaders["Content-Length"]
-            val responseContentRange = responseHeaders["Content-Range"]
+            val responseContentLength = response.header("Content-Length")
+            val responseContentRange = response.header("Content-Range")
 
             val head = StringBuilder().apply {
                 append(statusLine)
@@ -138,22 +146,14 @@ object LocalSinemaTvAzServer {
 
             out.write(head.toByteArray(Charsets.UTF_8))
 
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(16384)
             var bytesRead = bodyStream.read(buffer)
-            var isFirstChunk = true
 
             while (bytesRead != -1) {
                 val decrypted = cipher.update(buffer, 0, bytesRead)
-                if (decrypted != null) {
-                    if (isFirstChunk && skipBytesInBlock > 0) {
-                        if (decrypted.size > skipBytesInBlock) {
-                            out.write(decrypted, skipBytesInBlock, decrypted.size - skipBytesInBlock)
-                        }
-                    } else {
-                        out.write(decrypted)
-                    }
+                if (decrypted != null && decrypted.isNotEmpty()) {
+                    out.write(decrypted)
                 }
-                isFirstChunk = false
                 bytesRead = bodyStream.read(buffer)
             }
 
@@ -164,6 +164,8 @@ object LocalSinemaTvAzServer {
 
             out.flush()
             bodyStream.close()
+            responseBody.close()
+            response.close()
             socket.close()
         }
     }
