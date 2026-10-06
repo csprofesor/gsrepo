@@ -558,6 +558,25 @@
     "fileHash": "sha256-3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763"
   },
   {
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TavsiyeFilmIzle.cs3",
+    "status": 1,
+    "version": 1,
+    "name": "TavsiyeFilmIzle",
+    "internalName": "TavsiyeFilmIzle",
+    "authors": [
+      "csprofesor"
+    ],
+    "description": "TavsiyeFilmIzle - Türkçe Dublaj ve Altyazılı Filmler, Full HD Film izle.",
+    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
+    "language": "tr",
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "iconUrl": "https://www.google.com/s2/favicons?domain=tavsiyefilmizle.net&sz=%size%",
+    "apiVersion": 1
+  },
+  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Watch2Movies.cs3?v=047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f",
     "status": 1,
     "version": 6,
