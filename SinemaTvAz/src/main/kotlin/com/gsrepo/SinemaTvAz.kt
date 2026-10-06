@@ -1,18 +1,173 @@
 package com.gsrepo
 
 import android.util.Base64
+import android.util.Log
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.jsoup.nodes.Element
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.ServerSocket
+import java.net.Socket
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+
+object LocalSinemaTvAzServer {
+    private var serverSocket: ServerSocket? = null
+    private var activePort: Int = 0
+    private val streamMap = ConcurrentHashMap<String, StreamInfo>()
+
+    data class StreamInfo(
+        val url: String,
+        val filename: String,
+        val headers: Map<String, String>
+    )
+
+    @Synchronized
+    fun registerStream(id: String, streamInfo: StreamInfo): String {
+        if (serverSocket == null || serverSocket!!.isClosed) {
+            runCatching {
+                serverSocket = ServerSocket(0)
+                activePort = serverSocket!!.localPort
+                Log.d("LocalSinemaTvAzServer", "SERVER_STARTED_PORT=$activePort")
+                GlobalScope.launch(Dispatchers.IO) {
+                    while (serverSocket != null && !serverSocket!!.isClosed) {
+                        try {
+                            val socket = serverSocket!!.accept()
+                            GlobalScope.launch(Dispatchers.IO) {
+                                handleClient(socket)
+                            }
+                        } catch (e: Exception) {
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        streamMap[id] = streamInfo
+        return "http://127.0.0.1:$activePort/stream/$id.mp4"
+    }
+
+    private fun handleClient(socket: Socket) {
+        runCatching {
+            val input = socket.getInputStream()
+            val reader = BufferedReader(InputStreamReader(input))
+            val requestLine = reader.readLine() ?: return
+
+            var rangeHeader: String? = null
+            var line = reader.readLine()
+            while (!line.isNullOrEmpty()) {
+                if (line.startsWith("Range:", ignoreCase = true)) {
+                    rangeHeader = line.substringAfter(":").trim()
+                }
+                line = reader.readLine()
+            }
+
+            val path = requestLine.substringAfter("GET ").substringBefore(" HTTP")
+            val id = path.substringAfter("/stream/").substringBefore(".mp4")
+            val info = streamMap[id] ?: run {
+                val out = socket.getOutputStream()
+                out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                out.flush()
+                socket.close()
+                return
+            }
+
+            val md5Bytes = MessageDigest.getInstance("MD5").digest(info.filename.toByteArray(Charsets.UTF_8))
+            val md5Hex = md5Bytes.joinToString("") { "%02x".format(it) }
+            val keyBytes = md5Hex.toByteArray(Charsets.UTF_8)
+            val ivBytes = keyBytes.copyOfRange(0, 16)
+
+            val reqHeaders = info.headers.toMutableMap()
+            if (rangeHeader != null) {
+                reqHeaders["Range"] = rangeHeader
+            }
+
+            val call = runBlocking { app.get(info.url, headers = reqHeaders, interceptor = null) }
+            val responseCode = call.code
+            val responseHeaders = call.headers
+            val bodyStream = call.body.byteStream()
+
+            var startByte = 0L
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                startByte = rangeHeader.substringAfter("bytes=").substringBefore("-").toLongOrNull() ?: 0L
+            }
+
+            val blockIndex = startByte / 16
+            val skipBytesInBlock = (startByte % 16).toInt()
+
+            val counterIv = ivBytes.clone()
+            var carry = blockIndex
+            for (i in 15 downTo 0) {
+                val sum = (counterIv[i].toInt() and 0xFF) + (carry and 0xFF).toInt()
+                counterIv[i] = sum.toByte()
+                carry = carry ushr 8
+            }
+
+            val secretKey = SecretKeySpec(keyBytes, "AES")
+            val ivSpec = IvParameterSpec(counterIv)
+            val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+
+            val out = socket.getOutputStream()
+            val statusLine = if (responseCode == 206) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
+            val responseContentLength = responseHeaders["Content-Length"]
+            val responseContentRange = responseHeaders["Content-Range"]
+
+            val head = StringBuilder().apply {
+                append(statusLine)
+                append("Content-Type: video/mp4\r\n")
+                if (responseContentLength != null) append("Content-Length: $responseContentLength\r\n")
+                if (responseContentRange != null) append("Content-Range: $responseContentRange\r\n")
+                append("Accept-Ranges: bytes\r\n")
+                append("Access-Control-Allow-Origin: *\r\n")
+                append("Connection: close\r\n\r\n")
+            }.toString()
+
+            out.write(head.toByteArray(Charsets.UTF_8))
+
+            val buffer = ByteArray(8192)
+            var bytesRead = bodyStream.read(buffer)
+            var isFirstChunk = true
+
+            while (bytesRead != -1) {
+                val decrypted = cipher.update(buffer, 0, bytesRead)
+                if (decrypted != null) {
+                    if (isFirstChunk && skipBytesInBlock > 0) {
+                        if (decrypted.size > skipBytesInBlock) {
+                            out.write(decrypted, skipBytesInBlock, decrypted.size - skipBytesInBlock)
+                        }
+                    } else {
+                        out.write(decrypted)
+                    }
+                }
+                isFirstChunk = false
+                bytesRead = bodyStream.read(buffer)
+            }
+
+            val finalBytes = cipher.doFinal()
+            if (finalBytes != null && finalBytes.isNotEmpty()) {
+                out.write(finalBytes)
+            }
+
+            out.flush()
+            bodyStream.close()
+            socket.close()
+        }
+    }
+}
 
 class SinemaTvAz : MainAPI() {
     override var mainUrl = "https://sinematv.az"
@@ -175,7 +330,6 @@ class SinemaTvAz : MainAPI() {
     private suspend fun extractSinemaTvAzCdn(
         embedUrl: String,
         referer: String,
-        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         try {
@@ -214,10 +368,6 @@ class SinemaTvAz : MainAPI() {
             val fristDatas = section.optJSONArray("fristDatas")
 
             val embedDomain = fixUrl(embedUrl).substringBefore("/?").trimEnd('/') + "/"
-            val streamHeaders = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-                "Referer" to embedDomain
-            )
 
             var foundAny = false
 
@@ -239,16 +389,25 @@ class SinemaTvAz : MainAPI() {
                             else -> Qualities.Unknown.value
                         }
                         val codecLabel = if (codec.isNotEmpty()) " [$codec]" else ""
+                        val filename = streamUrl.substringAfterLast('/')
+
+                        val proxyUrl = LocalSinemaTvAzServer.registerStream(
+                            id = "${slug}_${resId}_${codec.ifEmpty { "v" }}_$i",
+                            streamInfo = LocalSinemaTvAzServer.StreamInfo(
+                                url = streamUrl,
+                                filename = filename,
+                                headers = mapOf("Referer" to embedDomain)
+                            )
+                        )
 
                         callback.invoke(
                             newExtractorLink(
                                 source = "SinemaTvAz",
                                 name = "SinemaTvAz$codecLabel",
-                                url = streamUrl,
+                                url = proxyUrl,
                                 type = ExtractorLinkType.VIDEO,
                             ) {
                                 this.quality = quality
-                                this.headers = streamHeaders
                             }
                         )
                         foundAny = true
@@ -288,7 +447,7 @@ class SinemaTvAz : MainAPI() {
             if (playerUrl.isEmpty()) continue
 
             if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) {
-                if (extractSinemaTvAzCdn(playerUrl, data, subtitleCallback, callback)) {
+                if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
                     foundAny = true
                     continue
                 }
