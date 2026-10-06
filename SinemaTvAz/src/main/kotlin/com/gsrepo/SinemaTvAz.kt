@@ -195,7 +195,20 @@ class SinemaTvAz : MainAPI() {
         "$mainUrl/rus-filmleri/" to "Rus Filmləri",
         "$mainUrl/mult/" to "Cizgi Filmləri",
         "$mainUrl/anime/" to "Anime",
-        "$mainUrl/dorama/" to "Doramalar"
+        "$mainUrl/dorama/" to "Doramalar",
+        "$mainUrl/turkce-filmler/" to "Türkçə Filmlər",
+        "$mainUrl/film/" to "Filmlər",
+        "$mainUrl/tvshow/" to "TV Şoular",
+        "$mainUrl/boevik/" to "Döyüş",
+        "$mainUrl/comedy/" to "Komediya",
+        "$mainUrl/drama/" to "Dram",
+        "$mainUrl/thriller/" to "Triller",
+        "$mainUrl/horror/" to "Qorxu",
+        "$mainUrl/fantasy/" to "Fantezi",
+        "$mainUrl/fantastic/" to "Elmi-Kütləvi",
+        "$mainUrl/detective/" to "Detektiv",
+        "$mainUrl/adventures/" to "Macəra",
+        "$mainUrl/semejnyj/" to "Ailə"
     )
 
     override suspend fun getMainPage(
@@ -204,7 +217,9 @@ class SinemaTvAz : MainAPI() {
     ): HomePageResponse {
         val url = if (page == 1) request.data else "${request.data.trimEnd('/')}/page/$page/"
         val document = app.get(url, headers = browserHeaders).document
-        val items = document.select("a.poster-item.grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory")
+        val mainContent = document.selectFirst("#dle-content") ?: document
+        val items = mainContent.select("a.poster-item.grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory")
+            .filterNot { it.parents().any { p -> p.hasClass("owl-carousel") || p.id() == "owl-popular" } }
         val home = items.mapNotNull {
             it.toSearchResult()
         }.distinctBy { it.url }
@@ -219,7 +234,7 @@ class SinemaTvAz : MainAPI() {
 
         val fixHref = fixUrl(href)
 
-        val titleElement = this.selectFirst(".poster-item__title, div.shortstory-title, h2.title, span.title")
+        val titleElement = this.selectFirst(".poster-item__title, div.shortstory-title, h2.title, span.title, a.title, .title")
         val title = (titleElement?.text()?.trim() ?: "").ifEmpty {
             this.attr("title")
         }.ifEmpty {
@@ -235,7 +250,7 @@ class SinemaTvAz : MainAPI() {
             ?.replace("/uploads/movies/", "/movies/")
             ?.let { fixUrl(it) }
 
-        val isTvSeries = fixHref.contains("/serial/") || fixHref.contains("/mult/") || fixHref.contains("/anime/") || fixHref.contains("/dorama/") || title.contains("sezon", ignoreCase = true)
+        val isTvSeries = fixHref.contains("/serial/") || fixHref.contains("/mult/") || fixHref.contains("/anime/") || fixHref.contains("/dorama/") || fixHref.contains("/tvshow/") || title.contains("sezon", ignoreCase = true)
 
         return if (isTvSeries) {
             newTvSeriesSearchResponse(title, fixHref, TvType.TvSeries) {
@@ -260,7 +275,11 @@ class SinemaTvAz : MainAPI() {
             headers = browserHeaders
         ).document
 
-        return response.select("a.poster-item.grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory").mapNotNull {
+        val mainContent = response.selectFirst("#dle-content") ?: response
+        val items = mainContent.select("a.poster-item.grid-item, .poster-item, .grid-item, div.shortstory, article.shortstory")
+            .filterNot { it.parents().any { p -> p.hasClass("owl-carousel") || p.id() == "owl-popular" } }
+
+        return items.mapNotNull {
             it.toSearchResult()
         }.distinctBy { it.url }
     }
@@ -269,18 +288,18 @@ class SinemaTvAz : MainAPI() {
         val document = app.get(url, headers = browserHeaders).document
 
         val title = document.selectFirst("h1.title, h1.entry-title, h1")?.text()?.trim() ?: ""
-        val poster = document.selectFirst("div.poster img, div.shortstory-poster img, div.story-poster img, img")?.let {
+        val poster = document.selectFirst("div.poster img, div.shortstory-poster img, div.story-poster img, .img-box img, img")?.let {
             it.attr("data-src").ifEmpty { it.attr("src") }
         }?.replace("/uploads/movies/", "/movies/")?.let { fixUrl(it) }
 
-        val description = document.selectFirst("div.full-text, div.story-text, div.description")?.text()?.trim()
-        val year = document.selectFirst("div.info:contains(İl), span:contains(İl)")?.text()?.let {
+        val description = document.selectFirst("div.full-text, div.story-text, div.description, div.fdesc")?.text()?.trim()
+        val year = document.selectFirst("div.info:contains(İl), span:contains(İl), div:contains(İl)")?.text()?.let {
             Regex("\\d{4}").find(it)?.value?.toIntOrNull()
         }
 
         val episodes = mutableListOf<Episode>()
 
-        val episodeElements = document.select("div.episodes-list a, ul.episodes a, div.seasons-list a")
+        val episodeElements = document.select("div.episodes-list a, ul.episodes a, div.seasons-list a, .episodes a, .season-episodes a")
         if (episodeElements.isNotEmpty()) {
             episodeElements.forEach { element ->
                 val epTitle = element.text().trim()
@@ -298,7 +317,7 @@ class SinemaTvAz : MainAPI() {
             }
         }
 
-        val isTvSeries = url.contains("/serial/") || url.contains("/mult/") || url.contains("/anime/") || url.contains("/dorama/") || title.contains("sezon", ignoreCase = true)
+        val isTvSeries = url.contains("/serial/") || url.contains("/mult/") || url.contains("/anime/") || url.contains("/dorama/") || url.contains("/tvshow/") || title.contains("sezon", ignoreCase = true)
 
         return if (isTvSeries) {
             val finalEpisodes = if (episodes.isEmpty()) {
