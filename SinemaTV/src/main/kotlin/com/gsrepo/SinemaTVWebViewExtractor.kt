@@ -15,12 +15,11 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 
 class SinemaTVWebViewExtractor(private val context: Context, private val pluginName: String) : ExtractorApi() {
@@ -50,21 +49,16 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
         }
 
         val path = lower.substringBefore("?").substringBefore("#")
-        if (path.endsWith(".js") ||
-            path.endsWith(".css") ||
-            path.endsWith(".png") ||
-            path.endsWith(".jpg") ||
-            path.endsWith(".jpeg") ||
-            path.endsWith(".gif") ||
-            path.endsWith(".webp") ||
-            path.endsWith(".svg") ||
-            path.endsWith(".ico") ||
-            path.endsWith(".txt")
-        ) {
-            return true
-        }
-
-        return false
+        return path.endsWith(".js") ||
+               path.endsWith(".css") ||
+               path.endsWith(".png") ||
+               path.endsWith(".jpg") ||
+               path.endsWith(".jpeg") ||
+               path.endsWith(".gif") ||
+               path.endsWith(".webp") ||
+               path.endsWith(".svg") ||
+               path.endsWith(".ico") ||
+               path.endsWith(".txt")
     }
 
     private fun isValidStreamUrl(url: String): Boolean {
@@ -91,16 +85,11 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
         url: String,
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
     ) {
         Log.d("SinemaTVWebView", "START_EXTRACTOR=$url")
         val foundStream = AtomicBoolean(false)
         val targetUrl = url
-
-        val domain = runCatching {
-            val uri = URI(url)
-            "${uri.scheme}://${uri.host}"
-        }.getOrNull() ?: mainUrl
 
         val browserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -116,36 +105,39 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                     userAgentString = browserUserAgent
                 }
 
-                addJavascriptInterface(object : Any() {
-                    @JavascriptInterface
-                    fun onStreamFound(body: String, reqUrl: String) {
-                        Log.d("SinemaTVWebView", "BRIDGE_FOUND: $reqUrl")
-                        val m3u8 = Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|deovi\.mvapspdmpg\.com|gorodyshka\.link|playlist|manifest|hls)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(body)?.value 
-                            ?: Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|deovi\.mvapspdmpg\.com|gorodyshka\.link|playlist|manifest|hls)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(reqUrl)?.value
-                            ?: reqUrl
+                addJavascriptInterface(
+                    object : Any() {
+                        @JavascriptInterface
+                        fun onStreamFound(body: String, reqUrl: String) {
+                            Log.d("SinemaTVWebView", "BRIDGE_FOUND: $reqUrl")
+                            val m3u8 = Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|deovi\.mvapspdmpg\.com|gorodyshka\.link|playlist|manifest|hls)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(body)?.value
+                                ?: Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|deovi\.mvapspdmpg\.com|gorodyshka\.link|playlist|manifest|hls)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(reqUrl)?.value
+                                ?: reqUrl
 
-                        if (isValidStreamUrl(m3u8) && !foundStream.getAndSet(true)) {
-                            Log.d("SinemaTVWebView", "EMITTING_STREAM=$m3u8")
-                            GlobalScope.launch(Dispatchers.IO) {
-                                callback.invoke(
-                                    newExtractorLink(
-                                        source = pluginName,
-                                        name = pluginName,
-                                        url = m3u8,
-                                        type = if (m3u8.contains(".m3u8", true) || m3u8.contains("playlist", true) || m3u8.contains("manifest", true) || m3u8.contains("hls", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                                    ) {
-                                        this.quality = Qualities.P1080.value
-                                        this.headers = mapOf(
-                                            "Referer" to "$mainUrl/",
-                                            "Origin" to mainUrl,
-                                            "User-Agent" to browserUserAgent
-                                        )
-                                    }
-                                )
+                            if (isValidStreamUrl(m3u8) && (!foundStream.getAndSet(true))) {
+                                Log.d("SinemaTVWebView", "EMITTING_STREAM=$m3u8")
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    callback.invoke(
+                                        newExtractorLink(
+                                            source = pluginName,
+                                            name = pluginName,
+                                            url = m3u8,
+                                            type = if (m3u8.contains(".m3u8", ignoreCase = true) || m3u8.contains("playlist", ignoreCase = true) || m3u8.contains("manifest", ignoreCase = true) || m3u8.contains("hls", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                        ) {
+                                            this.quality = Qualities.P1080.value
+                                            this.headers = mapOf(
+                                                "Referer" to "$mainUrl/",
+                                                "Origin" to mainUrl,
+                                                "User-Agent" to browserUserAgent
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
-                    }
-                }, "AndroidBridge")
+                    },
+                    "AndroidBridge"
+                )
 
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -191,7 +183,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                 window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
                                     this.addEventListener('load', function() {
                                         try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('mp4') || this.responseText.includes('storage.googleapis.com') || this.responseText.includes('playlist') || this.responseText.includes('hls'))) {
+                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('mp4') || this.responseText.includes('storage.googleapis.com') || this.responseText.includes('playlist') || text.includes('hls'))) {
                                                 window.AndroidBridge.onStreamFound(this.responseText, url);
                                             }
                                         } catch(e) {}
@@ -227,13 +219,13 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                         if (isValidStreamUrl(reqUrl)) {
                             Log.d("SinemaTVWebView", "INTERCEPTED_REQ=$reqUrl")
                             if (!foundStream.getAndSet(true)) {
-                                GlobalScope.launch(Dispatchers.IO) {
+                                CoroutineScope(Dispatchers.IO).launch {
                                     callback.invoke(
                                         newExtractorLink(
                                             source = pluginName,
                                             name = pluginName,
                                             url = reqUrl,
-                                            type = if (reqUrl.contains(".m3u8", true) || reqUrl.contains("playlist", true) || reqUrl.contains("manifest", true) || reqUrl.contains("hls", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                                            type = if (reqUrl.contains(".m3u8", ignoreCase = true) || reqUrl.contains("playlist", ignoreCase = true) || reqUrl.contains("manifest", ignoreCase = true) || reqUrl.contains("hls", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                                         ) {
                                             this.quality = Qualities.P1080.value
                                             this.headers = mapOf(
@@ -255,7 +247,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
         }
 
         var elapsed = 0L
-        while (!foundStream.get() && elapsed < 15000L) {
+        while ((!foundStream.get()) && elapsed < 15000L) {
             delay(300L)
             elapsed += 300L
         }

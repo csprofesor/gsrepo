@@ -21,28 +21,28 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
         TvType.TvSeries,
         TvType.Anime,
         TvType.AnimeMovie,
-        TvType.Cartoon
+        TvType.Cartoon,
     )
 
     override val mainPage = mainPageOf(
-        "${mainUrl}/" to "Son Eklenenler",
-        "${mainUrl}/film/" to "Filmler",
-        "${mainUrl}/serial/" to "Diziler",
-        "${mainUrl}/mult/" to "Çizgi Filmler",
-        "${mainUrl}/anime/" to "Anime",
-        "${mainUrl}/boevik/" to "Aksiyon",
-        "${mainUrl}/horror/" to "Korku",
-        "${mainUrl}/comedy/" to "Komedi",
-        "${mainUrl}/drama/" to "Dram",
-        "${mainUrl}/fantastic/" to "Bilim Kurgu",
-        "${mainUrl}/turkce-filmler/" to "Türkçe Filmler",
-        "${mainUrl}/hind-filmleri/" to "Hind Filmleri",
-        "${mainUrl}/xarici-filmler/" to "Xarici Filmler",
-        "${mainUrl}/rus-filmleri/" to "Rus Filmleri",
-        "${mainUrl}/dorama/" to "Dorama",
-        "${mainUrl}/thriller/" to "Triller",
-        "${mainUrl}/fantasy/" to "Fantastik",
-        "${mainUrl}/4k-filmy-i-serialy/" to "4K Filmler"
+        "$mainUrl/" to "Son Eklenenler",
+        "$mainUrl/film/" to "Filmler",
+        "$mainUrl/serial/" to "Diziler",
+        "$mainUrl/mult/" to "Çizgi Filmler",
+        "$mainUrl/anime/" to "Anime",
+        "$mainUrl/boevik/" to "Aksiyon",
+        "$mainUrl/horror/" to "Korku",
+        "$mainUrl/comedy/" to "Komedi",
+        "$mainUrl/drama/" to "Dram",
+        "$mainUrl/fantastic/" to "Bilim Kurgu",
+        "$mainUrl/turkce-filmler/" to "Türkçe Filmler",
+        "$mainUrl/hind-filmleri/" to "Hind Filmleri",
+        "$mainUrl/xarici-filmler/" to "Xarici Filmler",
+        "$mainUrl/rus-filmleri/" to "Rus Filmleri",
+        "$mainUrl/dorama/" to "Dorama",
+        "$mainUrl/thriller/" to "Triller",
+        "$mainUrl/fantasy/" to "Fantastik",
+        "$mainUrl/4k-filmy-i-serialy/" to "4K Filmler",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -69,7 +69,7 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
 
         val imgEl = this.selectFirst("img")
         var posterUrl = imgEl?.let { it.attr("data-src").ifEmpty { it.attr("src") } }
-        if (posterUrl != null && !posterUrl.startsWith("http")) {
+        if (posterUrl != null && (!posterUrl.startsWith("http"))) {
             posterUrl = "$mainUrl$posterUrl"
         }
 
@@ -86,7 +86,7 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val searchUrl = "${mainUrl}/?do=search&subaction=search&story=${query}"
+        val searchUrl = "$mainUrl/?do=search&subaction=search&story=$query"
         val document = app.get(searchUrl).document
 
         return document.select("a.poster-item, div.poster-item")
@@ -115,7 +115,7 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
 
         val posterEl = document.selectFirst(".page__poster img, .full-story__img img, .poster img")
         var posterUrl = posterEl?.let { it.attr("data-src").ifEmpty { it.attr("src") } }
-        if (posterUrl != null && !posterUrl.startsWith("http")) {
+        if (posterUrl != null && (!posterUrl.startsWith("http"))) {
             posterUrl = "$mainUrl$posterUrl"
         }
 
@@ -143,7 +143,7 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
             }
         }
 
-        val isTvSeries = url.contains("/serial/") || url.contains("/dorama/") || (url.contains("/anime/") && !url.contains("film"))
+        val isTvSeries = url.contains("/serial/") || url.contains("/dorama/") || (url.contains("/anime/") && (!url.contains("film")))
 
         val recommendations = document.select(".sect__content a.poster-item, div.poster-item")
             .mapNotNull { it.toSearchResult() }
@@ -182,9 +182,9 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
 
     override suspend fun loadLinks(
         data: String,
-        isCSType: Boolean,
+        isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        callback: (ExtractorLink) -> Unit,
     ): Boolean {
         val document = app.get(data).document
         val iframes = document.select("iframe")
