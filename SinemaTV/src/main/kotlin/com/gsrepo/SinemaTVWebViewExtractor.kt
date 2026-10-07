@@ -78,6 +78,61 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                lower.contains("index.m3u8")
     }
 
+    private fun emitStream(
+        streamUrl: String,
+        foundStream: AtomicBoolean,
+        browserUserAgent: String,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        if (!foundStream.getAndSet(true)) {
+            Log.d("SinemaTVWebView", "EMITTING_STREAM=$streamUrl")
+            CoroutineScope(Dispatchers.IO).launch {
+                if (streamUrl.contains(".m3u8", ignoreCase = true) || streamUrl.contains("playlist", ignoreCase = true) || streamUrl.contains("manifest", ignoreCase = true)) {
+                    val resolved = SinemaTVHelper.resolveM3u8Streams(
+                        pluginName,
+                        streamUrl,
+                        "$mainUrl/",
+                        mapOf("User-Agent" to browserUserAgent),
+                        callback
+                    )
+                    if (!resolved) {
+                        callback.invoke(
+                            newExtractorLink(
+                                source = pluginName,
+                                name = pluginName,
+                                url = streamUrl,
+                                type = ExtractorLinkType.M3U8
+                            ) {
+                                this.quality = Qualities.P1080.value
+                                this.headers = mapOf(
+                                    "Referer" to "$mainUrl/",
+                                    "Origin" to mainUrl,
+                                    "User-Agent" to browserUserAgent
+                                )
+                            }
+                        )
+                    }
+                } else {
+                    callback.invoke(
+                        newExtractorLink(
+                            source = pluginName,
+                            name = pluginName,
+                            url = streamUrl,
+                            type = ExtractorLinkType.VIDEO
+                        ) {
+                            this.quality = Qualities.P1080.value
+                            this.headers = mapOf(
+                                "Referer" to "$mainUrl/",
+                                "Origin" to mainUrl,
+                                "User-Agent" to browserUserAgent
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override suspend fun getUrl(
         url: String,
@@ -112,25 +167,8 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                 ?: Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|vkvideo\.cloud|deovi\.mvapspdmpg\.com)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(reqUrl)?.value
                                 ?: reqUrl
 
-                            if (isValidStreamUrl(m3u8) && (!foundStream.getAndSet(true))) {
-                                Log.d("SinemaTVWebView", "EMITTING_STREAM=$m3u8")
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    callback.invoke(
-                                        newExtractorLink(
-                                            source = pluginName,
-                                            name = pluginName,
-                                            url = m3u8,
-                                            type = if (m3u8.contains(".m3u8", ignoreCase = true) || m3u8.contains("playlist", ignoreCase = true) || m3u8.contains("manifest", ignoreCase = true) || m3u8.contains("hls", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                                        ) {
-                                            this.quality = Qualities.P1080.value
-                                            this.headers = mapOf(
-                                                "Referer" to "$mainUrl/",
-                                                "Origin" to mainUrl,
-                                                "User-Agent" to browserUserAgent
-                                            )
-                                        }
-                                    )
-                                }
+                            if (isValidStreamUrl(m3u8)) {
+                                emitStream(m3u8, foundStream, browserUserAgent, callback)
                             }
                         }
                     },
@@ -216,25 +254,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
 
                         if (isValidStreamUrl(reqUrl)) {
                             Log.d("SinemaTVWebView", "INTERCEPTED_REQ=$reqUrl")
-                            if (!foundStream.getAndSet(true)) {
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    callback.invoke(
-                                        newExtractorLink(
-                                            source = pluginName,
-                                            name = pluginName,
-                                            url = reqUrl,
-                                            type = if (reqUrl.contains(".m3u8", ignoreCase = true) || reqUrl.contains("playlist", ignoreCase = true) || reqUrl.contains("manifest", ignoreCase = true) || reqUrl.contains("hls", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                                        ) {
-                                            this.quality = Qualities.P1080.value
-                                            this.headers = mapOf(
-                                                "Referer" to "$mainUrl/",
-                                                "Origin" to mainUrl,
-                                                "User-Agent" to browserUserAgent
-                                            )
-                                        }
-                                    )
-                                }
-                            }
+                            emitStream(reqUrl, foundStream, browserUserAgent, callback)
                         }
                         return super.shouldInterceptRequest(view, request)
                     }

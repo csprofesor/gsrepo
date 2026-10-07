@@ -245,23 +245,33 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
                                     val innerM3u8Regex = Regex("""https?://[^\s"'<>]+?grouped\.m3u8[^\s"'<>]*""")
                                     val innerMatches = innerM3u8Regex.findAll(parsedResp)
                                     for (innerMatch in innerMatches) {
-                                        M3u8Helper.generateM3u8(
+                                        val resolved = SinemaTVHelper.resolveM3u8Streams(
                                             name,
                                             innerMatch.value,
-                                            "$mainUrl/"
-                                        ).forEach { link ->
-                                            callback.invoke(link)
-                                            linksFound = true
-                                        }
+                                            "$mainUrl/",
+                                            headersMap,
+                                            callback
+                                        )
+                                        if (resolved) linksFound = true
                                     }
                                 } catch (e: Exception) {
                                     e.printStackTrace()
                                 }
+                            } else if (streamPath.contains("master.m3u8") || streamPath.contains("grouped.m3u8") || streamPath.contains("gorodyshka.link")) {
+                                val resolved = SinemaTVHelper.resolveM3u8Streams(
+                                    name,
+                                    streamPath,
+                                    "$mainUrl/",
+                                    headersMap,
+                                    callback
+                                )
+                                if (resolved) linksFound = true
                             } else if (streamPath.contains(".m3u8")) {
                                 M3u8Helper.generateM3u8(
                                     name,
                                     streamPath,
-                                    "$mainUrl/"
+                                    "$mainUrl/",
+                                    headers = headersMap
                                 ).forEach { link ->
                                     callback.invoke(link)
                                     linksFound = true
