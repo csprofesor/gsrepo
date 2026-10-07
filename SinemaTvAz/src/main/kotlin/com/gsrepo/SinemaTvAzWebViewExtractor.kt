@@ -36,19 +36,10 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         val lower = url.lowercase()
         val path = lower.substringBefore("?").substringBefore("#")
 
-        if (path.endsWith(".m3u8") ||
-            path.endsWith(".mp4") ||
-            path.endsWith(".fd") ||
-            lower.contains(".m3u8") ||
-            lower.contains("storage.googleapis.com") ||
-            lower.contains("vkvideo.cloud") ||
-            lower.contains("vk.com") ||
-            lower.contains("vk.ru")
-        ) {
-            return false
-        }
-
-        if (lower.contains("google-analytics") ||
+        if (lower.contains("blank.mp4") ||
+            lower.contains("dummy.mp4") ||
+            lower.contains("empty.mp4") ||
+            lower.contains("google-analytics") ||
             lower.contains("googletagmanager") ||
             lower.contains("google.com/g/collect") ||
             lower.contains("yandex") ||
@@ -66,12 +57,21 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
             lower.contains("/user-stats/") ||
             lower.contains("player-metrics") ||
             lower.contains("gtag") ||
-            lower.contains("favicon") ||
-            lower.contains("blank.mp4") ||
-            lower.contains("dummy.mp4") ||
-            lower.contains("empty.mp4")
+            lower.contains("favicon")
         ) {
             return true
+        }
+
+        if (path.endsWith(".m3u8") ||
+            path.endsWith(".mp4") ||
+            path.endsWith(".fd") ||
+            lower.contains(".m3u8") ||
+            lower.contains("storage.googleapis.com") ||
+            lower.contains("vkvideo.cloud") ||
+            lower.contains("vk.com") ||
+            lower.contains("vk.ru")
+        ) {
+            return false
         }
 
         if (path.endsWith(".js") ||
@@ -111,10 +111,14 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                 lower.contains("cdn.sinematv.az") || lower.contains("cdn1.sinematv.az") -> "https://sinematv.az/"
                 else -> referer ?: "$mainUrl/"
             }
-            return mapOf(
+            val headers = mutableMapOf(
                 "User-Agent" to defaultUserAgent,
                 "Referer" to streamReferer
             )
+            if (lower.contains("vkvideo") || lower.contains("vk.com") || lower.contains("vk.ru")) {
+                headers["Origin"] = "https://vk.com"
+            }
+            return headers
         }
 
         fun emitStream(streamUrl: String) {

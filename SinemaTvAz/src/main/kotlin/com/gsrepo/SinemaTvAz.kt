@@ -102,7 +102,7 @@ object LocalSinemaTvAzServer {
             val partOffset = if (info.partSize > 0) startByte % info.partSize else startByte
 
             val targetUrl = if (partIndex > 0) {
-                "${info.url}.${partIndex}"
+                if (info.url.contains("?")) "${info.url}&part=$partIndex" else "${info.url}?part=$partIndex"
             } else {
                 info.url
             }
@@ -118,7 +118,6 @@ object LocalSinemaTvAzServer {
                 
                 // Cloudflare 416 hatasını önlemek için Range'i parça boyutuna göre sınırla
                 val endByteForPart = if (info.partSize > 0) {
-                    val defaultEnd = info.partSize - 1
                     if (requestedEndByte != null && (requestedEndByte - startByte < info.partSize)) {
                         val maxEnd = startByte + (info.partSize - partOffset - 1)
                         if (requestedEndByte <= maxEnd) requestedEndByte else maxEnd
@@ -137,7 +136,6 @@ object LocalSinemaTvAzServer {
             }
 
             val response = app.baseClient.newCall(builder.build()).execute()
-            val responseCode = response.code
             val responseBody = response.body
             val bodyStream = responseBody.byteStream()
 
@@ -435,7 +433,7 @@ class SinemaTvAz : MainAPI() {
 
             var foundAny = false
 
-            // Yeni yöntem: Direkt sources array'i kullanarak tam dosyayı part mantığıyla Stream server'a iletmek
+            // 1) Önce sources array'i kontrol et
             if (sources != null && sources.length() > 0) {
                 for (i in 0 until sources.length()) {
                     val item = sources.getJSONObject(i)
@@ -485,14 +483,18 @@ class SinemaTvAz : MainAPI() {
                         foundAny = true
                     }
                 }
-            } else if (fristDatas != null) {
-                // Yedek plan (eski yöntem)
+            }
+
+            // 2) Eğer sources'tan link bulunamadıysa fristDatas (.fd parça verileri) üzerinden deneyelim
+            if (!foundAny && fristDatas != null) {
                 for (i in 0 until fristDatas.length()) {
                     val item = fristDatas.getJSONObject(i)
                     val streamUrl = item.optString("url")
                     if (streamUrl.isNotEmpty()) {
                         val resId = item.optInt("res_id")
                         val codec = item.optString("codec")
+                        val totalSize = item.optLong("size", -1L)
+                        val partSize = item.optLong("partSize", 536870912L)
                         val quality = when (resId) {
                             1 -> Qualities.P144.value
                             2 -> Qualities.P360.value
@@ -507,11 +509,13 @@ class SinemaTvAz : MainAPI() {
                         val filename = streamUrl.substringAfterLast('/')
 
                         val proxyUrl = LocalSinemaTvAzServer.registerStream(
-                            id = "${slug}_${resId}_${codec.ifEmpty { "v" }}_$i",
+                            id = "${slug}_${resId}_${codec.ifEmpty { "v" }}_fd_$i",
                             streamInfo = LocalSinemaTvAzServer.StreamInfo(
                                 url = streamUrl,
                                 filename = filename,
-                                headers = mapOf("Referer" to embedDomain)
+                                headers = mapOf("Referer" to embedDomain),
+                                partSize = partSize,
+                                totalSize = totalSize
                             )
                         )
 
@@ -561,9 +565,12 @@ class SinemaTvAz : MainAPI() {
             val playerUrl = fixUrl(src)
             if (playerUrl.isEmpty()) continue
 
-            // Şifrelenmiş parça (.fd) video altyapısı proxy'de Range desteklemediği için 
-            // extractSinemaTvAzCdn kullanmıyoruz. Doğrudan WebView üzerinden yakalanmasını sağlıyoruz.
-            // if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) { ... }
+            if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) {
+                if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
+                    foundAny = true
+                    continue
+                }
+            }
 
             if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
                 foundAny = true
