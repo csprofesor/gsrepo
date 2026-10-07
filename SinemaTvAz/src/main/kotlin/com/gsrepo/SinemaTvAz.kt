@@ -561,21 +561,20 @@ class SinemaTvAz : MainAPI() {
             val playerUrl = fixUrl(src)
             if (playerUrl.isEmpty()) continue
 
-            if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) {
-                if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
-                    foundAny = true
-                    continue
-                }
-            }
+            // Şifrelenmiş parça (.fd) video altyapısı proxy'de Range desteklemediği için 
+            // extractSinemaTvAzCdn kullanmıyoruz. Doğrudan WebView üzerinden yakalanmasını sağlıyoruz.
+            // if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) { ... }
 
             if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
                 foundAny = true
             }
         }
 
+        // Eğer iframe üzerinden doğrudan yakalanamadıysa (veya şifreli/CDN ise), WebViewExtractor devreye girsin.
         if (!foundAny) {
             val context = SinemaTvAzPlugin.pluginContext
             if (context != null) {
+                // Verilen sayfayı (data) WebView'da açıp JS çalıştırarak stream URL'lerini çıkarır
                 SinemaTvAzWebViewExtractor(context).getUrl(data, data, subtitleCallback, callback)
                 return true
             }
