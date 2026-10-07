@@ -43,7 +43,10 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
             lower.contains("pixel") ||
             lower.contains("banner") ||
             lower.contains("tracker") ||
-            lower.contains("vast")
+            lower.contains("vast") ||
+            lower.contains("vv-api.php") ||
+            lower.contains("parsed.json") ||
+            lower.contains("catalog-api")
         ) {
             return true
         }
@@ -67,17 +70,12 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
         val path = lower.substringBefore("?").substringBefore("#")
         return path.endsWith(".m3u8") ||
                path.endsWith(".mp4") ||
-               lower.contains(".m3u8") ||
                lower.contains("storage.googleapis.com") ||
+               lower.contains("vkvideo.cloud") ||
                lower.contains("deovi.mvapspdmpg.com") ||
-               lower.contains("gorodyshka.link") ||
-               lower.contains("master.m3u8") ||
                lower.contains("grouped.m3u8") ||
-               lower.contains("index.m3u8") ||
-               lower.contains("playlist") ||
-               lower.contains("manifest") ||
-               lower.contains("hls") ||
-               lower.startsWith("blob:")
+               lower.contains("master.m3u8") ||
+               lower.contains("index.m3u8")
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -110,8 +108,8 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                         @JavascriptInterface
                         fun onStreamFound(body: String, reqUrl: String) {
                             Log.d("SinemaTVWebView", "BRIDGE_FOUND: $reqUrl")
-                            val m3u8 = Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|deovi\.mvapspdmpg\.com|gorodyshka\.link|playlist|manifest|hls)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(body)?.value
-                                ?: Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|deovi\.mvapspdmpg\.com|gorodyshka\.link|playlist|manifest|hls)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(reqUrl)?.value
+                            val m3u8 = Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|vkvideo\.cloud|deovi\.mvapspdmpg\.com)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(body)?.value
+                                ?: Regex("""https?://[^\s"'<>]+?(?:\.m3u8|\.mp4|storage\.googleapis\.com|vkvideo\.cloud|deovi\.mvapspdmpg\.com)[^\s"'<>]*""", RegexOption.IGNORE_CASE).find(reqUrl)?.value
                                 ?: reqUrl
 
                             if (isValidStreamUrl(m3u8) && (!foundStream.getAndSet(true))) {
@@ -154,10 +152,10 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                             const pl = jwplayer().getPlaylist();
                                             if (pl && pl.length) {
                                                 for (let item of pl) {
-                                                    if (item.file) window.AndroidBridge.onStreamFound(item.file, item.file);
+                                                    if (item.file && !item.file.startsWith('blob:')) window.AndroidBridge.onStreamFound(item.file, item.file);
                                                     if (item.allSources) {
                                                         for (let s of item.allSources) {
-                                                            if (s.file) window.AndroidBridge.onStreamFound(s.file, s.file);
+                                                            if (s.file && !s.file.startsWith('blob:')) window.AndroidBridge.onStreamFound(s.file, s.file);
                                                         }
                                                     }
                                                 }
@@ -172,7 +170,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                     try {
                                         const clone = response.clone();
                                         const text = await clone.text();
-                                        if (text.includes('m3u8') || text.includes('mp4') || text.includes('storage.googleapis.com') || text.includes('playlist') || text.includes('hls')) {
+                                        if (text.includes('.m3u8') || text.includes('.mp4') || text.includes('storage.googleapis.com') || text.includes('vkvideo.cloud') || text.includes('deovi.mvapspdmpg.com')) {
                                             window.AndroidBridge.onStreamFound(text, response.url);
                                         }
                                     } catch(e) {}
@@ -183,7 +181,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                 window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
                                     this.addEventListener('load', function() {
                                         try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('mp4') || this.responseText.includes('storage.googleapis.com') || this.responseText.includes('playlist') || text.includes('hls'))) {
+                                            if (this.responseText && (this.responseText.includes('.m3u8') || this.responseText.includes('.mp4') || this.responseText.includes('storage.googleapis.com') || this.responseText.includes('vkvideo.cloud') || this.responseText.includes('deovi.mvapspdmpg.com'))) {
                                                 window.AndroidBridge.onStreamFound(this.responseText, url);
                                             }
                                         } catch(e) {}
@@ -195,7 +193,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                     try {
                                         const entries = performance.getEntriesByType('resource');
                                         for (let e of entries) {
-                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('.mp4') || e.name.includes('storage.googleapis.com') || e.name.includes('playlist') || e.name.includes('hls'))) {
+                                            if (e.name && (e.name.includes('.m3u8') || e.name.includes('.mp4') || e.name.includes('storage.googleapis.com') || e.name.includes('vkvideo.cloud') || e.name.includes('deovi.mvapspdmpg.com'))) {
                                                 window.AndroidBridge.onStreamFound(e.name, e.name);
                                             }
                                         }
@@ -242,7 +240,17 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                     }
                 }
 
-                loadUrl(targetUrl, mapOf("Referer" to "$mainUrl/"))
+                val wrapperHtml = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+                    <body style="margin:0;padding:0;background:#000;">
+                      <iframe id="plr" src="$targetUrl" style="width:100%;height:100vh;border:none;" allowfullscreen></iframe>
+                    </body>
+                    </html>
+                """.trimIndent()
+
+                loadDataWithBaseURL("$mainUrl/", wrapperHtml, "text/html", "UTF-8", null)
             }
         }
 

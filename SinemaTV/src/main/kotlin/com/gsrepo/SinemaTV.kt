@@ -1,6 +1,8 @@
 package com.gsrepo
 
 import android.content.Context
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -214,27 +216,40 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
                 val movieId = iframeUrl.substringAfter("movie_id=").substringBefore("&")
                 if (movieId.isNotBlank()) {
                     try {
-                        val apiHeaders = mapOf(
+                        val playerHtml = app.get(iframeUrl, referer = "$mainUrl/").text
+                        val hdrMatch = Regex("""window\.REQUEST_HEADERS=(\{.*?\});""").find(playerHtml)?.groupValues?.get(1)?.replace("'", "\"")
+
+                        val headersMap = mutableMapOf(
                             "Referer" to iframeUrl,
-                            "INT-LANG" to "PHP",
-                            "INT-TYPE" to "DLE",
-                            "DLE-API-TOKEN" to "eyJhbGciOiJIUzI1NiJ9.eyJ3ZWJTaXRlIjoiMjg4IiwiaXNzIjoiYXBpLXdlYm1hc3RlciIsInN1YiI6IjI5NCIsImlhdCI6MTc1NTUxMDgwOSwianRpIjoiYWZiZGJmNzAtY2RhOS00OTUyLThiMWMtYTYzMGI3ZTI3NWYxIiwic2NvcGUiOiJETEUifQ.MFtW21VsvgjP3H3y06ARuU4a3gEwazsE7J6DtDCcqOU",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                             "X-Has-Token" to "1"
                         )
-                        val apiUrl = "$mainUrl/vv-api.php?path=/balancer-api/proxy/playlists/catalog-api/episodes&content-id=$movieId"
-                        val apiResp = app.get(apiUrl, headers = apiHeaders).text
 
-                        val m3u8Regex = Regex("""https?://[^\s"'<>]+?(?:\.m3u8|parsed\.json)[^\s"'<>]*""")
-                        val matches = m3u8Regex.findAll(apiResp)
-                        for (match in matches) {
-                            val streamPath = match.value
-                            M3u8Helper.generateM3u8(
-                                name,
-                                streamPath,
-                                "$mainUrl/"
-                            ).forEach { link ->
-                                callback.invoke(link)
-                                linksFound = true
+                        if (hdrMatch != null) {
+                            val parsedHdrs = jacksonObjectMapper().readValue<Map<String, Any>>(hdrMatch)
+                            for ((k, v) in parsedHdrs) {
+                                headersMap[k] = v.toString()
+                            }
+                        }
+
+                        val apiUrl = "$mainUrl/vv-api.php?path=/balancer-api/proxy/playlists/catalog-api/episodes&content-id=$movieId"
+                        val apiResp = app.get(apiUrl, headers = headersMap).text
+
+                        val parsedJsonUrl = Regex("""https?://[^\s"'<>]+?parsed\.json[^\s"'<>]*""").find(apiResp)?.value
+                        if (parsedJsonUrl != null) {
+                            val parsedResp = app.get(parsedJsonUrl, referer = iframeUrl).text
+                            val m3u8Regex = Regex("""https?://[^\s"'<>]+?grouped\.m3u8[^\s"'<>]*""")
+                            val matches = m3u8Regex.findAll(parsedResp)
+                            for (match in matches) {
+                                val streamPath = match.value
+                                M3u8Helper.generateM3u8(
+                                    name,
+                                    streamPath,
+                                    "$mainUrl/"
+                                ).forEach { link ->
+                                    callback.invoke(link)
+                                    linksFound = true
+                                }
                             }
                         }
                     } catch (e: Exception) {
