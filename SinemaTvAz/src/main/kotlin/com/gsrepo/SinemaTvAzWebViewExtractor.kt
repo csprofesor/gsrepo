@@ -43,8 +43,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
             lower.contains("storage.googleapis.com") ||
             lower.contains("vkvideo.cloud") ||
             lower.contains("vk.com") ||
-            lower.contains("vk.ru") ||
-            lower.contains("sssrr.org")
+            lower.contains("vk.ru")
         ) {
             return false
         }
@@ -119,7 +118,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
         }
 
         fun emitStream(streamUrl: String) {
-            var fixStream = streamUrl
+            var fixStream = streamUrl.split("#")[0]
             if (fixStream.startsWith("//")) {
                 fixStream = "https:$fixStream"
             }
@@ -157,14 +156,14 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                     } catch (e: Exception) {
                         Log.e("SinemaTvAzWebView", "API JSON fetch failed for $fixStream", e)
                     }
-                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || path.endsWith(".fd") || lower.contains(".m3u8") || lower.contains("storage.googleapis.com") || lower.contains("vkvideo.cloud") || lower.contains("sssrr.org") || lower.contains("playlist")) {
+                } else if (path.endsWith(".m3u8") || path.endsWith(".mp4") || path.endsWith(".fd") || lower.contains(".m3u8") || lower.contains("storage.googleapis.com") || lower.contains("vkvideo.cloud") || lower.contains("playlist")) {
                     foundStream.set(true)
                     callback.invoke(
                         newExtractorLink(
                             source = "SinemaTvAzWebView",
                             name = "SinemaTvAz",
                             url = fixStream,
-                            type = if (path.endsWith(".mp4") || path.endsWith(".fd") || lower.contains("storage.googleapis.com") || lower.contains("sssrr.org")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
+                            type = if (path.endsWith(".mp4") || path.endsWith(".fd") || lower.contains("storage.googleapis.com")) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8,
                         ) {
                             this.quality = Qualities.Unknown.value
                             this.headers = getHeadersForStream(fixStream)
@@ -214,7 +213,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                         const iframes = document.querySelectorAll('iframe');
                                         iframes.forEach(f => {
                                             try {
-                                                const ds = f.getAttribute('data-src');
+                                                const ds = f.getAttribute('data-src') || f.getAttribute('data-veo-src');
                                                 if (ds && (!f.src || f.src === 'about:blank')) {
                                                     f.src = ds;
                                                 }
@@ -229,6 +228,18 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                                 try { ov.click(); } catch(e) {}
                                                 try { ov.remove(); } catch(e) {}
                                             }
+
+                                            try {
+                                                const videos = d.querySelectorAll('video');
+                                                videos.forEach(v => {
+                                                    if (v && v.src) {
+                                                        let vsrc = v.src.split('#')[0];
+                                                        if (vsrc.startsWith('http://') || vsrc.startsWith('https://')) {
+                                                            window.AndroidBridge.onStreamFound(vsrc, vsrc);
+                                                        }
+                                                    }
+                                                });
+                                            } catch(e) {}
 
                                             const win = d.defaultView || window;
                                             if (win) {
@@ -280,7 +291,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                     try {
                                         const clone = response.clone();
                                         const text = await clone.text();
-                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('mp4') || text.includes('manifest') || text.includes('sssrr.org')) {
+                                        if (text.includes('m3u8') || text.includes('playlist') || text.includes('mp4') || text.includes('manifest')) {
                                             window.AndroidBridge.onStreamFound(text, response.url);
                                         }
                                     } catch(e) {}
@@ -291,7 +302,7 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                 window.XMLHttpRequest.prototype.open = function(method, url, ...args) {
                                     this.addEventListener('load', function() {
                                         try {
-                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('mp4') || this.responseText.includes('manifest') || this.responseText.includes('sssrr.org'))) {
+                                            if (this.responseText && (this.responseText.includes('m3u8') || this.responseText.includes('playlist') || this.responseText.includes('mp4') || this.responseText.includes('manifest'))) {
                                                 window.AndroidBridge.onStreamFound(this.responseText, url);
                                             }
                                         } catch(e) {}
@@ -322,7 +333,6 @@ class SinemaTvAzWebViewExtractor(private val context: Context) : ExtractorApi() 
                                 path.contains("manifest") ||
                                 reqUrl.contains("storage.googleapis.com") ||
                                 reqUrl.contains("vkvideo.cloud") ||
-                                reqUrl.contains("sssrr.org") ||
                                 reqUrl.contains("parsed.json") ||
                                 reqUrl.contains("catalog-api") ||
                                 reqUrl.contains("balancer-api") ||
