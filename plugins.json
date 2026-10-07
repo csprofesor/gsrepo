@@ -41,7 +41,7 @@
     "fileHash": "sha256-85a1025c070aac2d71a8992367a5d1aa9774b221f93929a1b0f24f9b82ae9ca1"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/BelgeselX.cs3?v=b98dde3ddcde0ca848f95a08978bf065e44614e8b26af6b62a327c92e1883596",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/BelgeselX.cs3?v=11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db",
     "status": 1,
     "version": 17,
     "name": "BelgeselX",
@@ -50,7 +50,7 @@
       "csprofesor"
     ],
     "description": "En yeni belgeseller, türkçe altyazılı yada dublaj olarak 1080p kalitesinde HD belgesel izle.",
-    "fileSize": 30177,
+    "fileSize": 31167,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -58,10 +58,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=belgeselx.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-b98dde3ddcde0ca848f95a08978bf065e44614e8b26af6b62a327c92e1883596"
+    "fileHash": "sha256-11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=8d9f6c7a562e7d426df339f5b5fbe05356aef815d20c0eeaaa9d6b998a9be2e3",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=03f8f6c63b88f23b62a434397562777594398e592da90d17be3f011432086294",
     "status": 1,
     "version": 16,
     "name": "CizgiMax",
@@ -70,7 +70,7 @@
       "csprofesor"
     ],
     "description": "ÇizgiMax ile Çizgi Film izlemek artık daha kolay, donmadan full hd ve reklamsız bir sitedir, içerisinde 700 den fazla çizgi film olan, Bu site bu işi profesyonelce yapıyor.",
-    "fileSize": 33964,
+    "fileSize": 36001,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -80,7 +80,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=cizgimax.online&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-8d9f6c7a562e7d426df339f5b5fbe05356aef815d20c0eeaaa9d6b998a9be2e3"
+    "fileHash": "sha256-03f8f6c63b88f23b62a434397562777594398e592da90d17be3f011432086294"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DDizi.cs3?v=f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558",
@@ -103,7 +103,7 @@
     "fileHash": "sha256-f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziBox.cs3?v=da3d9d910f5f2fe16cf60fb892e1868f555d3783fbe8f103dc160fc5be9e98c3",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziBox.cs3?v=556321b847ea83865f11effeebeaa17a2e3bbb394ae2910ac53205c7f6046235",
     "status": 1,
     "version": 24,
     "name": "DiziBox",
@@ -112,7 +112,7 @@
       "csprofesor"
     ],
     "description": "Yabancı Dizi izle, Tüm yabancı dizilerin yeni ve eski sezonlarını full hd izleyebileceğiniz elit site.",
-    "fileSize": 30702,
+    "fileSize": 31499,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -120,7 +120,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dizibox.live&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-da3d9d910f5f2fe16cf60fb892e1868f555d3783fbe8f103dc160fc5be9e98c3"
+    "fileHash": "sha256-556321b847ea83865f11effeebeaa17a2e3bbb394ae2910ac53205c7f6046235"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziGom.cs3?v=c4271d5ecba6cff6487245836c363a2fa670b26d525047e21124d361268c8fa4",
@@ -204,7 +204,7 @@
     "fileHash": "sha256-a04cff0b51b21a32a6f7429e58adb6e26e455441c265ff811f37b2ae77233075"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMom.cs3?v=6784254f62da165f780bfde1b2d0da6f0b5be7a61ea1b265703106a61efc177b",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziMom.cs3?v=bb3c20bfb3b8f81852eecde3e374788bd8de4b932ab8958674bf563b331927b9",
     "status": 1,
     "version": 67,
     "name": "DiziMom",
@@ -213,7 +213,7 @@
       "csprofesor"
     ],
     "description": "Binlerce yerli yabancı dizi arşivi, tüm sezonlar, kesintisiz bölümler. Sadece dizi izle, Dizimom heryerde seninle!",
-    "fileSize": 39532,
+    "fileSize": 39756,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -221,7 +221,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.dizimom.plus&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-6784254f62da165f780bfde1b2d0da6f0b5be7a61ea1b265703106a61efc177b"
+    "fileHash": "sha256-bb3c20bfb3b8f81852eecde3e374788bd8de4b932ab8958674bf563b331927b9"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPal.cs3?v=aa4443570aff1af1a7b5f56adffd9d35fb083f5d84e026017561aae0508b1803",
@@ -307,7 +307,7 @@
     "fileHash": "sha256-f0f64f904daf14bdf195b5e8ef27db57de7fd9d9b04988bd583f0ea62d3cf551"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FullHDFilm.cs3?v=0bdc689ed670fb709591eb5cd20765e06883da26e5da4f96da4f2cd8693df37e",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FullHDFilm.cs3?v=f96a5da7e613f706ecb57a43347315615e612343a2fa08dc2d31f81e6114f78c",
     "status": 1,
     "version": 37,
     "name": "FullHDFilm",
@@ -316,7 +316,7 @@
       "csprofesor"
     ],
     "description": "Fullhdfilm ile en yeni vizyon filmler Full HD ve kesintisiz film sizlerle. Özgün film arşivimizle en üstün kaliteli film izle keyfini sunuyoruz.",
-    "fileSize": 32938,
+    "fileSize": 34398,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -325,10 +325,10 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmizle.live&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-0bdc689ed670fb709591eb5cd20765e06883da26e5da4f96da4f2cd8693df37e"
+    "fileHash": "sha256-f96a5da7e613f706ecb57a43347315615e612343a2fa08dc2d31f81e6114f78c"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi.cs3?v=13b8cee4391ba4db5be6cb1a03268482c3196800e304cb4b6eea7845c2048ad0",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmCehennemi.cs3?v=6c61a53d9ee481d7b965a1e17d9afa1b4d368874af4f6a28c1fcafb159d130f3",
     "status": 1,
     "version": 1,
     "name": "HDFilmCehennemi",
@@ -337,7 +337,7 @@
       "csprofesor"
     ],
     "description": "HDFilmCehennemi film ve dizi sağlayıcısı",
-    "fileSize": 49200,
+    "fileSize": 50099,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -346,7 +346,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.nl&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-13b8cee4391ba4db5be6cb1a03268482c3196800e304cb4b6eea7845c2048ad0"
+    "fileHash": "sha256-6c61a53d9ee481d7b965a1e17d9afa1b4d368874af4f6a28c1fcafb159d130f3"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/HDFilmIzle.cs3?v=2d737ad6ef8ae6ef6054e75aff8e949fa699c9057dd3973a48f9b8e03fd06aff",
@@ -453,7 +453,7 @@
     "fileHash": "sha256-835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SetFilmIzle.cs3?v=7c34272d0d572f39cbb348451c4a646e984a78f3108b3763ad6562dae1a9a09f",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SetFilmIzle.cs3?v=d2735f01cf504fd21e5ab313d861e7220604e3ebfcd201437190619ad29b6dcc",
     "status": 1,
     "version": 38,
     "name": "SetFilmIzle",
@@ -462,7 +462,7 @@
       "csprofesor"
     ],
     "description": "Setfilmizle sitemizde, donma yaşamadan Türkçe dublaj ve altyazılı filmleri ile dizileri muhteşem 1080p full HD kalitesinde izleyebilirsiniz.",
-    "fileSize": 33787,
+    "fileSize": 35025,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -471,7 +471,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=www.setfilmizle.uk&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-7c34272d0d572f39cbb348451c4a646e984a78f3108b3763ad6562dae1a9a09f"
+    "fileHash": "sha256-d2735f01cf504fd21e5ab313d861e7220604e3ebfcd201437190619ad29b6dcc"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SezonlukDizi.cs3?v=f36ccc2bb6ed5c8f4af292d0a959c113985babf3c160346f85ee3e8760510652",
@@ -558,7 +558,7 @@
     "fileHash": "sha256-3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TavsiyeFilmIzle.cs3?v=8a7a3fa1a1dd4dee0c2da56b9ab5c80ddaffe4294063dd18f961d5578a63d10e",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TavsiyeFilmIzle.cs3?v=aec457b24513db653843d750ffb6314117858e2c02bd5ed8c0488a8022e84452",
     "status": 1,
     "version": 2,
     "name": "TavsiyeFilmIzle",
@@ -575,8 +575,8 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=tavsiyefilmizle.net&sz=%size%",
     "apiVersion": 1,
-    "fileSize": 26218,
-    "fileHash": "sha256-8a7a3fa1a1dd4dee0c2da56b9ab5c80ddaffe4294063dd18f961d5578a63d10e"
+    "fileSize": 27561,
+    "fileHash": "sha256-aec457b24513db653843d750ffb6314117858e2c02bd5ed8c0488a8022e84452"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Watch2Movies.cs3?v=047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f",
@@ -600,7 +600,7 @@
     "fileHash": "sha256-047f54ee3f3b54b59456018fa136013035674f89a8994aa8f8f1c0c3b5ff954f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=478053e06dc7b157b15cc02232582ba2a043ebcc8d289d7a525b73e316c3e313",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/WebteIzle.cs3?v=1a5fb05de10f52d1ed41baa57f267ef77f79a3219900cd6ff15c5989aeb661bf",
     "status": 1,
     "version": 23,
     "name": "WebteIzle",
@@ -609,7 +609,7 @@
       "csprofesor"
     ],
     "description": "Her türlü filmi ister dublaj ister altyazılı, en kaliteli bir şekilde izleyebileceğiniz arşivi en geniş gerçek film izleme siteniz.",
-    "fileSize": 25777,
+    "fileSize": 26695,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -617,28 +617,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=webteizle3.xyz&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-478053e06dc7b157b15cc02232582ba2a043ebcc8d289d7a525b73e316c3e313"
-  },
-  {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/XPrime.cs3?v=e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a",
-    "status": 1,
-    "version": 1,
-    "name": "XPrime",
-    "internalName": "XPrime",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "XPrime eklentisi",
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Movie",
-      "TvSeries"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=github.com&sz=%size%",
-    "apiVersion": 1,
-    "fileSize": 31025,
-    "fileHash": "sha256-e50a587450c13993779d82c07188fc62f95c819298a4efa6e438165d3bf1b57a"
+    "fileHash": "sha256-1a5fb05de10f52d1ed41baa57f267ef77f79a3219900cd6ff15c5989aeb661bf"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/YabanciDizi.cs3?v=fd1b62aa2a30ee22f64f8c822c24dc2e48fd0389e3cf25a3520d1fa70c1285c7",
