@@ -514,6 +514,27 @@
     "fileHash": "sha256-ce02080c5f308df47c8ecec4fa54cc6bbc0c6ebfd8e749b5f58047a45856f662"
   },
   {
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTV.cs3?v=5faea163aa6a012048b04c06e773330fee787e6e2214ac2df318de5ca8343cb5",
+    "status": 1,
+    "version": 1,
+    "name": "SinemaTV",
+    "internalName": "SinemaTV",
+    "authors": [
+      "csprofesor"
+    ],
+    "description": "SinemaTV eklentisi",
+    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
+    "language": "tr",
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "iconUrl": "https://www.google.com/s2/favicons?domain=github.com&sz=%size%",
+    "apiVersion": 1,
+    "fileSize": 28405,
+    "fileHash": "sha256-5faea163aa6a012048b04c06e773330fee787e6e2214ac2df318de5ca8343cb5"
+  },
+  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SineWix.cs3?v=3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763",
     "status": 1,
     "version": 3,
