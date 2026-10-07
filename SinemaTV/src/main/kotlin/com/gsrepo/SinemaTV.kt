@@ -235,13 +235,29 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
                         val apiUrl = "$mainUrl/vv-api.php?path=/balancer-api/proxy/playlists/catalog-api/episodes&content-id=$movieId"
                         val apiResp = app.get(apiUrl, headers = headersMap).text
 
-                        val parsedJsonUrl = Regex("""https?://[^\s"'<>]+?parsed\.json[^\s"'<>]*""").find(apiResp)?.value
-                        if (parsedJsonUrl != null) {
-                            val parsedResp = app.get(parsedJsonUrl, referer = iframeUrl).text
-                            val m3u8Regex = Regex("""https?://[^\s"'<>]+?grouped\.m3u8[^\s"'<>]*""")
-                            val matches = m3u8Regex.findAll(parsedResp)
-                            for (match in matches) {
-                                val streamPath = match.value
+                        val m3u8Regex = Regex("""https?://[^\s"'<>]+?(?:\.m3u8|parsed\.json)[^\s"'<>]*""")
+                        val matches = m3u8Regex.findAll(apiResp)
+                        for (match in matches) {
+                            val streamPath = match.value
+                            if (streamPath.contains("parsed.json")) {
+                                try {
+                                    val parsedResp = app.get(streamPath, referer = iframeUrl).text
+                                    val innerM3u8Regex = Regex("""https?://[^\s"'<>]+?grouped\.m3u8[^\s"'<>]*""")
+                                    val innerMatches = innerM3u8Regex.findAll(parsedResp)
+                                    for (innerMatch in innerMatches) {
+                                        M3u8Helper.generateM3u8(
+                                            name,
+                                            innerMatch.value,
+                                            "$mainUrl/"
+                                        ).forEach { link ->
+                                            callback.invoke(link)
+                                            linksFound = true
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            } else if (streamPath.contains(".m3u8")) {
                                 M3u8Helper.generateM3u8(
                                     name,
                                     streamPath,
