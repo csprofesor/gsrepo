@@ -52,7 +52,16 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
             "${request.data.trimEnd('/')}/page/$page/"
         }
         val document = app.get(targetUrl).document
-        val home = document.select("a.poster-item, div.poster-item")
+        val isHome = request.data == "$mainUrl/" || request.data == mainUrl
+
+        val items = if (isHome) {
+            document.select("a.poster-item, div.poster-item")
+        } else {
+            document.select(".sect:not(.sect--top) a.poster-item, .sect:not(.sect--top) div.poster-item, #dle-content a.poster-item")
+                .ifEmpty { document.select("a.poster-item, div.poster-item") }
+        }
+
+        val home = items
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
 
