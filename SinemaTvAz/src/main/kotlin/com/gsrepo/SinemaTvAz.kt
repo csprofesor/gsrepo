@@ -18,6 +18,7 @@ import org.json.JSONArray
 import org.jsoup.nodes.Element
 import org.json.JSONObject
 import org.json.JSONTokener
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -632,24 +633,96 @@ class SinemaTvAz : MainAPI() {
         }
     }
 
+    private fun labelValue(doc: Document, label: String): String? {
+        val el = doc.select("*:containsOwn($label)").firstOrNull() ?: return null
+        val box = if (el.text().length > label.length + 3) el else (el.parent() ?: el)
+        return box.text().substringAfter(label).trimStart(':', ' ').trim().takeIf { it.isNotBlank() }
+    }
+
+    private suspend fun loadDirect(
+        embed: String,
+        referer: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val html = try {
+            app.get(embed, referer = referer, headers = browserHeaders).text.replace("\\/", "/")
+        } catch (_: Exception) {
+            return false
+        }
+        val urls = Regex("""https?://[^"'\s<>\\]+?\.(?:m3u8|mp4)[^"'\s<>\\]*""", RegexOption.IGNORE_CASE)
+            .findAll(html).map { it.value }.distinct().take(4).toList()
+        for (u in urls) {
+            callback.invoke(
+                newExtractorLink(
+                    source = name,
+                    name = name,
+                    url = u,
+                    type = if (u.contains("m3u8", true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                ) {
+                    this.referer = embed
+                    this.quality = Qualities.Unknown.value
+                }
+            )
+        }
+        return urls.isNotEmpty()
+    }
+
+    private suspend fun deepEmbeds(html: String, pageUrl: String): List<String> {
+        val out = mutableListOf<String>()
+        val text = html.replace("\\/", "/").replace("\\u002F", "/").replace("&amp;", "&")
+        val texts = mutableListOf(text)
+        Regex("""atob\(\s*[\x27\x22]([A-Za-z0-9+/=_-]{16,})[\x27\x22]\s*\)""").findAll(text).forEach {
+            try {
+                texts.add(String(Base64.decode(it.groupValues[1], Base64.DEFAULT)))
+            } catch (_: Exception) {
+            }
+        }
+        for (t in texts) {
+            Regex("""<iframe[^>]+?(?:src|data-src)\s*=\s*\\?[\x27\x22]([^\x27\x22\\ >]+)""", RegexOption.IGNORE_CASE)
+                .findAll(t).forEach { out.add(it.groupValues[1]) }
+            Regex("""\x22(?:embed_url|embedUrl|embed|iframe|player|video_url|videoUrl|file|source)\x22\s*:\s*\x22(https?:[^\x22]+)\x22""")
+                .findAll(t).forEach { out.add(it.groupValues[1]) }
+        }
+        val doc = Jsoup.parse(html)
+        for (el in doc.select("[data-post][data-nume]").take(6)) {
+            val post = el.attr("data-post")
+            val nume = el.attr("data-nume")
+            val type = el.attr("data-type").ifBlank { "movie" }
+            try {
+                val r = app.get("$mainUrl/wp-json/dooplayer/v2/$post/$type/$nume", referer = pageUrl, headers = browserHeaders).text
+                    .replace("\\/", "/")
+                Regex("""(?:embed_url|src)\x22?\s*[:=]\s*\\?\x22?\\?[\x27\x22]?(https?:[^\x27\x22\\ >]+)""")
+                    .find(r)?.let { out.add(it.groupValues[1]) }
+            } catch (_: Exception) {
+            }
+        }
+        return out.map { fixUrl(it) }
+            .filterNot { it.contains("youtube", true) || Regex("""\.(js|css|jpe?g|png|webp|svg|gif)(\?|$)""", RegexOption.IGNORE_CASE).containsMatchIn(it) }
+            .distinct()
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data, headers = browserHeaders, referer = "$mainUrl/").document
+        val response = app.get(data, headers = browserHeaders, referer = "$mainUrl/")
+        val document = response.document
         val iframes = document.select("iframe")
         var foundAny = false
 
-        for (iframe in iframes) {
+        val embedUrls = (iframes.mapNotNull { iframe ->
             val src = iframe.attr("data-src").ifEmpty { iframe.attr("src") }
             val title = iframe.attr("title")
-
             if (title.contains("Трейлер", ignoreCase = true) || title.contains("Trailer", ignoreCase = true)) {
-                continue
+                null
+            } else {
+                src.takeIf { it.isNotBlank() }
             }
+        } + deepEmbeds(response.text, data)).distinct()
 
+        for (src in embedUrls) {
             if (src.isEmpty() || src.contains("googletagmanager") || src.contains("yandex") || src.contains("facebook") || src.contains("/t?token=") || src.contains("allarknow") || src.contains("/t/")) {
                 continue
             }
@@ -664,7 +737,7 @@ class SinemaTvAz : MainAPI() {
                 }
             }
 
-            if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
+            if (loadExtractor(playerUrl, data, subtitleCallback, callback) || loadDirect(playerUrl, data, callback)) {
                 foundAny = true
             }
         }
