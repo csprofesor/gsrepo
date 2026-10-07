@@ -3,6 +3,8 @@ package com.gsrepo
 import android.util.Base64
 import android.util.Log
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -12,8 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import okhttp3.Request
+import org.json.JSONArray
 import org.jsoup.nodes.Element
 import org.json.JSONObject
+import org.json.JSONTokener
+import org.jsoup.nodes.Document
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
@@ -230,6 +235,7 @@ class SinemaTvAz : MainAPI() {
     )
 
     override val mainPage = mainPageOf(
+        "$mainUrl/" to "Son Eklenenler",
         "$mainUrl/xarici-filmler/" to "Xarici Filmlər",
         "$mainUrl/hind-filmleri/" to "Hind Filmləri",
         "$mainUrl/serial/" to "Seriallar",
@@ -249,7 +255,9 @@ class SinemaTvAz : MainAPI() {
         "$mainUrl/fantastic/" to "Elmi-Kütləvi",
         "$mainUrl/detective/" to "Detektiv",
         "$mainUrl/adventures/" to "Macəra",
-        "$mainUrl/semejnyj/" to "Ailə"
+        "$mainUrl/semejnyj/" to "Ailə",
+        "$mainUrl/4k-filmy-i-serialy/" to "4K Filmlər",
+        "$mainUrl/new-items/" to "Yenilər"
     )
 
     override suspend fun getMainPage(
@@ -264,7 +272,7 @@ class SinemaTvAz : MainAPI() {
         val home = items.mapNotNull {
             it.toSearchResult()
         }.distinctBy { it.url }
-        return newHomePageResponse(request.name, home)
+        return newHomePageResponse(request.name, home, hasNext = home.isNotEmpty())
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -282,14 +290,17 @@ class SinemaTvAz : MainAPI() {
             this.selectFirst("img")?.attr("title")?.ifEmpty { this.selectFirst("img")?.attr("alt") } ?: ""
         }.ifEmpty {
             this.text().trim()
-        }
+        }.replace(Regex("""\s*(film(i)?\s+)?izle\s*$""", RegexOption.IGNORE_CASE), "").trim()
 
         if (title.isBlank()) return null
 
         val imgElement = this.selectFirst("img")
-        val posterUrl = imgElement?.attr("data-src")?.ifEmpty { imgElement.attr("src") }
-            ?.replace("/uploads/movies/", "/movies/")
-            ?.let { fixUrl(it) }
+        val rawPoster = imgElement?.attr("data-src")?.ifEmpty { imgElement.attr("src") }
+        val posterUrl = if (rawPoster != null && !rawPoster.startsWith("data:image")) {
+            fixUrl(rawPoster.replace("/uploads/movies/", "/movies/"))
+        } else {
+            null
+        }
 
         val isTvSeries = fixHref.contains("/serial/") || fixHref.contains("/mult/") || fixHref.contains("/anime/") || fixHref.contains("/dorama/") || fixHref.contains("/tvshow/") || title.contains("sezon", ignoreCase = true)
 
@@ -325,21 +336,79 @@ class SinemaTvAz : MainAPI() {
         }.distinctBy { it.url }
     }
 
+    private fun ldValues(doc: Document, key: String): List<String> {
+        val out = mutableListOf<String>()
+        fun add(v: Any?) {
+            when (v) {
+                is String -> out.add(v)
+                is Number -> out.add(v.toString())
+                is JSONObject -> v.optString("name").takeIf { it.isNotBlank() }?.let { out.add(it) }
+                is JSONArray -> for (i in 0 until v.length()) add(v.opt(i))
+            }
+        }
+        fun walk(o: Any?) {
+            when (o) {
+                is JSONObject -> {
+                    if (o.has(key)) add(o.get(key))
+                    o.keys().forEach { walk(o.opt(it)) }
+                }
+                is JSONArray -> for (i in 0 until o.length()) walk(o.opt(i))
+            }
+        }
+        doc.select("script[type=application/ld+json]").forEach {
+            try {
+                walk(JSONTokener(it.data()).nextValue())
+            } catch (_: Exception) {
+            }
+        }
+        return out.filter { it.isNotBlank() }.distinct()
+    }
+
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url, headers = browserHeaders).document
 
-        val title = document.selectFirst("h1.title, h1.entry-title, h1")?.text()?.trim() ?: ""
-        val poster = document.selectFirst("div.poster img, div.shortstory-poster img, div.story-poster img, .img-box img, img")?.let {
-            it.attr("data-src").ifEmpty { it.attr("src") }
-        }?.replace("/uploads/movies/", "/movies/")?.let { fixUrl(it) }
+        val title = (document.selectFirst("h1.title, h1.entry-title, h1")?.text() ?: document.selectFirst("meta[property=og:title]")?.attr("content"))
+            ?.trim()?.replace(Regex("""\s*(film(i)?\s+)?izle\s*(\|.*)?$""", RegexOption.IGNORE_CASE), "")?.trim() ?: ""
 
-        val description = document.selectFirst("div.full-text, div.story-text, div.description, div.fdesc")?.text()?.trim()
-        val year = document.selectFirst("div.info:contains(İl), span:contains(İl), div:contains(İl)")?.text()?.let {
+        val poster = document.selectFirst("div.poster img, div.page__poster img, div.shortstory-poster img, div.story-poster img, .img-box img, img")?.let {
+            it.attr("data-src").ifEmpty { it.attr("src") }
+        }?.takeIf { !it.startsWith("data:image") }?.replace("/uploads/movies/", "/movies/")?.let { fixUrl(it) }
+
+        val description = document.selectFirst("div.page__text, div.full-text, div.story-text, div.description, div.fdesc")?.text()?.trim()
+            ?: document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
+            ?: ldValues(document, "description").firstOrNull()
+
+        val year = document.selectFirst("div.page__year, div.info:contains(İl), span:contains(İl)")?.text()?.let {
             Regex("\\d{4}").find(it)?.value?.toIntOrNull()
+        } ?: Regex("""\b(19|20)\d{2}\b""").find(title)?.value?.toIntOrNull()
+
+        val genres = document.select("span.page__meta-item--genres, div.genres a").map { it.text().trim() }
+            .flatMap { it.split(",") }.map { it.trim() }.filter { it.isNotBlank() }
+            .ifEmpty { ldValues(document, "genre") }.distinct()
+
+        val actors = document.select("div.actors a, div.page__meta a").map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .ifEmpty { ldValues(document, "actor") }.distinct()
+
+        val durationText = document.selectFirst("span.page__meta-item--duration")?.text()
+        val duration = durationText?.let { d ->
+            Regex("""(\d{1,2}):(\d{2})""").find(d)?.let { m ->
+                m.groupValues[1].toInt() * 60 + m.groupValues[2].toInt()
+            } ?: Regex("""(\d+)\s*(?:dk|dakika|min)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
         }
 
-        val episodes = mutableListOf<Episode>()
+        val score = Regex("""(?iu)(?:IMDb|Кинопоиск|Kinopoisk)\D{0,15}(\d(?:[.,]\d)?)""").find(document.text())?.groupValues?.get(1)?.replace(",", ".")?.toDoubleOrNull()
+            ?: ldValues(document, "ratingValue").firstOrNull()?.toDoubleOrNull()
 
+        val trailer = document.selectFirst("iframe[src*=youtube], iframe[data-src*=youtube]")?.let { f ->
+            f.attr("data-src").ifEmpty { f.attr("src") }
+        }
+
+        val recs = document.select(".sect--last a.poster-item, a.poster-item.grid-item").mapNotNull {
+            it.toSearchResult()
+        }.filter { it.url != url }.distinctBy { it.url }.take(20)
+
+        val episodes = mutableListOf<Episode>()
         val episodeElements = document.select("div.episodes-list a, ul.episodes a, div.seasons-list a, .episodes a, .season-episodes a")
         if (episodeElements.isNotEmpty()) {
             episodeElements.forEach { element ->
@@ -376,12 +445,24 @@ class SinemaTvAz : MainAPI() {
                 this.posterUrl = poster
                 this.plot = description
                 this.year = year
+                this.tags = genres
+                this.duration = duration
+                this.recommendations = recs
+                if (actors.isNotEmpty()) addActors(actors)
+                if (!trailer.isNullOrBlank()) addTrailer(trailer)
+                if (score != null) this.score = Score.from10(score)
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
                 this.plot = description
                 this.year = year
+                this.tags = genres
+                this.duration = duration
+                this.recommendations = recs
+                if (actors.isNotEmpty()) addActors(actors)
+                if (!trailer.isNullOrBlank()) addTrailer(trailer)
+                if (score != null) this.score = Score.from10(score)
             }
         }
     }
