@@ -95,95 +95,38 @@ object LocalSinemaTvAzServer {
             val md5Bytes = MessageDigest.getInstance("MD5").digest(info.filename.toByteArray(Charsets.UTF_8))
             val md5Hex = md5Bytes.joinToString("") { "%02x".format(it) }
             val keyBytes = md5Hex.toByteArray(Charsets.UTF_8)
-            val ivBytes = keyBytes.copyOfRange(0, 16)
 
             var startByte = 0L
+            var requestedEndByte: Long? = null
             if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-                startByte = rangeHeader.substringAfter("bytes=").substringBefore("-").toLongOrNull() ?: 0L
+                val rangeStr = rangeHeader.substringAfter("bytes=").trim()
+                startByte = rangeStr.substringBefore("-").toLongOrNull() ?: 0L
+                requestedEndByte = rangeStr.substringAfter("-").takeIf { it.isNotBlank() }?.toLongOrNull()
             }
 
-            // Hesaplanmış bölüm endeksi ve part dosyasının boyutu
-            val partIndex = if (info.partSize > 0) startByte / info.partSize else 0L
-            val partOffset = if (info.partSize > 0) startByte % info.partSize else startByte
-
-            val targetUrl = if (partIndex > 0) {
-                if (info.url.contains("?")) "${info.url}&part=$partIndex" else "${info.url}?part=$partIndex"
+            var currentStartByte = startByte
+            val totalSize = info.totalSize
+            val finalEndByte = if (requestedEndByte != null) {
+                requestedEndByte
             } else {
-                info.url
+                if (totalSize > 0) totalSize - 1 else -1L
             }
 
-            val builder = Request.Builder()
-                .url(targetUrl)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
-                .header("Referer", info.headers["Referer"] ?: "")
-
-            if (rangeHeader != null) {
-                val requestedEndByteStr = rangeHeader.substringAfter("-")
-                val requestedEndByte = requestedEndByteStr.toLongOrNull()
-                
-                // Cloudflare 416 hatasını önlemek için Range'i parça boyutuna göre sınırla
-                val endByteForPart = if (info.partSize > 0) {
-                    if (requestedEndByte != null && (requestedEndByte - startByte < info.partSize)) {
-                        val maxEnd = startByte + (info.partSize - partOffset - 1)
-                        if (requestedEndByte <= maxEnd) requestedEndByte else maxEnd
-                    } else {
-                        info.partSize - 1
-                    }
-                } else {
-                    requestedEndByte
-                }
-
-                if (endByteForPart != null) {
-                     builder.header("Range", "bytes=$partOffset-$endByteForPart")
-                } else {
-                     builder.header("Range", "bytes=$partOffset-")
-                }
-            }
-
-            val response = app.baseClient.newCall(builder.build()).execute()
-            val responseBody = response.body
-            val bodyStream = responseBody.byteStream()
-
-            val blockIndex = startByte / 16
-            val keystreamOffset = (startByte % 16).toInt()
-
-            val counterIv = ivBytes.clone()
-            var carry = blockIndex
-            for (i in 15 downTo 0) {
-                val sum = (counterIv[i].toInt() and 0xFF) + (carry and 0xFF).toInt()
-                counterIv[i] = sum.toByte()
-                carry = carry ushr 8
-            }
-
-            val secretKey = SecretKeySpec(keyBytes, "AES")
-            val ivSpec = IvParameterSpec(counterIv)
-            val cipher = Cipher.getInstance("AES/CTR/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
-
-            if (keystreamOffset > 0) {
-                cipher.update(ByteArray(keystreamOffset))
-            }
+            val contentLength = if (finalEndByte != -1L) finalEndByte - currentStartByte + 1 else -1L
 
             val out = socket.getOutputStream()
+            val statusLine = if (rangeHeader != null) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
             
-            // Gerçek dosya boyutu (totalSize) client'a bildirilmeli.
-            val totalSizeKnown = info.totalSize > 0
-            val statusLine = if (startByte > 0) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
-            
-            // Eğer response'dan Content-Range okuyorsak parçanınkini değil tüm dosyanınkini simüle edelim.
-            val originContentRange = response.header("Content-Range")
-            val originContentLength = response.header("Content-Length")
-
             val head = StringBuilder().apply {
                 append(statusLine)
                 append("Content-Type: video/mp4\r\n")
-                if (totalSizeKnown) {
-                    val remainLength = info.totalSize - startByte
-                    append("Content-Length: $remainLength\r\n")
-                    append("Content-Range: bytes $startByte-${info.totalSize - 1}/${info.totalSize}\r\n")
-                } else {
-                    if (originContentLength != null) append("Content-Length: $originContentLength\r\n")
-                    if (originContentRange != null) append("Content-Range: $originContentRange\r\n")
+                if (contentLength > 0) {
+                    append("Content-Length: $contentLength\r\n")
+                }
+                if (rangeHeader != null) {
+                    val totalStr = if (totalSize > 0) totalSize.toString() else "*"
+                    val endStr = if (finalEndByte != -1L) finalEndByte.toString() else ""
+                    append("Content-Range: bytes $currentStartByte-$endStr/$totalStr\r\n")
                 }
                 append("Accept-Ranges: bytes\r\n")
                 append("Access-Control-Allow-Origin: *\r\n")
@@ -191,27 +134,95 @@ object LocalSinemaTvAzServer {
             }.toString()
 
             out.write(head.toByteArray(Charsets.UTF_8))
-
-            val buffer = ByteArray(16384)
-            var bytesRead = bodyStream.read(buffer)
-
-            while (bytesRead != -1) {
-                val decrypted = cipher.update(buffer, 0, bytesRead)
-                if (decrypted != null && decrypted.isNotEmpty()) {
-                    out.write(decrypted)
+            
+            while (currentStartByte <= finalEndByte || finalEndByte == -1L) {
+                val partIndex = if (info.partSize > 0) currentStartByte / info.partSize else 0L
+                val partOffset = if (info.partSize > 0) currentStartByte % info.partSize else currentStartByte
+                
+                val partRemain = if (info.partSize > 0) info.partSize - partOffset else -1L
+                val fetchEndOffset = if (finalEndByte != -1L) {
+                    val remainInRequest = finalEndByte - currentStartByte + 1
+                    if (partRemain > 0 && remainInRequest > partRemain) partOffset + partRemain - 1 else partOffset + remainInRequest - 1
+                } else {
+                    if (partRemain > 0) partOffset + partRemain - 1 else -1L
                 }
-                bytesRead = bodyStream.read(buffer)
-            }
 
-            val finalBytes = cipher.doFinal()
-            if (finalBytes != null && finalBytes.isNotEmpty()) {
-                out.write(finalBytes)
-            }
+                val targetUrl = if (partIndex > 0) {
+                    if (info.url.contains("?")) "${info.url}&part=$partIndex" else "${info.url}?part=$partIndex"
+                } else {
+                    info.url
+                }
 
+                val builder = Request.Builder()
+                    .url(targetUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
+                    .header("Referer", info.headers["Referer"] ?: "")
+
+                if (fetchEndOffset != -1L) {
+                     builder.header("Range", "bytes=$partOffset-$fetchEndOffset")
+                } else {
+                     builder.header("Range", "bytes=$partOffset-")
+                }
+
+                val response = app.baseClient.newCall(builder.build()).execute()
+                if (!response.isSuccessful) {
+                    response.close()
+                    break
+                }
+                
+                val bodyStream = response.body.byteStream()
+                
+                val md5Bytes = MessageDigest.getInstance("MD5").digest(info.filename.toByteArray(Charsets.UTF_8))
+                val md5Hex = md5Bytes.joinToString("") { "%02x".format(it) }
+                val keyBytes = md5Hex.toByteArray(Charsets.UTF_8)
+                val ivBytes = keyBytes.copyOfRange(0, 16)
+                
+                val blockIndex = partOffset / 16
+                val keystreamOffset = (partOffset % 16).toInt()
+                
+                val counterIv = ivBytes.clone()
+                var carry = blockIndex
+                for (i in 15 downTo 0) {
+                    val sum = (counterIv[i].toInt() and 0xFF) + (carry and 0xFF).toInt()
+                    counterIv[i] = sum.toByte()
+                    carry = carry ushr 8
+                }
+                
+                val secretKey = SecretKeySpec(keyBytes, "AES")
+                val ivSpec = IvParameterSpec(counterIv)
+                val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+                
+                if (keystreamOffset > 0) {
+                    cipher.update(ByteArray(keystreamOffset))
+                }
+                
+                val buffer = ByteArray(16384)
+                var bytesRead = bodyStream.read(buffer)
+                var partBytesRead = 0L
+                while (bytesRead != -1) {
+                    val decrypted = cipher.update(buffer, 0, bytesRead)
+                    if (decrypted != null && decrypted.isNotEmpty()) {
+                        out.write(decrypted)
+                    }
+                    partBytesRead += bytesRead
+                    currentStartByte += bytesRead
+                    bytesRead = bodyStream.read(buffer)
+                }
+                val finalBytes = cipher.doFinal()
+                if (finalBytes != null && finalBytes.isNotEmpty()) {
+                    out.write(finalBytes)
+                }
+                
+                bodyStream.close()
+                response.close()
+                
+                val expectedBytes = if (fetchEndOffset != -1L) fetchEndOffset - partOffset + 1 else partRemain
+                if (expectedBytes > 0 && partBytesRead < expectedBytes) {
+                    break // Server didn't send full requested chunk
+                }
+            }
             out.flush()
-            bodyStream.close()
-            responseBody.close()
-            response.close()
             socket.close()
         }
     }
