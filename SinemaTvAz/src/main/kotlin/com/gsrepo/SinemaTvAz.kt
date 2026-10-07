@@ -465,10 +465,11 @@ class SinemaTvAz : MainAPI() {
             if (playerUrl.isEmpty()) continue
 
             if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) {
-                if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
-                    foundAny = true
-                    continue
-                }
+                // Let WebView handle it because extractSinemaTvAzCdn returns broken partial .fd chunks
+                // if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
+                //     foundAny = true
+                //     continue
+                // }
             }
 
             if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
