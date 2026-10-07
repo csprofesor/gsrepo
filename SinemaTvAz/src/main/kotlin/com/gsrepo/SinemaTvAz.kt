@@ -32,7 +32,9 @@ object LocalSinemaTvAzServer {
     data class StreamInfo(
         val url: String,
         val filename: String,
-        val headers: Map<String, String>
+        val headers: Map<String, String>,
+        val partSize: Long = 536870912L,
+        val totalSize: Long = -1L
     )
 
     @Synchronized
@@ -90,24 +92,54 @@ object LocalSinemaTvAzServer {
             val keyBytes = md5Hex.toByteArray(Charsets.UTF_8)
             val ivBytes = keyBytes.copyOfRange(0, 16)
 
+            var startByte = 0L
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                startByte = rangeHeader.substringAfter("bytes=").substringBefore("-").toLongOrNull() ?: 0L
+            }
+
+            // Hesaplanmış bölüm endeksi ve part dosyasının boyutu
+            val partIndex = if (info.partSize > 0) startByte / info.partSize else 0L
+            val partOffset = if (info.partSize > 0) startByte % info.partSize else startByte
+
+            val targetUrl = if (partIndex > 0) {
+                "${info.url}.${partIndex}"
+            } else {
+                info.url
+            }
+
             val builder = Request.Builder()
-                .url(info.url)
+                .url(targetUrl)
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
                 .header("Referer", info.headers["Referer"] ?: "")
 
             if (rangeHeader != null) {
-                builder.header("Range", rangeHeader)
+                val requestedEndByteStr = rangeHeader.substringAfter("-")
+                val requestedEndByte = requestedEndByteStr.toLongOrNull()
+                
+                // Cloudflare 416 hatasını önlemek için Range'i parça boyutuna göre sınırla
+                val endByteForPart = if (info.partSize > 0) {
+                    val defaultEnd = info.partSize - 1
+                    if (requestedEndByte != null && (requestedEndByte - startByte < info.partSize)) {
+                        val maxEnd = startByte + (info.partSize - partOffset - 1)
+                        if (requestedEndByte <= maxEnd) requestedEndByte else maxEnd
+                    } else {
+                        info.partSize - 1
+                    }
+                } else {
+                    requestedEndByte
+                }
+
+                if (endByteForPart != null) {
+                     builder.header("Range", "bytes=$partOffset-$endByteForPart")
+                } else {
+                     builder.header("Range", "bytes=$partOffset-")
+                }
             }
 
             val response = app.baseClient.newCall(builder.build()).execute()
             val responseCode = response.code
             val responseBody = response.body
             val bodyStream = responseBody.byteStream()
-
-            var startByte = 0L
-            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-                startByte = rangeHeader.substringAfter("bytes=").substringBefore("-").toLongOrNull() ?: 0L
-            }
 
             val blockIndex = startByte / 16
             val keystreamOffset = (startByte % 16).toInt()
@@ -130,15 +162,26 @@ object LocalSinemaTvAzServer {
             }
 
             val out = socket.getOutputStream()
-            val statusLine = if (responseCode == 206) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
-            val responseContentLength = response.header("Content-Length")
-            val responseContentRange = response.header("Content-Range")
+            
+            // Gerçek dosya boyutu (totalSize) client'a bildirilmeli.
+            val totalSizeKnown = info.totalSize > 0
+            val statusLine = if (startByte > 0) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
+            
+            // Eğer response'dan Content-Range okuyorsak parçanınkini değil tüm dosyanınkini simüle edelim.
+            val originContentRange = response.header("Content-Range")
+            val originContentLength = response.header("Content-Length")
 
             val head = StringBuilder().apply {
                 append(statusLine)
                 append("Content-Type: video/mp4\r\n")
-                if (responseContentLength != null) append("Content-Length: $responseContentLength\r\n")
-                if (responseContentRange != null) append("Content-Range: $responseContentRange\r\n")
+                if (totalSizeKnown) {
+                    val remainLength = info.totalSize - startByte
+                    append("Content-Length: $remainLength\r\n")
+                    append("Content-Range: bytes $startByte-${info.totalSize - 1}/${info.totalSize}\r\n")
+                } else {
+                    if (originContentLength != null) append("Content-Length: $originContentLength\r\n")
+                    if (originContentRange != null) append("Content-Range: $originContentRange\r\n")
+                }
                 append("Accept-Ranges: bytes\r\n")
                 append("Access-Control-Allow-Origin: *\r\n")
                 append("Connection: close\r\n\r\n")
@@ -383,13 +426,67 @@ class SinemaTvAz : MainAPI() {
 
             val decryptedJson = JSONObject(decryptedText)
             val section = decryptedJson.optJSONObject("mp4") ?: decryptedJson.optJSONObject("hls") ?: return false
+            val sources = section.optJSONArray("sources")
+            
+            // Eğer fristDatas üzerinden gidemiyorsak sources ve domainleri birleştirip partlı yapıyı çözelim
             val fristDatas = section.optJSONArray("fristDatas")
 
             val embedDomain = fixUrl(embedUrl).substringBefore("/?").trimEnd('/') + "/"
 
             var foundAny = false
 
-            if (fristDatas != null) {
+            // Yeni yöntem: Direkt sources array'i kullanarak tam dosyayı part mantığıyla Stream server'a iletmek
+            if (sources != null && sources.length() > 0) {
+                for (i in 0 until sources.length()) {
+                    val item = sources.getJSONObject(i)
+                    val streamUrlBase = item.optString("url")
+                    val path = item.optString("path")
+                    if (streamUrlBase.isNotEmpty() && path.isNotEmpty()) {
+                        val streamUrl = "$streamUrlBase/$path"
+                        val resId = item.optInt("res_id")
+                        val codec = item.optString("codec")
+                        val totalSize = item.optLong("size", -1L)
+                        val partSize = item.optLong("partSize", 536870912L) // Default 512MB
+                        
+                        val quality = when (resId) {
+                            1 -> Qualities.P144.value
+                            2 -> Qualities.P360.value
+                            3 -> Qualities.P480.value
+                            4 -> Qualities.P720.value
+                            5 -> Qualities.P1080.value
+                            7 -> Qualities.P1440.value
+                            8 -> Qualities.P2160.value
+                            else -> Qualities.Unknown.value
+                        }
+                        val codecLabel = if (codec.isNotEmpty()) " [$codec]" else ""
+                        val filename = path.substringAfterLast('/')
+
+                        val proxyUrl = LocalSinemaTvAzServer.registerStream(
+                            id = "${slug}_${resId}_${codec.ifEmpty { "v" }}_$i",
+                            streamInfo = LocalSinemaTvAzServer.StreamInfo(
+                                url = streamUrl,
+                                filename = filename,
+                                headers = mapOf("Referer" to embedDomain),
+                                partSize = partSize,
+                                totalSize = totalSize
+                            )
+                        )
+
+                        callback.invoke(
+                            newExtractorLink(
+                                source = "SinemaTvAz",
+                                name = "SinemaTvAz$codecLabel",
+                                url = proxyUrl,
+                                type = ExtractorLinkType.VIDEO,
+                            ) {
+                                this.quality = quality
+                            }
+                        )
+                        foundAny = true
+                    }
+                }
+            } else if (fristDatas != null) {
+                // Yedek plan (eski yöntem)
                 for (i in 0 until fristDatas.length()) {
                     val item = fristDatas.getJSONObject(i)
                     val streamUrl = item.optString("url")
@@ -465,11 +562,10 @@ class SinemaTvAz : MainAPI() {
             if (playerUrl.isEmpty()) continue
 
             if (playerUrl.contains("cdn.sinematv.az") || playerUrl.contains("cdn1.sinematv.az") || playerUrl.contains("v=")) {
-                // Let WebView handle it because extractSinemaTvAzCdn returns broken partial .fd chunks
-                // if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
-                //     foundAny = true
-                //     continue
-                // }
+                if (extractSinemaTvAzCdn(playerUrl, data, callback)) {
+                    foundAny = true
+                    continue
+                }
             }
 
             if (loadExtractor(playerUrl, data, subtitleCallback, callback)) {
