@@ -51,6 +51,14 @@ subprojects {
         requiresResources = false
     }
 
+    afterEvaluate {
+        if (!file("src/main/res").exists()) {
+            cloudstream {
+                requiresResources = false
+            }
+        }
+    }
+
     android {
         namespace = "com.gsrepo"
         compileSdk = 36
