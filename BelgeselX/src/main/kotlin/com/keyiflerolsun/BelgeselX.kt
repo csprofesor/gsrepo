@@ -7,6 +7,7 @@ import android.util.Log
 import org.jsoup.nodes.Element
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import org.jsoup.Jsoup
 
 class BelgeselX : MainAPI() {
     override var mainUrl              = "https://belgeselx.com"
@@ -212,28 +213,38 @@ class BelgeselX : MainAPI() {
         if (ic2.isNotEmpty() && ic2 != "0") playerUrls.add(getSrc(ic2, episodeId, 2))
         if (ic3.isNotEmpty() && ic3 != "0") playerUrls.add(getSrc(ic3, episodeId, 3))
 
-        if (playerUrls.isEmpty()) {
-            playerUrls.add("https://belgeselx.com/video/data/new4.php?id=$episodeId")
-            playerUrls.add("https://belgeselx.com/video/data/new5.php?id=$episodeId")
-            playerUrls.add("https://belgeselx.com/video/data/new3.php?id=$episodeId")
-            playerUrls.add("https://belgeselx.com/video/data/new2.php?id=$episodeId")
-            playerUrls.add("https://belgeselx.com/video/data/new1.php?id=$episodeId")
-        }
+        // Always include sira=2 player endpoints for new3/new1/new2 as they host active Odnoklassniki streams
+        playerUrls.add("https://belgeselx.com/video/data/new3.php?id=$episodeId&sira=2")
+        playerUrls.add("https://belgeselx.com/video/data/new1.php?id=$episodeId&sira=2")
+        playerUrls.add("https://belgeselx.com/video/data/new2.php?id=$episodeId&sira=2")
+        playerUrls.add("https://belgeselx.com/video/data/new5.php?id=$episodeId&sira=1")
+        playerUrls.add("https://belgeselx.com/video/data/new4.php?id=$episodeId&sira=1")
 
         var linksFound = false
 
-        playerUrls.forEach { iframeUrl ->
+        playerUrls.distinct().forEach { iframeUrl ->
             try {
                 val alternatifResp = app.get(iframeUrl, referer = refererUrl).text
-                
+                val doc = Jsoup.parse(alternatifResp)
+
                 // 1. Check for iframe sources
-                val iframeSrcMatch = Regex("""<iframe[^>]+src=["']([^"']+)["']""").find(alternatifResp)
-                if (iframeSrcMatch != null) {
-                    var embedUrl = iframeSrcMatch.groupValues[1]
-                    if (embedUrl.startsWith("AF1Qip")) {
-                        embedUrl = "https://photos.google.com/share/$embedUrl"
+                doc.select("iframe").forEach { ifr ->
+                    var embedUrl = ifr.attr("src").trim()
+                    if (embedUrl.isBlank()) return@forEach
+
+                    val okIdMatch = Regex("""(\d{10,})""").find(embedUrl)
+                    if (okIdMatch != null) {
+                        val okId = okIdMatch.groupValues[1]
+                        embedUrl = "https://odnoklassniki.ru/videoembed/$okId"
+                    } else if (embedUrl.contains("AF1Qip")) {
+                        val afMatch = Regex("""AF1Qip[^\s"'<>]*""").find(embedUrl)
+                        if (afMatch != null) {
+                            embedUrl = "https://photos.google.com/share/${afMatch.groupValues[0]}"
+                        }
+                    } else if (!embedUrl.startsWith("http")) {
+                        embedUrl = "https://belgeselx.com/$embedUrl"
                     }
-                    
+
                     if (embedUrl.contains("photos.google.com") || embedUrl.contains("googleusercontent.com")) {
                         try {
                             val photosPage = app.get(embedUrl).text
@@ -256,7 +267,7 @@ class BelgeselX : MainAPI() {
                         } catch (e: Exception) {
                             Log.e("BLX", "Failed to resolve Google Photos stream: ${e.message}")
                         }
-                    } else if (embedUrl.startsWith("http")) {
+                    } else {
                         if (loadExtractor(embedUrl, refererUrl, subtitleCallback, callback)) {
                             linksFound = true
                         }
@@ -267,8 +278,8 @@ class BelgeselX : MainAPI() {
                 Regex("""\{\s*["']?file["']?\s*:\s*["']([^"']+)["'](?:.*?["']?label["']?\s*:\s*["']([^"']+)["'])?""").findAll(alternatifResp).forEach {
                     val videoUrl = it.groupValues[1]
 
-                    // Filter out empty/incomplete URLs
-                    if (videoUrl.endsWith("cid=") || videoUrl.endsWith("googleusercontent.com/") || videoUrl.isBlank()) {
+                    // Filter out empty/incomplete/dummy URLs
+                    if (videoUrl.endsWith("cid=") || videoUrl.contains("ogw/default-user") || videoUrl.endsWith("googleusercontent.com/") || videoUrl.isBlank()) {
                         return@forEach
                     }
 
