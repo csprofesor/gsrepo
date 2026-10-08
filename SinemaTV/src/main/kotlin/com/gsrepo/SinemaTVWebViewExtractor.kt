@@ -194,14 +194,14 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                         super.onPageFinished(view, url)
                         val js = """
                             (function() {
-                                setInterval(() => {
+                                function processWindow(win) {
                                     try {
-                                        const v = document.querySelector('video');
+                                        const v = win.document.querySelector('video');
                                         if (v && v.paused) { v.muted = true; v.play(); }
-                                        const btns = document.querySelectorAll('#overlay, [role="button"], .play-button, button, .play, iframe');
+                                        const btns = win.document.querySelectorAll('#overlay, [role="button"], .play-button, button, .play');
                                         for (let b of btns) { b.click(); }
-                                        if (window.jwplayer && jwplayer().getPlaylist) {
-                                            const pl = jwplayer().getPlaylist();
+                                        if (win.jwplayer && win.jwplayer().getPlaylist) {
+                                            const pl = win.jwplayer().getPlaylist();
                                             if (pl && pl.length) {
                                                 for (let item of pl) {
                                                     if (item.file && !item.file.startsWith('blob:')) window.AndroidBridge.onStreamFound(item.file, item.file);
@@ -211,6 +211,18 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                                         }
                                                     }
                                                 }
+                                            }
+                                        }
+                                    } catch(e) {}
+                                }
+
+                                setInterval(() => {
+                                    processWindow(window);
+                                    try {
+                                        const iframes = document.querySelectorAll('iframe');
+                                        for (let ifr of iframes) {
+                                            if (ifr.contentWindow) {
+                                                processWindow(ifr.contentWindow);
                                             }
                                         }
                                     } catch(e) {}
