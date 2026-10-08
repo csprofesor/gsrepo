@@ -9,7 +9,6 @@ gsrepo Türkçe CloudStream eklentilerini içeren sağlayıcı deposudur.
 | **AnimeciX** | Anime | Türkçe | Active |
 | **Anizm** | Anime, Anime Film, OVA | Türkçe | Active |
 | **BelgeselX** | Belgesel | Türkçe | Active |
-| **CizgiMax** | Çizgi Film, Anime, Film | Türkçe | Active |
 | **DDizi** | Dizi | Türkçe | Active |
 | **DiziBox** | Yabancı Dizi | Türkçe | Active |
 | **DiziGom** | Yabancı Dizi | Türkçe | Active |
