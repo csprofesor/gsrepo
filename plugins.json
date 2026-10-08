@@ -61,28 +61,6 @@
     "fileHash": "sha256-11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=c567372eb13e324c1cc53b5735647f7d4a5c8cf86569b68c4c234428b3063785",
-    "status": 1,
-    "version": 16,
-    "name": "CizgiMax",
-    "internalName": "CizgiMax",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "ÇizgiMax ile Çizgi Film izlemek artık daha kolay, donmadan full hd ve reklamsız bir sitedir, içerisinde 700 den fazla çizgi film olan, Bu site bu işi profesyonelce yapıyor.",
-    "fileSize": 35553,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "Cartoon",
-      "Anime",
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=cizgimax.online&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-c567372eb13e324c1cc53b5735647f7d4a5c8cf86569b68c4c234428b3063785"
-  },
-  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DDizi.cs3?v=f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558",
     "status": 1,
     "version": 1,
