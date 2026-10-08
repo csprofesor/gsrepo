@@ -93,11 +93,19 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                 val refererHost = try { URI(targetUrl).let { "${it.scheme}://${it.host}/" } } catch(_: Exception) { "$mainUrl/" }
                 val originHost = refererHost.trimEnd('/')
 
+                // AbyssPlayer ve benzer sağlayıcılar, ana sayfayı referans alarak koruma uygulayabilir
+                val finalReferer = when {
+                    streamUrl.contains("storage.googleapis.com") || streamUrl.contains("vkvideo.cloud") || streamUrl.contains("deovi.mvapspdmpg.com") || streamUrl.contains("sssrr.org") -> targetUrl
+                    else -> refererHost
+                }
+                
+                val finalOrigin = try { URI(finalReferer).let { "${it.scheme}://${it.host}" } } catch(_: Exception) { originHost }
+
                 if (streamUrl.contains(".m3u8", ignoreCase = true) || streamUrl.contains("playlist", ignoreCase = true) || streamUrl.contains("manifest", ignoreCase = true)) {
                     val resolved = SinemaTVHelper.resolveM3u8Streams(
                         pluginName,
                         streamUrl,
-                        refererHost,
+                        finalReferer,
                         mapOf("User-Agent" to browserUserAgent),
                         callback
                     )
@@ -111,8 +119,8 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                             ) {
                                 this.quality = Qualities.P1080.value
                                 this.headers = mapOf(
-                                    "Referer" to refererHost,
-                                    "Origin" to originHost,
+                                    "Referer" to finalReferer,
+                                    "Origin" to finalOrigin,
                                     "User-Agent" to browserUserAgent
                                 )
                             }
@@ -128,8 +136,8 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                         ) {
                             this.quality = Qualities.P1080.value
                             this.headers = mapOf(
-                                "Referer" to refererHost,
-                                "Origin" to originHost,
+                                "Referer" to finalReferer,
+                                "Origin" to finalOrigin,
                                 "User-Agent" to browserUserAgent
                             )
                         }
