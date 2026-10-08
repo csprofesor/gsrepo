@@ -41,7 +41,7 @@
     "fileHash": "sha256-85a1025c070aac2d71a8992367a5d1aa9774b221f93929a1b0f24f9b82ae9ca1"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/BelgeselX.cs3?v=11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/BelgeselX.cs3?v=7b96a466236771d0940f6c81ff6185b82bb43632eb753d0a9c86635dfaf08458",
     "status": 1,
     "version": 17,
     "name": "BelgeselX",
@@ -50,7 +50,7 @@
       "csprofesor"
     ],
     "description": "En yeni belgeseller, türkçe altyazılı yada dublaj olarak 1080p kalitesinde HD belgesel izle.",
-    "fileSize": 31167,
+    "fileSize": 31490,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -58,7 +58,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=belgeselx.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-11afcc524f9a2616d4d3e2b170f255d8f78a6ad50ce3ed0c585dcaf74b8d49db"
+    "fileHash": "sha256-7b96a466236771d0940f6c81ff6185b82bb43632eb753d0a9c86635dfaf08458"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DDizi.cs3?v=f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558",
