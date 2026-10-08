@@ -26,6 +26,7 @@ import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -423,24 +424,63 @@ class DiziPal : MainAPI() {
         var iframeUrl = ""
 
         try {
-            val doc = app.get(
+            val cookieMap = mutableMapOf<String, String>()
+
+            fun updateCookies(headers: Headers) {
+                val setCookies = headers.values("Set-Cookie")
+                for (sc in setCookies) {
+                    val part = sc.substringBefore(";")
+                    if (part.contains("=")) {
+                        val key = part.substringBefore("=").trim()
+                        val value = part.substringAfter("=").trim()
+                        if (key.isNotBlank() && value.isNotBlank()) {
+                            cookieMap[key] = value
+                        }
+                    }
+                }
+            }
+
+            val pageResp = app.get(
                 data, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
-            ).document
+            )
+            updateCookies(pageResp.headers)
+            val doc = pageResp.document
 
             val cfg = doc.selectFirst(".video-player-container[data-cfg]")?.attr("data-cfg")
             if (!cfg.isNullOrBlank()) {
                 try {
-                    app.get("$mainUrl/ajax-token", headers = mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data))
-                } catch (_: Exception) {}
+                    val cookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                    val tokResp = app.get(
+                        "$mainUrl/ajax-token",
+                        headers = mapOf(
+                            "X-Requested-With" to "XMLHttpRequest",
+                            "Referer" to data,
+                            "Cookie" to cookieHeader
+                        ),
+                        interceptor = interceptor
+                    )
+                    updateCookies(tokResp.headers)
 
+                    val tokText = tokResp.text
+                    val tokenVal = Regex(""""t"\s*:\s*"([^"]+)"""").find(tokText)?.groupValues?.get(1)
+                    if (!tokenVal.isNullOrBlank()) {
+                        cookieMap["_ct"] = tokenVal
+                    }
+                } catch (e: Exception) {
+                    Log.e("DiziPal", "ajax-token hatası: ${e.message}")
+                }
+
+                val finalCookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
                 val configResp = app.post(
                     "$mainUrl/ajax-player-config",
                     data = mapOf("cfg" to cfg),
                     headers = mapOf(
                         "X-Requested-With" to "XMLHttpRequest",
                         "Content-Type" to "application/x-www-form-urlencoded",
-                        "Referer" to data
+                        "Referer" to data,
+                        "Cookie" to finalCookieHeader
                     ),
+                    cookies = cookieMap,
                     interceptor = interceptor
                 ).text
 

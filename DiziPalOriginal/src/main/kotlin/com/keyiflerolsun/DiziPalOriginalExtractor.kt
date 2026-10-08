@@ -22,57 +22,75 @@ class DizipalOriginalPlayer : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val response = app.get(url, referer = referer).text
-        val openPlayerRegex = """window\.openPlayer\s*\(\s*['"]([^'"]+)['"]""".toRegex()
+        try {
+            val response = app.get(url, referer = referer).text
 
-        val subUrls = mutableSetOf<String>()
-        Regex(""""file":"((?:\\\\\"|[^"])+)","label":"((?:\\\\\"|[^"])+)"""").findAll(response).forEach {
-            val (subUrlExt, subLangExt) = it.destructured
+            val subUrls = mutableSetOf<String>()
+            Regex(""""file":"((?:\\\\\"|[^"])+)","label":"((?:\\\\\"|[^"])+)"""").findAll(response).forEach {
+                val (subUrlExt, subLangExt) = it.destructured
+                val subUrl = subUrlExt.replace("\\/", "/").replace("\\u0026", "&").replace("\\", "")
+                val subLang = subLangExt.replace("\\u0131", "ı").replace("\\u0130", "İ").replace("\\u00fc", "ü").replace("\\u00e7", "ç").replace("\\u011f", "ğ").replace("\\u015f", "ş")
 
-            val subUrl = subUrlExt.replace("\\/", "/").replace("\\u0026", "&").replace("\\", "")
-            val subLang = subLangExt.replace("\\u0131", "ı").replace("\\u0130", "İ").replace("\\u00fc", "ü").replace("\\u00e7", "ç").replace("\\u011f", "ğ").replace("\\u015f", "ş")
-
-            if (subUrl in subUrls) return@forEach
-            subUrls.add(subUrl)
-
-            subtitleCallback.invoke(
-                newSubtitleFile(
-                    lang = subLang,
-                    url = fixUrl(subUrl)
-                ) {
-                    headers = mapOf(
-                        "Referer" to url,
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Norton/124.0.0.0"
+                if (subUrl !in subUrls) {
+                    subUrls.add(subUrl)
+                    subtitleCallback.invoke(
+                        newSubtitleFile(lang = subLang, url = fixUrl(subUrl)) {
+                            headers = mapOf(
+                                "Referer" to url,
+                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                            )
+                        }
                     )
                 }
-            )
-        }
-        val playlistId = openPlayerRegex.find(response)?.groupValues?.get(1)
-        Log.d("DiziPalOriginal", "--> playlistId: $playlistId")
-        if (playlistId != null) {
-            val domainRegex = """https?://[^/]+""".toRegex()
-            val domain = domainRegex.find(url)?.value ?: "https://dplayer82.site"
-            val apiUrl = "$domain/source2.php?v=$playlistId"
-            Log.d("DiziPalOriginal", "--> apiUrl: $apiUrl")
-            val apiResponse = app.get(apiUrl, referer = url).text
+            }
 
-            try {
-                val fileRegex = """"file"\s*:\s*"([^"]+)"""".toRegex()
-                val fileMatches = fileRegex.findAll(apiResponse)
+            val fileMatches = Regex("""file\s*:\s*["']([^"']+\.m3u8[^"']*)["']""").findAll(response)
+                .map { it.groupValues[1] }.toList()
+                .ifEmpty {
+                    Regex("""https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/,-]+\.m3u8[a-zA-Z0-9._/,-]*""").findAll(response)
+                        .map { it.value }.toList()
+                }
 
-                fileMatches.forEach { matchResult ->
+            if (fileMatches.isNotEmpty()) {
+                fileMatches.distinct().forEach { rawFile ->
+                    var fileUrl = rawFile.replace("\\/", "/")
+                    if (fileUrl.startsWith("//")) fileUrl = "https:$fileUrl"
+                    else if (!fileUrl.startsWith("http")) fileUrl = "https://$fileUrl"
+
+                    val domain = Regex("""https?://[^/]+""").find(url)?.value ?: mainUrl
+                    callback.invoke(
+                        newExtractorLink(
+                            source = name,
+                            name = "DiziPal (HLS)",
+                            url = fileUrl,
+                            type = ExtractorLinkType.M3U8
+                        ) {
+                            headers = mapOf(
+                                "Origin" to domain,
+                                "Referer" to url,
+                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                            )
+                            Qualities.Unknown.value
+                        }
+                    )
+                }
+                return
+            }
+
+            val openPlayerRegex = """window\.openPlayer\s*\(\s*['"]([^'"]+)['"]""".toRegex()
+            val playlistId = openPlayerRegex.find(response)?.groupValues?.get(1)
+            if (playlistId != null) {
+                val domain = Regex("""https?://[^/]+""").find(url)?.value ?: "https://dplayer82.site"
+                val apiUrl = "$domain/source2.php?v=$playlistId"
+                val apiResponse = app.get(apiUrl, referer = url).text
+
+                val apiMatches = Regex(""""file"\s*:\s*"([^"]+)"""").findAll(apiResponse)
+                apiMatches.forEach { matchResult ->
                     var fileUrl = matchResult.groupValues[1].replace("\\/", "/")
+                    if (fileUrl.startsWith("//")) fileUrl = "https:$fileUrl"
+                    else if (!fileUrl.startsWith("http")) fileUrl = "https://$fileUrl"
 
-                    if (fileUrl.startsWith("//")) {
-                        fileUrl = "https:$fileUrl"
-                    } else if (!fileUrl.startsWith("http")) {
-                        fileUrl = "https://$fileUrl"
-                        Log.d("DiziPalOriginal", "--> fileUrl: $fileUrl")
-                    }
-
-                    if (fileUrl.contains("m.php")) {
-                        fileUrl = fileUrl.replace("m.php", "master.m3u8")
-                    }
+                    if (fileUrl.contains("m.php")) fileUrl = fileUrl.replace("m.php", "master.m3u8")
 
                     callback.invoke(
                         newExtractorLink(
@@ -86,9 +104,9 @@ class DizipalOriginalPlayer : ExtractorApi() {
                         }
                     )
                 }
-            } catch (e: Exception) {
-                Log.e("DiziPalOriginal", "--> DPlayer Extractor Hata: ${e.message}")
             }
+        } catch (e: Exception) {
+            Log.e("DiziPalOriginal", "DizipalOriginalPlayer Extractor Hata: ${e.message}")
         }
     }
 }
