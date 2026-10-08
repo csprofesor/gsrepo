@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 
 class SinemaTVWebViewExtractor(private val context: Context, private val pluginName: String) : ExtractorApi() {
@@ -82,16 +83,20 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
         streamUrl: String,
         foundStream: AtomicBoolean,
         browserUserAgent: String,
+        targetUrl: String,
         callback: (ExtractorLink) -> Unit
     ) {
         if (!foundStream.getAndSet(true)) {
             Log.d("SinemaTVWebView", "EMITTING_STREAM=$streamUrl")
             CoroutineScope(Dispatchers.IO).launch {
+                val refererHost = try { URI(targetUrl).let { "${it.scheme}://${it.host}/" } } catch(_: Exception) { "$mainUrl/" }
+                val originHost = refererHost.trimEnd('/')
+
                 if (streamUrl.contains(".m3u8", ignoreCase = true) || streamUrl.contains("playlist", ignoreCase = true) || streamUrl.contains("manifest", ignoreCase = true)) {
                     val resolved = SinemaTVHelper.resolveM3u8Streams(
                         pluginName,
                         streamUrl,
-                        "$mainUrl/",
+                        refererHost,
                         mapOf("User-Agent" to browserUserAgent),
                         callback
                     )
@@ -105,8 +110,8 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                             ) {
                                 this.quality = Qualities.P1080.value
                                 this.headers = mapOf(
-                                    "Referer" to "$mainUrl/",
-                                    "Origin" to mainUrl,
+                                    "Referer" to refererHost,
+                                    "Origin" to originHost,
                                     "User-Agent" to browserUserAgent
                                 )
                             }
@@ -122,8 +127,8 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                         ) {
                             this.quality = Qualities.P1080.value
                             this.headers = mapOf(
-                                "Referer" to "$mainUrl/",
-                                "Origin" to mainUrl,
+                                "Referer" to refererHost,
+                                "Origin" to originHost,
                                 "User-Agent" to browserUserAgent
                             )
                         }
@@ -168,7 +173,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
                                 ?: reqUrl
 
                             if (isValidStreamUrl(m3u8)) {
-                                emitStream(m3u8, foundStream, browserUserAgent, callback)
+                                emitStream(m3u8, foundStream, browserUserAgent, reqUrl, callback)
                             }
                         }
                     },
@@ -254,7 +259,7 @@ class SinemaTVWebViewExtractor(private val context: Context, private val pluginN
 
                         if (isValidStreamUrl(reqUrl)) {
                             Log.d("SinemaTVWebView", "INTERCEPTED_REQ=$reqUrl")
-                            emitStream(reqUrl, foundStream, browserUserAgent, callback)
+                            emitStream(reqUrl, foundStream, browserUserAgent, reqUrl, callback)
                         }
                         return super.shouldInterceptRequest(view, request)
                     }
