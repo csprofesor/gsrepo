@@ -14,10 +14,12 @@ data class SearchAnime(
 )
 
 data class ServerItem(
-    @JsonProperty("type") val type: String?,
-    @JsonProperty("resolveUrl") val resolveUrl: String?,
-    @JsonProperty("label") val label: String?,
-    @JsonProperty("src") val src: String?
+    @JsonProperty("type") val type: String? = null,
+    @JsonProperty("resolveUrl") val resolveUrl: String? = null,
+    @JsonProperty("streamUrl") val streamUrl: String? = null,
+    @JsonProperty("label") val label: String? = null,
+    @JsonProperty("src") val src: String? = null,
+    @JsonProperty("embedId") val embedId: Any? = null
 )
 
 data class ResolveResponse(

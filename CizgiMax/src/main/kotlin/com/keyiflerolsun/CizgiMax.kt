@@ -97,7 +97,13 @@ class CizgiMax : MainAPI() {
         }
 
         return if (episodes.isEmpty()) {
-            newMovieLoadResponse(title, url, TvType.Movie, url) {
+            val watchUrl = fixUrlNull(
+                document.selectFirst("a.btn-primary-cz")?.attr("href")
+                    ?: document.selectFirst("a.ep-num-btn")?.attr("href")
+                    ?: document.selectFirst("div.ep-grid-numbers a")?.attr("href")
+            ) ?: url
+
+            newMovieLoadResponse(title, url, TvType.Movie, watchUrl) {
                 this.posterUrl = poster
                 this.plot      = description
                 this.tags      = tags
@@ -115,9 +121,23 @@ class CizgiMax : MainAPI() {
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         Log.d("CZGM", "data » $data")
-        val document = app.get(data).document
+        var document = app.get(data).document
 
-        val script = document.select("script").find { it.data().contains("var servers") }?.data() ?: return false
+        var script = document.select("script").find { it.data().contains("var servers") }?.data()
+        
+        if (script == null) {
+            val watchUrl = fixUrlNull(
+                document.selectFirst("a.btn-primary-cz")?.attr("href")
+                    ?: document.selectFirst("a.ep-num-btn")?.attr("href")
+                    ?: document.selectFirst("div.ep-grid-numbers a")?.attr("href")
+            )
+            if (!watchUrl.isNullOrEmpty() && watchUrl != data) {
+                document = app.get(watchUrl).document
+                script = document.select("script").find { it.data().contains("var servers") }?.data()
+            }
+        }
+
+        if (script == null) return false
         
         val serversList = mutableListOf<ServerItem>()
 
@@ -158,7 +178,7 @@ class CizgiMax : MainAPI() {
         uniqueServers.forEach { server ->
             if (!server.resolveUrl.isNullOrEmpty()) {
                 try {
-                    val resolveUrl = if (server.resolveUrl.startsWith("http")) server.resolveUrl else "${mainUrl}${server.resolveUrl}"
+                    val resolveUrl = fixUrlNull(server.resolveUrl) ?: return@forEach
                     val resolveRes = app.get(resolveUrl, referer = data).parsedSafe<ResolveResponse>()
                     val embedId = resolveRes?.id
                     if (!embedId.isNullOrEmpty()) {
@@ -181,7 +201,7 @@ class CizgiMax : MainAPI() {
                     Log.e("CZGM", "Resolve error: ${e.message}")
                 }
             } else if (!server.streamUrl.isNullOrEmpty()) {
-                val streamUrl = if (server.streamUrl.startsWith("http")) server.streamUrl else "${mainUrl}${server.streamUrl}"
+                val streamUrl = fixUrlNull(server.streamUrl) ?: return@forEach
                 var finalUrl = streamUrl
                 try {
                     val headRes = app.get(streamUrl, headers = mapOf("Referer" to "$mainUrl/"), allowRedirects = false)
@@ -218,7 +238,7 @@ class CizgiMax : MainAPI() {
                     }
                 )
             } else if (!server.src.isNullOrEmpty()) {
-                val iframeSrc = server.src
+                val iframeSrc = fixUrlNull(server.src) ?: return@forEach
                 loadExtractor(iframeSrc, "$mainUrl/", subtitleCallback, callback)
             }
         }
@@ -235,26 +255,4 @@ class CizgiMax : MainAPI() {
             else -> Qualities.Unknown.value
         }
     }
-
-    data class ServerItem(
-        val type: String?,
-        val label: String?,
-        val resolveUrl: String?,
-        val streamUrl: String?,
-        val src: String?,
-        val embedId: Any?
-    )
-
-    data class ResolveResponse(
-        val id: String?
-    )
-
-    data class TauResponse(
-        val urls: List<TauUrl>?
-    )
-
-    data class TauUrl(
-        val label: String?,
-        val url: String
-    )
 }
