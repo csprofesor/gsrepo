@@ -60,8 +60,18 @@ class DiziPalOriginal : MainAPI() {
             val request  = chain.request()
             val response = chain.proceed(request)
             val doc      = Jsoup.parse(response.peekBody(1024 * 1024).string())
+            val htmlStr  = doc.html()
+            val htmlLow  = htmlStr.lowercase()
 
-            if (doc.html().contains("Just a moment") || doc.html().contains("Attention Required!") || doc.html().contains("Cloudflare") || doc.html().contains("erisime_engellenmis") || doc.html().contains("5651")) {
+            if (htmlStr.contains("Just a moment")
+                || htmlStr.contains("Attention Required!")
+                || htmlStr.contains("Cloudflare")
+                || htmlStr.contains("erisime_engellenmis")
+                || htmlStr.contains("5651")
+                || htmlStr.contains("Doğrulama")
+                || htmlLow.contains("cf-turnstile")
+                || htmlLow.contains("turnstile")
+            ) {
                 return cloudflareKiller.intercept(chain)
             }
 
@@ -530,12 +540,32 @@ class DiziPalOriginal : MainAPI() {
                     } else {
                         val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
                         if (!loadedExt) {
-                            DizipalOriginalPlayer().getUrl(
-                                url = iframeUrl,
-                                referer = targetUrl,
-                                subtitleCallback = subtitleCallback,
-                                callback = callback
-                            )
+                            try {
+                                val embedResp = app.get(
+                                    iframeUrl,
+                                    interceptor = interceptor,
+                                    timeout = 15000,
+                                    headers = mapOf(
+                                        "Referer" to targetUrl,
+                                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                                    )
+                                )
+                                DizipalOriginalPlayer().extractFromHtml(
+                                    url = iframeUrl,
+                                    referer = targetUrl,
+                                    html = embedResp.text,
+                                    subtitleCallback = subtitleCallback,
+                                    callback = callback
+                                )
+                            } catch (e: Exception) {
+                                Log.e("DiziPalOriginal", "embed fetch hatası: ${e.message}")
+                                DizipalOriginalPlayer().getUrl(
+                                    url = iframeUrl,
+                                    referer = targetUrl,
+                                    subtitleCallback = subtitleCallback,
+                                    callback = callback
+                                )
+                            }
                         }
                     }
                 }
@@ -556,12 +586,32 @@ class DiziPalOriginal : MainAPI() {
 
                     val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
                     if (!loadedExt) {
-                        DizipalOriginalPlayer().getUrl(
-                            url = iframeUrl,
-                            referer = targetUrl,
-                            subtitleCallback = subtitleCallback,
-                            callback = callback
-                        )
+                        try {
+                            val embedResp = app.get(
+                                iframeUrl,
+                                interceptor = interceptor,
+                                timeout = 15000,
+                                headers = mapOf(
+                                    "Referer" to targetUrl,
+                                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                                )
+                            )
+                            DizipalOriginalPlayer().extractFromHtml(
+                                url = iframeUrl,
+                                referer = targetUrl,
+                                html = embedResp.text,
+                                subtitleCallback = subtitleCallback,
+                                callback = callback
+                            )
+                        } catch (e: Exception) {
+                            Log.e("DiziPalOriginal", "embed fetch hatası: ${e.message}")
+                            DizipalOriginalPlayer().getUrl(
+                                url = iframeUrl,
+                                referer = targetUrl,
+                                subtitleCallback = subtitleCallback,
+                                callback = callback
+                            )
+                        }
                     }
                 }
             }

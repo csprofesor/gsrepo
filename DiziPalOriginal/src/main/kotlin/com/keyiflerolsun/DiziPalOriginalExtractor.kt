@@ -28,12 +28,25 @@ class DizipalOriginalPlayer : ExtractorApi() {
                 "Referer" to (referer ?: "https://dizipal2137.com/")
             )
             val response = app.get(url, headers = reqHeaders).text
+            extractFromHtml(url, referer, response, subtitleCallback, callback)
+        } catch (e: Exception) {
+            Log.e("DiziPalOriginal", "DizipalOriginalPlayer Extractor Hata: ${e.message}")
+        }
+    }
 
+    suspend fun extractFromHtml(
+        url: String,
+        referer: String?,
+        html: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        try {
             val subUrls = mutableSetOf<String>()
 
             // 1. Extract tracks from JS setup/objects: file: "...", label: "..."
             val trackRegex = Regex("""(?:file|src)\s*:\s*["']([^"']+\.(?:vtt|srt)[^"']*)["'](?:\s*,\s*label\s*:\s*["']([^"']+)["'])?""")
-            trackRegex.findAll(response).forEach { match ->
+            trackRegex.findAll(html).forEach { match ->
                 val rawSubUrl = match.groupValues[1]
                 val rawLabel = match.groupValues[2].ifBlank {
                     if (rawSubUrl.contains("_tur") || rawSubUrl.contains("/tr") || rawSubUrl.contains("turkish")) "Türkçe"
@@ -68,7 +81,7 @@ class DizipalOriginalPlayer : ExtractorApi() {
 
             // 2. Extract tracks from JSON format: "file":"...","label":"..."
             val jsonSubRegex = Regex(""""file"\s*:\s*"([^"]+\.(?:vtt|srt)[^"]*)"(?:\s*,\s*"label"\s*:\s*"([^"]+)")?""")
-            jsonSubRegex.findAll(response).forEach { match ->
+            jsonSubRegex.findAll(html).forEach { match ->
                 val rawSubUrl = match.groupValues[1]
                 val rawLabel = match.groupValues[2].ifBlank { "Türkçe" }
 
@@ -100,10 +113,10 @@ class DizipalOriginalPlayer : ExtractorApi() {
             val domain = Regex("""https?://[^/]+""").find(url)?.value ?: "https://dizipal2137.com"
 
             // Stream Extraction - M3U8
-            val fileMatches = Regex("""(?:file|src)\s*:\s*["']([^"']+\.m3u8[^"']*)["']""").findAll(response)
+            val fileMatches = Regex("""(?:file|src)\s*:\s*["']([^"']+\.m3u8[^"']*)["']""").findAll(html)
                 .map { it.groupValues[1] }.toList()
                 .ifEmpty {
-                    Regex("""https?://[^\s"']+\.m3u8[^\s"']*""").findAll(response)
+                    Regex("""https?://[^\s"']+\.m3u8[^\s"']*""").findAll(html)
                         .map { it.value }.toList()
                 }
 
@@ -133,10 +146,10 @@ class DizipalOriginalPlayer : ExtractorApi() {
             }
 
             // Stream Extraction - MP4
-            val mp4Matches = Regex("""(?:file|src)\s*:\s*["']([^"']+\.mp4[^"']*)["']""").findAll(response)
+            val mp4Matches = Regex("""(?:file|src)\s*:\s*["']([^"']+\.mp4[^"']*)["']""").findAll(html)
                 .map { it.groupValues[1] }.toList()
                 .ifEmpty {
-                    Regex("""https?://[^\s"']+\.mp4[^\s"']*""").findAll(response)
+                    Regex("""https?://[^\s"']+\.mp4[^\s"']*""").findAll(html)
                         .map { it.value }.toList()
                 }
 
@@ -167,7 +180,7 @@ class DizipalOriginalPlayer : ExtractorApi() {
 
             // Fallback for openPlayer / source2.php
             val openPlayerRegex = """window\.openPlayer\s*\(\s*['"]([^'"]+)['"]""".toRegex()
-            val playlistId = openPlayerRegex.find(response)?.groupValues?.get(1)
+            val playlistId = openPlayerRegex.find(html)?.groupValues?.get(1)
             if (playlistId != null) {
                 val dplayerDomain = Regex("""https?://[^/]+""").find(url)?.value ?: "https://dplayer82.site"
                 val apiUrl = "$dplayerDomain/source2.php?v=$playlistId"
@@ -201,7 +214,7 @@ class DizipalOriginalPlayer : ExtractorApi() {
             }
 
             // Fallback for nested iframe
-            val iframeSrc = Regex("""<iframe[^>]+src=["']([^"']+)["']""").find(response)?.groupValues?.get(1)
+            val iframeSrc = Regex("""<iframe[^>]+src=["']([^"']+)["']""").find(html)?.groupValues?.get(1)
             if (!iframeSrc.isNullOrBlank() && iframeSrc != url) {
                 var nestedUrl = iframeSrc.replace("\\/", "/")
                 if (nestedUrl.startsWith("//")) nestedUrl = "https:$nestedUrl"
