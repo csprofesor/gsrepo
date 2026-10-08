@@ -514,7 +514,7 @@
     "fileHash": "sha256-ce02080c5f308df47c8ecec4fa54cc6bbc0c6ebfd8e749b5f58047a45856f662"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTV.cs3?v=58ad65b6250b7d9056e5384734056493ce2b78c46f307454dcd0b56aa927782d",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaTV.cs3?v=2fc53f992b15ccbfd865f970afe4d043ddfd28a539196889ee58fbb0ea4ea89b",
     "status": 1,
     "version": 1,
     "name": "SinemaTV",
@@ -531,8 +531,8 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=github.com&sz=%size%",
     "apiVersion": 1,
-    "fileSize": 41104,
-    "fileHash": "sha256-58ad65b6250b7d9056e5384734056493ce2b78c46f307454dcd0b56aa927782d"
+    "fileSize": 41161,
+    "fileHash": "sha256-2fc53f992b15ccbfd865f970afe4d043ddfd28a539196889ee58fbb0ea4ea89b"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SineWix.cs3?v=3f58de143dfd36990079ac8393ece3b1e11b7cbaee78d1b55640054c6cdf6763",
