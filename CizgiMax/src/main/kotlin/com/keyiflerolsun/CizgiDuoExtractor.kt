@@ -17,19 +17,19 @@ open class CizgiDuo : ExtractorApi() {
         val extRef  = referer ?: ""
         val iSource = app.get(url, referer=extRef).text
 
-        val bePlayer     = Regex("""bePlayer\('([^']+)',\s*'(\{[^}]+\})'\);""").find(iSource)?.groupValues ?: throw ErrorLoadingException("bePlayer not found")
-        val bePlayerPass = bePlayer[1]
-        val bePlayerData = bePlayer[2]
-        val encrypted    = AesHelper.cryptoAESHandler(bePlayerData, bePlayerPass.toByteArray(), false)?.replace("\\", "") ?: throw ErrorLoadingException("failed to decrypt")
+        val bePlayer     = Regex("""bePlayer\('([^']+)',\s*'(\{[^}]+\})'\);""").find(iSource)?.groupValues ?: return
+        val bePlayerPass = bePlayer.getOrNull(1) ?: return
+        val bePlayerData = bePlayer.getOrNull(2) ?: return
+        val encrypted    = AesHelper.cryptoAESHandler(bePlayerData, bePlayerPass.toByteArray(), false)?.replace("\\", "") ?: return
         Log.d("Kekik_${this.name}", "encrypted » $encrypted")
 
-        m3uLink = Regex("""video_location":"([^"]+)""").find(encrypted)?.groupValues?.get(1)
+        m3uLink = Regex("""video_location":"([^"]+)""").find(encrypted)?.groupValues?.get(1) ?: return
 
         callback.invoke(
             newExtractorLink(
                 source = this.name,
                 name = this.name,
-                url = m3uLink ?: throw ErrorLoadingException("m3u link not found"),
+                url = m3uLink,
                 type = ExtractorLinkType.M3U8 // Tür olarak M3U8'yi belirtiyoruz
             ) {
                 quality = Qualities.Unknown.value // Varsayılan kalite ayarlandı
