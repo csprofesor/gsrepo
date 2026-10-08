@@ -26,7 +26,15 @@ data class DizipalSearchResultItem(
 data class DizipalPlayerConfigResponse(
     @JsonProperty("success") val success: Boolean? = null,
     @JsonProperty("message") val message: String? = null,
-    @JsonProperty("enc") val enc: DizipalEncData? = null
+    @JsonProperty("enc") val enc: DizipalEncData? = null,
+    @JsonProperty("config") val config: DizipalConfigData? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class DizipalConfigData(
+    @JsonProperty("v") val v: String? = null,
+    @JsonProperty("t") val t: String? = null,
+    @JsonProperty("p") val p: String? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

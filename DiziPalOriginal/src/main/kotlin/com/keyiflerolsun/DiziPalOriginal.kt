@@ -25,7 +25,10 @@ import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -418,7 +421,8 @@ class DiziPalOriginal : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        Log.d("DiziPalOriginal", "--> loadLinks URL: $data")
+        val targetUrl = data.replace(Regex("""https://dizipal\d+\.com"""), mainUrl)
+        Log.d("DiziPalOriginal", "--> loadLinks URL: $targetUrl")
         var iframeUrl = ""
 
         try {
@@ -439,20 +443,22 @@ class DiziPalOriginal : MainAPI() {
             }
 
             val pageResp = app.get(
-                data, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
+                targetUrl, timeout = 10000, interceptor = interceptor, headers = getHeaders(mainUrl)
             )
             updateCookies(pageResp.headers)
             val doc = pageResp.document
 
-            val cfg = doc.selectFirst(".video-player-container[data-cfg]")?.attr("data-cfg")
-            if (!cfg.isNullOrBlank()) {
+            val cfgElements = doc.select(".video-player-container[data-cfg], [data-cfg]")
+            val cfgList = cfgElements.mapNotNull { it.attr("data-cfg").takeIf { c -> c.isNotBlank() } }.distinct()
+
+            for (cfg in cfgList) {
                 try {
                     val cookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
                     val tokResp = app.get(
                         "$mainUrl/ajax-token",
                         headers = mapOf(
                             "X-Requested-With" to "XMLHttpRequest",
-                            "Referer" to data,
+                            "Referer" to targetUrl,
                             "Cookie" to cookieHeader
                         ),
                         interceptor = interceptor
@@ -475,7 +481,7 @@ class DiziPalOriginal : MainAPI() {
                     headers = mapOf(
                         "X-Requested-With" to "XMLHttpRequest",
                         "Content-Type" to "application/x-www-form-urlencoded",
-                        "Referer" to data,
+                        "Referer" to targetUrl,
                         "Cookie" to finalCookieHeader
                     ),
                     cookies = cookieMap,
@@ -487,6 +493,52 @@ class DiziPalOriginal : MainAPI() {
                 if (configData.enc != null) {
                     iframeUrl = decryptPlayerConfig(configData.enc) ?: ""
                 }
+                if (iframeUrl.isBlank() && !configData.config?.v.isNullOrBlank()) {
+                    iframeUrl = configData.config.v
+                }
+
+                if (iframeUrl.isNotBlank()) {
+                    if (iframeUrl.contains("<iframe")) {
+                        val extracted = Regex("""src=["']([^"']+)["']""").find(iframeUrl)?.groupValues?.get(1)
+                        if (!extracted.isNullOrBlank()) {
+                            iframeUrl = extracted
+                        }
+                    }
+
+                    if (iframeUrl.startsWith("//")) iframeUrl = "https:$iframeUrl"
+                    else if (iframeUrl.startsWith("://")) iframeUrl = "https$iframeUrl"
+                    else if (!iframeUrl.startsWith("http")) iframeUrl = "https://$iframeUrl"
+
+                    Log.d("DiziPalOriginal", "--> Extractor'a gönderilen Final URL: $iframeUrl")
+
+                    if (iframeUrl.contains(".m3u8") || iframeUrl.contains(".mp4")) {
+                        val isM3u8 = iframeUrl.contains(".m3u8")
+                        callback.invoke(
+                            newExtractorLink(
+                                source = name,
+                                name = "DiziPal Direct",
+                                url = iframeUrl,
+                                type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                            ) {
+                                headers = mapOf(
+                                    "Referer" to targetUrl,
+                                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                                )
+                                Qualities.Unknown.value
+                            }
+                        )
+                    } else {
+                        val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
+                        if (!loadedExt) {
+                            DizipalOriginalPlayer().getUrl(
+                                url = iframeUrl,
+                                referer = targetUrl,
+                                subtitleCallback = subtitleCallback,
+                                callback = callback
+                            )
+                        }
+                    }
+                }
             }
 
             if (iframeUrl.isBlank()) {
@@ -496,29 +548,28 @@ class DiziPalOriginal : MainAPI() {
                 } else {
                     iframeUrl = doc.selectFirst("iframe")?.attr("src") ?: ""
                 }
+
+                if (iframeUrl.isNotBlank()) {
+                    if (iframeUrl.startsWith("//")) iframeUrl = "https:$iframeUrl"
+                    else if (iframeUrl.startsWith("://")) iframeUrl = "https$iframeUrl"
+                    else if (!iframeUrl.startsWith("http")) iframeUrl = "https://$iframeUrl"
+
+                    val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
+                    if (!loadedExt) {
+                        DizipalOriginalPlayer().getUrl(
+                            url = iframeUrl,
+                            referer = targetUrl,
+                            subtitleCallback = subtitleCallback,
+                            callback = callback
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e("DiziPalOriginal", "loadLinks Hatası: ${e.message}")
         }
 
-        if (iframeUrl.isNotBlank()) {
-            if (iframeUrl.startsWith("//")) iframeUrl = "https:$iframeUrl"
-            Log.d("DiziPalOriginal", "--> Extractor'a gönderilen Final URL: $iframeUrl")
-
-            val loadedExt = loadExtractor(iframeUrl, data, subtitleCallback, callback)
-            if (!loadedExt) {
-                DizipalOriginalPlayer().getUrl(
-                    url = iframeUrl,
-                    referer = data,
-                    subtitleCallback = subtitleCallback,
-                    callback = callback
-                )
-            }
-            return true
-        }
-
-        Log.e("DiziPalOriginal", "--> HATA: iframeUrl tamamen BOŞ!")
-        return false
+        return true
     }
 
     private fun String.decodeHex(): ByteArray {
