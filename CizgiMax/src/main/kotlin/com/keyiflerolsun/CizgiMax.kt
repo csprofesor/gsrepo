@@ -209,10 +209,19 @@ class CizgiMax : MainAPI() {
                         val redirectLoc = headRes.headers["location"] ?: headRes.headers["Location"]
                         if (!redirectLoc.isNullOrEmpty()) {
                             finalUrl = redirectLoc
+                            if (finalUrl.startsWith("/") || !finalUrl.startsWith("http")) {
+                                finalUrl = fixUrl(finalUrl)
+                            }
+                            loadExtractor(finalUrl, "$mainUrl/", subtitleCallback, callback)
+                            return@forEach
                         }
+                    } else if (headRes.code != 200) {
+                        // Skip broken stream endpoints (e.g. 502 Bad Gateway)
+                        return@forEach
                     }
                 } catch (e: Exception) {
                     Log.e("CZGM", "Redirect error: ${e.message}")
+                    return@forEach
                 }
 
                 var label = server.label ?: "ÇizgiMax"
