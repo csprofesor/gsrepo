@@ -287,10 +287,13 @@ class SinemaTV(private val context: Context? = null) : MainAPI() {
             val loaded = loadExtractor(iframeUrl, "$mainUrl/", subtitleCallback, callback)
             if (loaded) {
                 linksFound = true
-            } else if (context != null) {
-                val webExtractor = SinemaTVWebViewExtractor(context, name)
-                webExtractor.getUrl(iframeUrl, "$mainUrl/", subtitleCallback, callback)
-                linksFound = true
+            } else {
+                val currentCtx = context ?: SinemaTVPlugin.pluginContext
+                if (currentCtx != null) {
+                    val webExtractor = SinemaTVWebViewExtractor(currentCtx, name)
+                    webExtractor.getUrl(iframeUrl, "$mainUrl/", subtitleCallback, callback)
+                    linksFound = true
+                }
             }
         }
 

@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import java.net.URI
 
 object SinemaTVHelper {
     private const val DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -30,6 +31,7 @@ object SinemaTVHelper {
             val masterText = masterResp.text
             val masterLines = masterText.lines()
 
+            val baseUri = try { URI(m3u8Url) } catch (_: Exception) { null }
             val plParam = if (m3u8Url.contains("?")) m3u8Url.substringAfter("?") else ""
 
             val isMaster = masterLines.any { it.contains("#EXT-X-STREAM-INF") }
@@ -47,10 +49,10 @@ object SinemaTVHelper {
                             ?: "1080p"
                     } else if (trimmed.isNotBlank() && !trimmed.startsWith("#")) {
                         val fullSubUrl = when {
-                            trimmed.startsWith("/") && !trimmed.startsWith("/content-router/r") ->
-                                "https://gorodyshka.link/content-router/r$trimmed"
-                            !trimmed.startsWith("http") ->
-                                "https://gorodyshka.link/content-router/r/${trimmed.trimStart('/')}"
+                            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+                            baseUri != null -> {
+                                try { baseUri.resolve(trimmed).toString() } catch (_: Exception) { trimmed }
+                            }
                             else -> trimmed
                         }
 
@@ -72,12 +74,17 @@ object SinemaTVHelper {
                     val subResp = app.get(subUrl, headers = headers)
                     if (subResp.isSuccessful) {
                         val subText = subResp.text
+                        val subBaseUri = try { URI(subUrl) } catch (_: Exception) { null }
                         val fixedSubLines = subText.lines().map { l ->
                             val t = l.trim()
-                            if (t.startsWith("/") && !t.startsWith("/content-router/r")) {
-                                "https://gorodyshka.link/content-router/r$t"
-                            } else if (!t.startsWith("#") && !t.startsWith("http") && t.isNotBlank()) {
-                                "https://gorodyshka.link/content-router/r/${t.trimStart('/')}"
+                            if (!t.startsWith("#") && t.isNotBlank()) {
+                                if (t.startsWith("http://") || t.startsWith("https://")) {
+                                    t
+                                } else if (subBaseUri != null) {
+                                    try { subBaseUri.resolve(t).toString() } catch (_: Exception) { t }
+                                } else {
+                                    t
+                                }
                             } else {
                                 t
                             }
