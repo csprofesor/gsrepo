@@ -121,7 +121,7 @@
     "fileHash": "sha256-c4271d5ecba6cff6487245836c363a2fa670b26d525047e21124d361268c8fa4"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziKorea.cs3?v=1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziKorea.cs3?v=1ff238cd66b768c8e9f0073de60bde16365e1c451ac6fcda9b21875464f29215",
     "status": 1,
     "version": 41,
     "name": "DiziKorea",
@@ -130,7 +130,7 @@
       "csprofesor"
     ],
     "description": "En Güncel Kore Dizileri izleme Sitesi",
-    "fileSize": 23562,
+    "fileSize": 26291,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -138,7 +138,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=https://dizikorea.vip&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-1958c66dd0c32ab436adc333504c1183322653afa048425509a7dfc4898ba0da"
+    "fileHash": "sha256-1ff238cd66b768c8e9f0073de60bde16365e1c451ac6fcda9b21875464f29215"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Dizilla.cs3?v=25a5164a8a92dece1f5993e4ddd7be8399f53c92ebf7448177712fa51b853827",
