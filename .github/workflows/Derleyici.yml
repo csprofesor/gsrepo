@@ -101,15 +101,26 @@ jobs:
 
           built = {p.stem: p for p in builds_dir.glob('*.cs3')}
 
+          import zipfile
+
           final_data = []
           for name, target in built.items():
+              version = 1
+              try:
+                  with zipfile.ZipFile(target) as z:
+                      if 'manifest.json' in z.namelist():
+                          m = json.loads(z.read('manifest.json').decode('utf-8'))
+                          version = m.get('version', 1)
+              except Exception:
+                  pass
+
               if name in entries:
                   item = entries[name]
               else:
                   item = {
                       "url": f"https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}",
                       "status": 1,
-                      "version": 1,
+                      "version": version,
                       "name": name,
                       "internalName": name,
                       "authors": ["csprofesor"],
@@ -121,6 +132,7 @@ jobs:
                       "apiVersion": 1
                   }
               digest = hashlib.sha256(target.read_bytes()).hexdigest()
+              item['version'] = version
               item['fileSize'] = target.stat().st_size
               item['fileHash'] = f'sha256-{digest}'
               item['url'] = f'https://raw.githubusercontent.com/csprofesor/gsrepo/builds/{target.name}?v={digest}'
