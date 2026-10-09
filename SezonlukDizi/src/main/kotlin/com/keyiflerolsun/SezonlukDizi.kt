@@ -12,6 +12,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
 import okhttp3.Interceptor
@@ -141,11 +142,19 @@ class SezonlukDizi : MainAPI() {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request  = chain.request()
             val response = chain.proceed(request)
+            val body     = response.peekBody(1024 * 1024).string()
+            val doc      = Jsoup.parse(body)
 
-            if (response.code == 403 || response.code == 503 || response.header("cf-mitigated") != null) {
-                synchronized(cloudflareKiller) {
-                    return cloudflareKiller.intercept(chain)
-                }
+            if (response.code == 403 || response.code == 503 ||
+                response.header("cf-mitigated") != null ||
+                body.contains("Just a moment", ignoreCase = true) ||
+                body.contains("Checking your browser", ignoreCase = true) ||
+                body.contains("cf-challenge", ignoreCase = true) ||
+                body.contains("turnstile", ignoreCase = true) ||
+                doc.title().contains("Just a moment", ignoreCase = true) ||
+                doc.title().contains("Attention Required", ignoreCase = true)
+            ) {
+                return cloudflareKiller.intercept(chain)
             }
 
             return response
@@ -153,14 +162,14 @@ class SezonlukDizi : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/diziler.asp?siralama_tipi=id&s="          to "Son Eklenenler",
-        "$mainUrl/diziler.asp?siralama_tipi=id&tur=mini&s=" to "Mini Diziler",
-        "$mainUrl/diziler.asp?siralama_tipi=id&kat=2&s="    to "Yerli Diziler",
-        "$mainUrl/diziler.asp?siralama_tipi=id&kat=1&s="    to "Yabancı Diziler",
-        "$mainUrl/diziler.asp?siralama_tipi=id&kat=3&s="    to "Asya Dizileri",
-        "$mainUrl/diziler.asp?siralama_tipi=id&kat=4&s="    to "Animasyonlar",
-        "$mainUrl/diziler.asp?siralama_tipi=id&kat=5&s="    to "Animeler",
-        "$mainUrl/diziler.asp?siralama_tipi=id&kat=6&s="    to "Belgeseller",
+        "$mainUrl/diziler.asp?s="          to "Son Eklenenler",
+        "$mainUrl/diziler.asp?kat=1&s="    to "Yabancı Diziler",
+        "$mainUrl/diziler.asp?kat=2&s="    to "Yerli Diziler",
+        "$mainUrl/diziler.asp?kat=3&s="    to "Asya Dizileri",
+        "$mainUrl/diziler.asp?kat=4&s="    to "Animasyonlar",
+        "$mainUrl/diziler.asp?kat=5&s="    to "Animeler",
+        "$mainUrl/diziler.asp?kat=6&s="    to "Belgeseller",
+        "$mainUrl/diziler.asp?tur=mini&s=" to "Mini Diziler",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {

@@ -452,16 +452,16 @@
     "fileHash": "sha256-7c34272d0d572f39cbb348451c4a646e984a78f3108b3763ad6562dae1a9a09f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SezonlukDizi.cs3?v=c5a930e65c7de73e804f1951e80d4ae599ee64290b97c1ee68e4980b5e129dac",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SezonlukDizi.cs3?v=748dc1d18de88a1ca6da8f3c20938819bd76a1f582ea9d3c08e1f95228cdaed5",
     "status": 1,
-    "version": 10,
+    "version": 11,
     "name": "SezonlukDizi",
     "internalName": "SezonlukDizi",
     "authors": [
       "csprofesor"
     ],
     "description": "Güncel ve eski dizileri en iyi görüntü kalitesiyle bulabileceğiniz yabancı dizi izleme siteniz.",
-    "fileSize": 37536,
+    "fileSize": 37754,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -469,7 +469,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=sezonlukdizi6.com&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-c5a930e65c7de73e804f1951e80d4ae599ee64290b97c1ee68e4980b5e129dac"
+    "fileHash": "sha256-748dc1d18de88a1ca6da8f3c20938819bd76a1f582ea9d3c08e1f95228cdaed5"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SinemaCX.cs3?v=ce02080c5f308df47c8ecec4fa54cc6bbc0c6ebfd8e749b5f58047a45856f662",
