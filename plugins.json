@@ -123,7 +123,7 @@
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziKorea.cs3?v=1ff238cd66b768c8e9f0073de60bde16365e1c451ac6fcda9b21875464f29215",
     "status": 1,
-    "version": 41,
+    "version": 42,
     "name": "DiziKorea",
     "internalName": "DiziKorea",
     "authors": [
@@ -537,7 +537,7 @@
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/TavsiyeFilmIzle.cs3?v=aec457b24513db653843d750ffb6314117858e2c02bd5ed8c0488a8022e84452",
     "status": 1,
-    "version": 2,
+    "version": 3,
     "name": "TavsiyeFilmIzle",
     "internalName": "TavsiyeFilmIzle",
     "authors": [
