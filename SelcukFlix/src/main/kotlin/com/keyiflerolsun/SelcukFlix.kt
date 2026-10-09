@@ -17,7 +17,7 @@ private const val PRIVATE_AES_KEY = "9bYMCNQiWsXIYFWYAu7EkdsSbmGBTyUI"
 private val jacksonMapper = ObjectMapper()
 
 class SelcukFlix : MainAPI() {
-    override var mainUrl              = "https://selcukflix.com"
+    override var mainUrl              = "https://selcukflix.app"
     override var name                 = "SelcukFlix"
     override val hasMainPage          = true
     override var lang                 = "tr"
@@ -49,9 +49,25 @@ class SelcukFlix : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/film-izle"    to "Yeni Eklenen Filmler",
-        //"$mainUrl/seri-filmler" to "Seri Filmler",
-        "$mainUrl/dizi-izle"    to "Yeni Diziler",
+        "$mainUrl/film-izle"                  to "Yeni Eklenen Filmler",
+        "$mainUrl/dizi-izle"                  to "Yeni Diziler",
+        "$mainUrl/trend"                      to "Trendler",
+        "$mainUrl/kesfet"                     to "Keşfet",
+        "$mainUrl/film-kategori/aksiyon"      to "Aksiyon Filmleri",
+        "$mainUrl/film-kategori/komedi"       to "Komedi Filmleri",
+        "$mainUrl/film-kategori/suc"          to "Suç Filmleri",
+        "$mainUrl/film-kategori/animasyon"    to "Animasyon Filmleri",
+        "$mainUrl/film-kategori/korku"        to "Korku Filmleri",
+        "$mainUrl/film-kategori/bilim-kurgu"  to "Bilim Kurgu Filmleri",
+        "$mainUrl/film-kategori/dram"         to "Dram Filmleri",
+        "$mainUrl/film-kategori/romantik"     to "Romantik Filmler",
+        "$mainUrl/film-kategori/macera"       to "Macera Filmleri",
+        "$mainUrl/film-kategori/aile"         to "Aile Filmleri",
+        "$mainUrl/film-kategori/fantastik"    to "Fantastik Filmler",
+        "$mainUrl/film-kategori/gerilim"      to "Gerilim Filmleri",
+        "$mainUrl/film-kategori/gizem"        to "Gizem Filmleri",
+        "$mainUrl/film-kategori/savas"        to "Savaş Filmleri",
+        "$mainUrl/film-kategori/western"      to "Western Filmleri"
     )
 
     private fun decryptAES(encryptedData: String): String? {
@@ -83,11 +99,18 @@ class SelcukFlix : MainAPI() {
 
     private fun fixPosterUrl(raw: String?): String? {
         if (raw.isNullOrBlank() || raw == "null") return null
-        var url = raw
-            .replace("images-macellan-online.cdn.ampproject.org/i/s/", "")
-        url = Regex("file\\.[\\w.]+/").replace(url, "file.macellan.online/")
-        url = Regex("images\\.[\\w.]+/").replace(url, "images.macellan.online/")
+        var url = raw.trim().replace("images-macellan-online.cdn.ampproject.org/i/s/", "")
+
+        if (url.startsWith("//")) {
+            url = "https:$url"
+        } else if (url.startsWith("/")) {
+            url = fixUrl(url)
+        }
+
+        url = url.replace(Regex("https?://file\\.[a-zA-Z0-9.-]+/"), "https://file.macellan.online/")
+        url = url.replace(Regex("https?://images\\.[a-zA-Z0-9.-]+/"), "https://images.macellan.online/")
         url = url.replace("/f/f/", "/630/910/")
+
         return fixUrlNull(url)
     }
 
@@ -95,42 +118,110 @@ class SelcukFlix : MainAPI() {
         val data  = request.data
         val items = mutableListOf<SearchResponse>()
 
-        val url = if (page > 1) "$data?page=$page" else data
-        val doc = app.get(url, interceptor = interceptor).document
-
-        val isSeries = data.contains("/dizi-izle") || data.contains("/dizi/")
-        val isMovie  = data.contains("/film-izle") || data.contains("/film/")
-        val isSeri   = data.contains("/seri-filmler")
-
-        val cardSelector = when {
-            isSeries -> "a[href*=/dizi/]"
-            isMovie  -> "a[href*=/film/]"
-            isSeri   -> "a[href*=/film/], a[href*=/seri-filmler/]"
-            else     -> "a[href*=/film/], a[href*=/dizi/]"
-        }
-
-        doc.select(cardSelector).forEach { el ->
-            val href  = fixUrlNull(el.attr("href")) ?: return@forEach
-            if (href == "$mainUrl/film-izle"
-                || href == "$mainUrl/dizi-izle"
-                || href == "$mainUrl/seri-filmler") return@forEach
-
-            val img   = el.selectFirst("img")
-            val title = el.selectFirst("h2,h3")?.text()
-                ?: img?.attr("alt")?.replace(Regex("\\d+\\.\\s*(Sezon|Bölüm)|izle", RegexOption.IGNORE_CASE), "")?.trim()
-                ?: return@forEach
-            if (title.isBlank()) return@forEach
-
-            val poster = fixPosterUrl(
-                img?.attr("data-src")?.takeIf { it.isNotBlank() } ?: img?.attr("src")
-            )
-
-            if (href.contains("/dizi/")) {
-                items.add(newTvSeriesSearchResponse(title, href.substringBefore("/sezon"), TvType.TvSeries) { posterUrl = poster })
+        val url = if (page > 1) {
+            if (data.contains("/film-kategori/")) {
+                val catSlug = data.substringAfter("/film-kategori/")
+                "$mainUrl/api/bg/findMovies?curPage=$page&perPageCount=24&queryStr=&categorySlugsComma=film-kategori/$catSlug&countryCodesComma="
+            } else if (data.endsWith("/film-izle")) {
+                "$mainUrl/api/bg/findMovies?curPage=$page&perPageCount=24&queryStr=&categorySlugsComma=&countryCodesComma="
             } else {
-                items.add(newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster })
+                "$data?page=$page"
             }
+        } else {
+            data
         }
+
+        try {
+            if (url.contains("/api/bg/findMovies")) {
+                val responseText = app.post(
+                    url = url,
+                    headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Accept" to "application/json, text/plain, */*",
+                        "Referer" to "$mainUrl/"
+                    ),
+                    interceptor = interceptor
+                ).text
+                val encryptedData = jacksonMapper.readTree(responseText)?.get("response")?.asText()
+                if (!encryptedData.isNullOrBlank()) {
+                    val decoded = decryptAES(encryptedData)
+                    if (decoded != null) {
+                        val json: JsonNode = jacksonMapper.readTree(decoded)
+                        json.get("result")?.forEach { item ->
+                            val title  = item.get("object_name")?.asText() ?: item.get("original_title")?.asText() ?: return@forEach
+                            val slug   = item.get("used_slug")?.asText() ?: return@forEach
+                            val poster = fixPosterUrl(item.get("object_poster_url")?.asText() ?: item.get("poster_url")?.asText())
+                            val href   = fixUrl(slug)
+                            items.add(newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster })
+                        }
+                    }
+                }
+            } else {
+                val responseText = app.get(url, interceptor = interceptor).text
+                val secureDataRaw = extractSecureData(responseText)
+                if (secureDataRaw != null) {
+                    val jsonText = decodeSecureData(secureDataRaw)
+                    if (jsonText != null) {
+                        try {
+                            val json: JsonNode = jacksonMapper.readTree(jsonText)
+                            val listItemsNode = json.get("listItems")
+                                ?: json.get("dailyTrends")
+                                ?: json.get("getLastMovies")
+                                ?: json.get("trendMovies")
+                                ?: json.get("allPopularSeries")
+
+                            listItemsNode?.forEach { item ->
+                                val title  = item.get("object_name")?.asText()
+                                    ?: item.get("original_title")?.asText()
+                                    ?: item.get("title")?.asText()
+                                    ?: return@forEach
+                                val slug   = item.get("used_slug")?.asText()
+                                    ?: item.get("slug")?.asText()
+                                    ?: return@forEach
+                                val poster = fixPosterUrl(
+                                    item.get("object_poster_url")?.asText()
+                                        ?: item.get("poster_url")?.asText()
+                                )
+                                val href   = fixUrl(slug)
+                                if (href.contains("/dizi/")) {
+                                    items.add(newTvSeriesSearchResponse(title, href.substringBefore("/sezon"), TvType.TvSeries) { posterUrl = poster })
+                                } else {
+                                    items.add(newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster })
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+
+                if (items.isEmpty()) {
+                    val doc = Jsoup.parse(responseText)
+                    doc.select("a[href*=/film/], a[href*=/dizi/]").forEach { el ->
+                        val href = fixUrlNull(el.attr("href")) ?: return@forEach
+                        if (href == "$mainUrl/film-izle"
+                            || href == "$mainUrl/dizi-izle"
+                            || href == "$mainUrl/seri-filmler"
+                            || href == "$mainUrl/trend"
+                            || href == "$mainUrl/kesfet") return@forEach
+
+                        val img   = el.selectFirst("img")
+                        val title = el.selectFirst("h2,h3")?.text()
+                            ?: img?.attr("alt")?.replace(Regex("\\d+\\.\\s*(Sezon|Bölüm)|izle", RegexOption.IGNORE_CASE), "")?.trim()
+                            ?: return@forEach
+                        if (title.isBlank()) return@forEach
+
+                        val poster = fixPosterUrl(
+                            img?.attr("data-src")?.takeIf { it.isNotBlank() } ?: img?.attr("src")
+                        )
+
+                        if (href.contains("/dizi/")) {
+                            items.add(newTvSeriesSearchResponse(title, href.substringBefore("/sezon"), TvType.TvSeries) { posterUrl = poster })
+                        } else {
+                            items.add(newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster })
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
 
         return newHomePageResponse(request.name, items.distinctBy { it.url }, hasNext = items.isNotEmpty())
     }
@@ -143,13 +234,9 @@ class SelcukFlix : MainAPI() {
             val response  = app.post(
                 url         = searchUrl,
                 headers     = mapOf(
-                    "User-Agent"       to "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0",
+                    "User-Agent"       to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                     "Accept"           to "application/json, text/plain, */*",
-                    "Accept-Language"  to "en-US,en;q=0.5",
                     "X-Requested-With" to "XMLHttpRequest",
-                    "Sec-Fetch-Site"   to "same-origin",
-                    "Sec-Fetch-Mode"   to "cors",
-                    "Sec-Fetch-Dest"   to "empty",
                     "Referer"          to "$mainUrl/"
                 ),
                 referer     = "$mainUrl/",
@@ -164,14 +251,14 @@ class SelcukFlix : MainAPI() {
                     json.get("result")?.forEach { item: JsonNode ->
                         val title  = item.get("object_name")?.asText() ?: return@forEach
                         val slug   = item.get("used_slug")?.asText() ?: return@forEach
-                        val poster = fixPosterUrl(item.get("object_poster_url")?.asText())
+                        val poster = fixPosterUrl(item.get("object_poster_url")?.asText() ?: item.get("poster_url")?.asText())
                         val type   = item.get("type")?.asText() ?: ""
                         val href   = fixUrl(slug)
                         if (!href.contains("/seri-filmler/")) {
-                            if (type == "Movies") {
+                            if (type == "Movies" || href.contains("/film/")) {
                                 results.add(newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster })
                             } else {
-                                results.add(newTvSeriesSearchResponse(title, href, TvType.TvSeries) { posterUrl = poster })
+                                results.add(newTvSeriesSearchResponse(title, href.substringBefore("/sezon"), TvType.TvSeries) { posterUrl = poster })
                             }
                         }
                     }
@@ -182,7 +269,7 @@ class SelcukFlix : MainAPI() {
         if (results.isEmpty()) {
             try {
                 val doc = app.get("$mainUrl/arama?q=$query", interceptor = interceptor).document
-                doc.select("a[href^=/film/], a[href^=/dizi/]").forEach { el ->
+                doc.select("a[href*=/film/], a[href*=/dizi/]").forEach { el ->
                     val href  = fixUrlNull(el.attr("href")) ?: return@forEach
                     if (href == "$mainUrl/film-izle" || href == "$mainUrl/dizi-izle") return@forEach
                     val img   = el.selectFirst("img")
@@ -351,9 +438,8 @@ class SelcukFlix : MainAPI() {
         var finalUrl  = fixUrlNull(iframeUrl) ?: return false
 
         finalUrl = finalUrl
-            .replace("sn.dplayer74.site", "sn.hotlinger.com")
-            .replace("sn.dplayer82.site", "sn.hotlinger.com")
-            .replace("sn.dplayer.site",   "sn.hotlinger.com")
+            .replace(Regex("sn\\.dplayer\\d*\\.site"), "sn.hotlinger.com")
+            .replace(Regex("(four\\.|v\\.)?pichive\\.online"), "sn.hotlinger.com")
 
         loadExtractor(finalUrl, data, subtitleCallback, callback)
         return true
