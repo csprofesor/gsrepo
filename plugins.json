@@ -410,7 +410,7 @@
     "fileHash": "sha256-47b263ff6bf1b4f65d17b3aee00112e687de473ce7fd2fd777b17c2ba0290104"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SelcukFlix.cs3?v=835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SelcukFlix.cs3?v=e970fecc078f7423ce7a7a7ac97d54a0b1e014fb60bfcf17140e15e435d32ab6",
     "status": 1,
     "version": 2,
     "name": "SelcukFlix",
@@ -419,7 +419,7 @@
       "csprofesor"
     ],
     "description": "SelcukFlix eklentisi.",
-    "fileSize": 33998,
+    "fileSize": 37391,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -428,7 +428,7 @@
     ],
     "iconUrl": "https://selcukflix.co/assets/favicon/favicon-32x32.png",
     "apiVersion": 1,
-    "fileHash": "sha256-835fd32012016c56acc786a48b2188899708212995931e48d602ef3f0f808b20"
+    "fileHash": "sha256-e970fecc078f7423ce7a7a7ac97d54a0b1e014fb60bfcf17140e15e435d32ab6"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/SetFilmIzle.cs3?v=d2735f01cf504fd21e5ab313d861e7220604e3ebfcd201437190619ad29b6dcc",
