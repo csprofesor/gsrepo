@@ -38,7 +38,6 @@ class SezonlukDizi : MainAPI() {
                 body.contains("Checking your browser", ignoreCase = true) ||
                 body.contains("cf-challenge", ignoreCase = true) ||
                 body.contains("turnstile", ignoreCase = true) ||
-                body.contains("reCAPTCHADATA.asp", ignoreCase = true) ||
                 doc.title().contains("Just a moment", ignoreCase = true) ||
                 doc.title().contains("Attention Required", ignoreCase = true)
             ) {
@@ -53,7 +52,6 @@ class SezonlukDizi : MainAPI() {
                         checkBody.contains("Checking your browser", ignoreCase = true) ||
                         checkBody.contains("cf-challenge", ignoreCase = true) ||
                         checkBody.contains("turnstile", ignoreCase = true) ||
-                        checkBody.contains("reCAPTCHADATA.asp", ignoreCase = true) ||
                         checkDoc.title().contains("Just a moment", ignoreCase = true) ||
                         checkDoc.title().contains("Attention Required", ignoreCase = true)
                     ) {
@@ -207,8 +205,12 @@ class SezonlukDizi : MainAPI() {
                 }
 
                 val iframe = fixUrlNull(iframeSrc) ?: continue
-                Log.d("SZD", "dil»1 | iframe » $iframe")
+                if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
+                    Log.d("SZD", "reCAPTCHA iframe skipped: $iframe")
+                    continue
+                }
 
+                Log.d("SZD", "dil»1 | iframe » $iframe")
                 invokeExtractor("AltYazı", veri, iframe, subtitleCallback, callback)
             }
         }
@@ -258,8 +260,12 @@ class SezonlukDizi : MainAPI() {
                 }
 
                 val iframe = fixUrlNull(iframeSrc) ?: continue
-                Log.d("SZD", "dil»0 | iframe » $iframe")
+                if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
+                    Log.d("SZD", "reCAPTCHA iframe skipped: $iframe")
+                    continue
+                }
 
+                Log.d("SZD", "dil»0 | iframe » $iframe")
                 invokeExtractor("Dublaj", veri, iframe, subtitleCallback, callback)
             }
         }
@@ -353,7 +359,52 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 4. Fallback / Standard loadExtractor
+        // 4. Byse / Filemoon inner frame API resolution
+        if (!found && (iframe.contains("byse") || iframe.contains("filemoon"))) {
+            try {
+                val videoId = iframe.split("/e/").lastOrNull()?.split("?")?.firstOrNull()?.split("/")?.firstOrNull()
+                if (videoId != null) {
+                    val domain = iframe.substringBefore("/e/")
+                    val detUrl = "$domain/api/videos/$videoId/embed/details"
+                    val detResp = app.get(
+                        detUrl,
+                        headers = mapOf(
+                            "Referer" to "$mainUrl/",
+                            "X-Embed-Origin" to "sezonlukdizi.cc",
+                            "X-Embed-Parent" to iframe,
+                            "X-Embed-Referer" to "$mainUrl/"
+                        )
+                    ).text
+                    if (detResp.contains("embed_frame_url")) {
+                        val frameUrl = Regex(""""embed_frame_url":\s*"([^"]+)"""").find(detResp)?.groupValues?.get(1)
+                        if (frameUrl != null) {
+                            Log.d("SZD", "Byse embed_frame_url found: $frameUrl, running WebViewResolver...")
+                            val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|/hls/|playlist).*"))
+                            val wvResp = app.get(frameUrl, headers = mapOf("Referer" to domain), interceptor = resolver)
+                            val wvUrl = wvResp.url
+                            if (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/") || wvUrl.contains("playlist")) {
+                                callback.invoke(
+                                    newExtractorLink(
+                                        source = "$prefix - ${veri.baslik}",
+                                        name = "$prefix - ${veri.baslik}",
+                                        url = wvUrl,
+                                        type = INFER_TYPE
+                                    ) {
+                                        this.quality = Qualities.Unknown.value
+                                        this.headers = mapOf("Referer" to frameUrl)
+                                    }
+                                )
+                                found = true
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SZD", "Byse direct error: ${e.message}")
+            }
+        }
+
+        // 5. Fallback / Standard loadExtractor
         if (!found) {
             val extractedLinks = mutableListOf<ExtractorLink>()
             loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
@@ -377,14 +428,14 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 5. WebViewResolver fallback for SPA players (Byse, Filemoon, VidMoly, etc.)
+        // 6. WebViewResolver fallback for SPA players
         if (!found) {
             try {
                 Log.d("SZD", "Trying WebViewResolver for $iframe...")
                 val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|\\.txt|/hls/|playlist).*"))
                 val wvResp = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = resolver)
                 val wvUrl = wvResp.url
-                if (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/") || wvUrl.startsWith("http")) {
+                if (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/") || wvUrl.contains("playlist") || wvUrl.contains(".mp4") || wvUrl.contains(".mkv")) {
                     callback.invoke(
                         newExtractorLink(
                             source = "$prefix - ${veri.baslik}",
@@ -397,6 +448,8 @@ class SezonlukDizi : MainAPI() {
                         }
                     )
                     Log.d("SZD", "WebViewResolver found stream URL: $wvUrl")
+                } else {
+                    Log.w("SZD", "WebViewResolver returned non-stream URL: $wvUrl")
                 }
             } catch (e: Exception) {
                 Log.e("SZD", "WebViewResolver error: ${e.message}")
