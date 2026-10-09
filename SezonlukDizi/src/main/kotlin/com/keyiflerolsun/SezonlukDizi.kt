@@ -2,7 +2,16 @@
 
 package com.keyiflerolsun
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.os.SystemClock
 import android.util.Log
+import android.view.MotionEvent
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
@@ -13,6 +22,110 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
+
+class SezonlukDiziWebViewExtractor(private val context: Context) {
+    @SuppressLint("SetJavaScriptEnabled")
+    suspend fun extract(
+        url: String,
+        referer: String = "https://sezonlukdizi.cc/",
+    ): String? = withTimeoutOrNull(15000) {
+        suspendCancellableCoroutine { continuation ->
+            val foundStream = AtomicBoolean(false)
+
+            CoroutineScope(Dispatchers.Main).launch {
+                var webView: WebView? = null
+                try {
+                    webView = WebView(context).apply {
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            mediaPlaybackRequiresUserGesture = false
+                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                        }
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, pageUrl: String?) {
+                                super.onPageFinished(view, pageUrl)
+                                val js = """
+                                    (function() {
+                                        setInterval(function() {
+                                            try {
+                                                if (document.body) document.body.click();
+                                                let el = document.querySelector('#root, video, button, iframe, .player, svg, div');
+                                                if (el) el.click();
+                                            } catch(e) {}
+                                        }, 300);
+                                    })();
+                                """.trimIndent()
+                                view?.evaluateJavascript(js, null)
+                            }
+
+                            override fun shouldInterceptRequest(
+                                view: WebView?,
+                                request: WebResourceRequest?
+                            ): WebResourceResponse? {
+                                val reqUrl = request?.url?.toString() ?: ""
+                                if ((reqUrl.contains(".m3u8") || reqUrl.contains("/hls/")) && !reqUrl.contains("reCAPTCHA", ignoreCase = true)) {
+                                    if (!foundStream.getAndSet(true)) {
+                                        Log.d("SZD", "SezonlukDiziWebViewExtractor stream found: $reqUrl")
+                                        CoroutineScope(Dispatchers.Main).launch {
+                                            try { view?.destroy() } catch (_: Exception) {}
+                                        }
+                                        if (continuation.isActive) {
+                                            continuation.resume(reqUrl)
+                                        }
+                                    }
+                                }
+                                return super.shouldInterceptRequest(view, request)
+                            }
+                        }
+
+                        CoroutineScope(Dispatchers.Main).launch {
+                            repeat(25) {
+                                delay(400)
+                                if (foundStream.get()) return@launch
+                                try {
+                                    val v = webView ?: return@launch
+                                    val w = v.width.coerceAtLeast(600)
+                                    val h = v.height.coerceAtLeast(600)
+                                    val x = w / 2f
+                                    val y = h / 2f
+                                    val now = SystemClock.uptimeMillis()
+                                    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+                                    val up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, x, y, 0)
+                                    v.dispatchTouchEvent(down)
+                                    v.dispatchTouchEvent(up)
+                                    down.recycle()
+                                    up.recycle()
+                                } catch (_: Exception) {}
+                            }
+                        }
+
+                        loadUrl(url, mapOf("Referer" to referer))
+                    }
+                } catch (e: Exception) {
+                    Log.e("SZD", "WebView creation error: ${e.message}")
+                    if (continuation.isActive) continuation.resume(null)
+                }
+
+                continuation.invokeOnCancellation {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        try { webView?.destroy() } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+    }
+}
 
 class SezonlukDizi : MainAPI() {
     override var mainUrl              = "https://sezonlukdizi.cc"
@@ -359,48 +472,31 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 4. Byse / Filemoon inner frame API resolution
-        if (!found && (iframe.contains("byse") || iframe.contains("filemoon"))) {
-            try {
-                val videoId = iframe.split("/e/").lastOrNull()?.split("?")?.firstOrNull()?.split("/")?.firstOrNull()
-                if (videoId != null) {
-                    val domain = iframe.substringBefore("/e/")
-                    val detUrl = "$domain/api/videos/$videoId/embed/details"
-                    val detResp = app.get(
-                        detUrl,
-                        headers = mapOf(
-                            "Referer" to "$mainUrl/",
-                            "X-Embed-Origin" to "sezonlukdizi.cc",
-                            "X-Embed-Parent" to iframe,
-                            "X-Embed-Referer" to "$mainUrl/"
-                        )
-                    ).text
-                    if (detResp.contains("embed_frame_url")) {
-                        val frameUrl = Regex(""""embed_frame_url":\s*"([^"]+)"""").find(detResp)?.groupValues?.get(1)
-                        if (frameUrl != null) {
-                            Log.d("SZD", "Byse embed_frame_url found: $frameUrl, running WebViewResolver...")
-                            val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|/hls/|playlist).*"))
-                            val wvResp = app.get(frameUrl, headers = mapOf("Referer" to domain), interceptor = resolver)
-                            val wvUrl = wvResp.url
-                            if (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/") || wvUrl.contains("playlist")) {
-                                callback.invoke(
-                                    newExtractorLink(
-                                        source = "$prefix - ${veri.baslik}",
-                                        name = "$prefix - ${veri.baslik}",
-                                        url = wvUrl,
-                                        type = INFER_TYPE
-                                    ) {
-                                        this.quality = Qualities.Unknown.value
-                                        this.headers = mapOf("Referer" to frameUrl)
-                                    }
-                                )
-                                found = true
+        // 4. Custom WebView extractor for Byse, Filemoon, SPA players
+        if (!found) {
+            val ctx = SezonlukDiziPlugin.pluginContext
+            if (ctx != null) {
+                try {
+                    Log.d("SZD", "Trying SezonlukDiziWebViewExtractor for $iframe...")
+                    val wvUrl = SezonlukDiziWebViewExtractor(ctx).extract(iframe, "$mainUrl/")
+                    if ((wvUrl != null) && (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/"))) {
+                        callback.invoke(
+                            newExtractorLink(
+                                source = "$prefix - ${veri.baslik}",
+                                name = "$prefix - ${veri.baslik}",
+                                url = wvUrl,
+                                type = INFER_TYPE
+                            ) {
+                                this.quality = Qualities.Unknown.value
+                                this.headers = mapOf("Referer" to iframe)
                             }
-                        }
+                        )
+                        found = true
+                        Log.d("SZD", "SezonlukDiziWebViewExtractor success: $wvUrl")
                     }
+                } catch (e: Exception) {
+                    Log.e("SZD", "SezonlukDiziWebViewExtractor error: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.e("SZD", "Byse direct error: ${e.message}")
             }
         }
 
