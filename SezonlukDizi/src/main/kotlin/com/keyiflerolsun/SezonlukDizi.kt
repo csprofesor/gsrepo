@@ -12,7 +12,6 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
 import okhttp3.Interceptor
@@ -142,35 +141,10 @@ class SezonlukDizi : MainAPI() {
         override fun intercept(chain: Interceptor.Chain): Response {
             val request  = chain.request()
             val response = chain.proceed(request)
-            val body     = response.peekBody(1024 * 1024).string()
-            val doc      = Jsoup.parse(body)
 
-            if ((response.code == 403) || (response.code == 503) ||
-                (response.header("cf-mitigated") != null) ||
-                body.contains("Just a moment", ignoreCase = true) ||
-                body.contains("Checking your browser", ignoreCase = true) ||
-                body.contains("cf-challenge", ignoreCase = true) ||
-                body.contains("turnstile", ignoreCase = true) ||
-                doc.title().contains("Just a moment", ignoreCase = true) ||
-                doc.title().contains("Attention Required", ignoreCase = true)
-            ) {
+            if (response.code == 403 || response.code == 503 || response.header("cf-mitigated") != null) {
                 synchronized(cloudflareKiller) {
-                    val checkResp = chain.proceed(request)
-                    val checkBody = checkResp.peekBody(1024 * 1024).string()
-                    val checkDoc  = Jsoup.parse(checkBody)
-
-                    if ((checkResp.code == 403) || (checkResp.code == 503) ||
-                        (checkResp.header("cf-mitigated") != null) ||
-                        checkBody.contains("Just a moment", ignoreCase = true) ||
-                        checkBody.contains("Checking your browser", ignoreCase = true) ||
-                        checkBody.contains("cf-challenge", ignoreCase = true) ||
-                        checkBody.contains("turnstile", ignoreCase = true) ||
-                        checkDoc.title().contains("Just a moment", ignoreCase = true) ||
-                        checkDoc.title().contains("Attention Required", ignoreCase = true)
-                    ) {
-                        return cloudflareKiller.intercept(chain)
-                    }
-                    return checkResp
+                    return cloudflareKiller.intercept(chain)
                 }
             }
 
