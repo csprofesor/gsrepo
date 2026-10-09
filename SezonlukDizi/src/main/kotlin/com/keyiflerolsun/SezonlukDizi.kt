@@ -3,10 +3,15 @@
 package com.keyiflerolsun
 
 import android.util.Log
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
+import okhttp3.Interceptor
+import okhttp3.Response
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.network.CloudflareKiller
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 
 class SezonlukDizi : MainAPI() {
@@ -16,6 +21,51 @@ class SezonlukDizi : MainAPI() {
     override var lang                 = "tr"
     override val hasQuickSearch       = false
     override val supportedTypes       = setOf(TvType.TvSeries)
+
+    private val cloudflareKiller by lazy { CloudflareKiller() }
+    private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
+
+    class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request  = chain.request()
+            val response = chain.proceed(request)
+            val body     = response.peekBody(1024 * 1024).string()
+            val doc      = Jsoup.parse(body)
+
+            if ((response.code == 403) || (response.code == 503) ||
+                (response.header("cf-mitigated") != null) ||
+                body.contains("Just a moment", ignoreCase = true) ||
+                body.contains("Checking your browser", ignoreCase = true) ||
+                body.contains("cf-challenge", ignoreCase = true) ||
+                body.contains("turnstile", ignoreCase = true) ||
+                body.contains("reCAPTCHADATA.asp", ignoreCase = true) ||
+                doc.title().contains("Just a moment", ignoreCase = true) ||
+                doc.title().contains("Attention Required", ignoreCase = true)
+            ) {
+                synchronized(cloudflareKiller) {
+                    val checkResp = chain.proceed(request)
+                    val checkBody = checkResp.peekBody(1024 * 1024).string()
+                    val checkDoc  = Jsoup.parse(checkBody)
+
+                    if ((checkResp.code == 403) || (checkResp.code == 503) ||
+                        (checkResp.header("cf-mitigated") != null) ||
+                        checkBody.contains("Just a moment", ignoreCase = true) ||
+                        checkBody.contains("Checking your browser", ignoreCase = true) ||
+                        checkBody.contains("cf-challenge", ignoreCase = true) ||
+                        checkBody.contains("turnstile", ignoreCase = true) ||
+                        checkBody.contains("reCAPTCHADATA.asp", ignoreCase = true) ||
+                        checkDoc.title().contains("Just a moment", ignoreCase = true) ||
+                        checkDoc.title().contains("Attention Required", ignoreCase = true)
+                    ) {
+                        return cloudflareKiller.intercept(chain)
+                    }
+                    return checkResp
+                }
+            }
+
+            return response
+        }
+    }
 
     override val mainPage = mainPageOf(
         "$mainUrl/diziler.asp?siralama_tipi=id&s="          to "Son Eklenenler",
@@ -29,7 +79,7 @@ class SezonlukDizi : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get("${request.data}$page").document
+        val document = app.get("${request.data}$page", interceptor = interceptor).document
         val home     = document.select("div.afis a").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(request.name, home)
@@ -44,7 +94,7 @@ class SezonlukDizi : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("$mainUrl/diziler.asp?adi=$query").document
+        val document = app.get("$mainUrl/diziler.asp?adi=$query", interceptor = interceptor).document
 
         return document.select("div.afis a").mapNotNull { it.toSearchResult() }
     }
@@ -52,7 +102,7 @@ class SezonlukDizi : MainAPI() {
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url).document
+        val document = app.get(url, interceptor = interceptor).document
 
         val title       = document.selectFirst("div.header")?.text()?.trim() ?: return null
         val poster      = fixUrlNull(document.selectFirst("div.image img")?.attr("data-src")) ?: return null
@@ -63,7 +113,7 @@ class SezonlukDizi : MainAPI() {
 
         val endpoint    = url.split("/").last()
 
-        val actorsReq  = app.get("$mainUrl/oyuncular/$endpoint").document
+        val actorsReq  = app.get("$mainUrl/oyuncular/$endpoint", interceptor = interceptor).document
         val actors     = actorsReq.select("div.doubling div.ui").map {
             Actor(
                 it.selectFirst("div.header")!!.text().trim(),
@@ -71,7 +121,7 @@ class SezonlukDizi : MainAPI() {
             )
         }
 
-        val episodesReq = app.get("$mainUrl/bolumler/$endpoint").document
+        val episodesReq = app.get("$mainUrl/bolumler/$endpoint", interceptor = interceptor).document
         val episodes    = mutableListOf<Episode>()
         for (sezon in episodesReq.select("table.unstackable")) {
             for (bolum in sezon.select("tbody tr")) {
@@ -107,7 +157,7 @@ class SezonlukDizi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         Log.d("SZD", "data » $data")
-        val document = app.get(data).document
+        val document = app.get(data, interceptor = interceptor).document
         val aspData = getAspData(document)
         val bid = document.selectFirst("div#dilsec")?.attr("data-id") ?: return false
         Log.d("SZD", "bid » $bid")
@@ -116,6 +166,8 @@ class SezonlukDizi : MainAPI() {
         val altyaziResponse = app.post(
             "$mainUrl/ajax/dataAlternatif${aspData.alternatif}.asp",
             headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+            referer = data,
+            interceptor = interceptor,
             data = mapOf(
                 "bid" to bid,
                 "dil" to "1",
@@ -129,10 +181,31 @@ class SezonlukDizi : MainAPI() {
                 val veriResponse = app.post(
                     "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
                     headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                    referer = data,
+                    interceptor = interceptor,
                     data = mapOf("id" to veri.id.toString()),
                 ).document
 
-                val iframeSrc = veriResponse.selectFirst("iframe")?.attr("src")
+                var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
+                if (iframeSrc == null) {
+                    val scriptSource = veriResponse.html()
+                    val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
+                    if (functionMatch != null) {
+                        val platform = functionMatch.groupValues[1]
+                        val vidId = functionMatch.groupValues[2]
+
+                        iframeSrc = when (platform) {
+                            "vidmoly" -> "https://vidmoly.me/embed-$vidId.html"
+                            "sruby" -> "https://rubyvidhub.com/embed-$vidId.html"
+                            "filemoon" -> "https://bysejikuar.com/e/$vidId"
+                            "pixel" -> "https://pixeldrain.com/u/$vidId"
+                            "okru" -> "https://ok.ru/videoembed/$vidId"
+                            "mailru" -> "https://my.mail.ru/video/embed/$vidId"
+                            else -> null
+                        }
+                    }
+                }
+
                 val iframe = fixUrlNull(iframeSrc) ?: continue
                 Log.d("SZD", "dil»1 | iframe » $iframe")
 
@@ -144,6 +217,8 @@ class SezonlukDizi : MainAPI() {
         val dublajResponse = app.post(
             "$mainUrl/ajax/dataAlternatif${aspData.alternatif}.asp",
             headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+            referer = data,
+            interceptor = interceptor,
             data = mapOf(
                 "bid" to bid,
                 "dil" to "0",
@@ -157,10 +232,31 @@ class SezonlukDizi : MainAPI() {
                 val veriResponse = app.post(
                     "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
                     headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                    referer = data,
+                    interceptor = interceptor,
                     data = mapOf("id" to veri.id.toString()),
                 ).document
 
-                val iframeSrc = veriResponse.selectFirst("iframe")?.attr("src")
+                var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
+                if (iframeSrc == null) {
+                    val scriptSource = veriResponse.html()
+                    val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
+                    if (functionMatch != null) {
+                        val platform = functionMatch.groupValues[1]
+                        val vidId = functionMatch.groupValues[2]
+
+                        iframeSrc = when (platform) {
+                            "vidmoly" -> "https://vidmoly.me/embed-$vidId.html"
+                            "sruby" -> "https://rubyvidhub.com/embed-$vidId.html"
+                            "filemoon" -> "https://bysejikuar.com/e/$vidId"
+                            "pixel" -> "https://pixeldrain.com/u/$vidId"
+                            "okru" -> "https://ok.ru/videoembed/$vidId"
+                            "mailru" -> "https://my.mail.ru/video/embed/$vidId"
+                            else -> null
+                        }
+                    }
+                }
+
                 val iframe = fixUrlNull(iframeSrc) ?: continue
                 Log.d("SZD", "dil»0 | iframe » $iframe")
 
@@ -184,7 +280,7 @@ class SezonlukDizi : MainAPI() {
         // 1. VidMoly direct extraction
         if (iframe.contains("vidmoly", ignoreCase = true)) {
             try {
-                val iSource = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/")).text
+                val iSource = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = interceptor).text
                 val m3uLink = Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""").find(iSource)?.groupValues?.get(1)
                     ?: Regex("""file:\s*["']([^"']+)["']""").find(iSource)?.groupValues?.get(1)
 
@@ -210,7 +306,7 @@ class SezonlukDizi : MainAPI() {
         // 2. Sibnet direct extraction
         if (!found && iframe.contains("sibnet", ignoreCase = true)) {
             try {
-                val iSource = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/")).text
+                val iSource = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = interceptor).text
                 val videoPath = Regex("""player\.src\(\[\{src:\s*["']([^"']+)["']""").find(iSource)?.groupValues?.get(1)
                 if (videoPath != null) {
                     val fullUrl = if (videoPath.startsWith("http")) videoPath else "https://video.sibnet.ru$videoPath"
@@ -232,10 +328,35 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 3. Fallback / Standard loadExtractor
+        // 3. Pixeldrain direct extraction
+        if (!found && (iframe.contains("pixeldrain", ignoreCase = true) || iframe.contains("pixel", ignoreCase = true))) {
+            try {
+                val pixelId = iframe.split("/u/").lastOrNull()?.split("?")?.firstOrNull()?.split("/")?.firstOrNull()
+                    ?: iframe.split("v=").lastOrNull()?.split("&")?.firstOrNull()
+                if (pixelId != null) {
+                    val downloadUrl = "https://pixeldrain.com/api/file/$pixelId?download"
+                    callback.invoke(
+                        newExtractorLink(
+                            source = "$prefix - ${veri.baslik}",
+                            name = "$prefix - ${veri.baslik}",
+                            url = downloadUrl,
+                            type = INFER_TYPE
+                        ) {
+                            this.quality = Qualities.Unknown.value
+                            this.headers = mapOf("Referer" to iframe)
+                        }
+                    )
+                    found = true
+                }
+            } catch (e: Exception) {
+                Log.e("SZD", "Pixeldrain direct error: ${e.message}")
+            }
+        }
+
+        // 4. Fallback / Standard loadExtractor
         if (!found) {
             val extractedLinks = mutableListOf<ExtractorLink>()
-            val extracted = loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
+            loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
                 extractedLinks.add(link)
             }
             extractedLinks.forEach { link ->
@@ -252,32 +373,33 @@ class SezonlukDizi : MainAPI() {
                         this.extractorData = link.extractorData
                     }
                 )
+                found = true
             }
+        }
 
-            if (!extracted && (iframe.contains("byse") || iframe.contains("filemoon"))) {
-                val filemoonId = iframe.split("/e/").lastOrNull()?.split("?")?.firstOrNull()?.split("/")?.firstOrNull()
-                if (filemoonId != null) {
-                    val filemoonUrl = "https://filemoon.sx/e/$filemoonId"
-                    val filemoonLinks = mutableListOf<ExtractorLink>()
-                    loadExtractor(filemoonUrl, "$mainUrl/", subtitleCallback) { link ->
-                        filemoonLinks.add(link)
-                    }
-                    filemoonLinks.forEach { link ->
-                        callback.invoke(
-                            newExtractorLink(
-                                source = "$prefix - ${veri.baslik}",
-                                name = "$prefix - ${veri.baslik}",
-                                url = link.url,
-                                type = link.type
-                            ) {
-                                this.referer = link.referer
-                                this.quality = link.quality
-                                this.headers = link.headers
-                                this.extractorData = link.extractorData
-                            }
-                        )
-                    }
+        // 5. WebViewResolver fallback for SPA players (Byse, Filemoon, VidMoly, etc.)
+        if (!found) {
+            try {
+                Log.d("SZD", "Trying WebViewResolver for $iframe...")
+                val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|\\.txt|/hls/|playlist).*"))
+                val wvResp = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = resolver)
+                val wvUrl = wvResp.url
+                if (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/") || wvUrl.startsWith("http")) {
+                    callback.invoke(
+                        newExtractorLink(
+                            source = "$prefix - ${veri.baslik}",
+                            name = "$prefix - ${veri.baslik}",
+                            url = wvUrl,
+                            type = INFER_TYPE
+                        ) {
+                            this.quality = Qualities.Unknown.value
+                            this.headers = mapOf("Referer" to iframe)
+                        }
+                    )
+                    Log.d("SZD", "WebViewResolver found stream URL: $wvUrl")
                 }
+            } catch (e: Exception) {
+                Log.e("SZD", "WebViewResolver error: ${e.message}")
             }
         }
     }
@@ -286,7 +408,7 @@ class SezonlukDizi : MainAPI() {
         return try {
             val jsSrc = document?.selectFirst("script[src*='site.min.js']")?.attr("src")
             val jsUrl = jsSrc?.let { fixUrl(it) } ?: "$mainUrl/js/site.min.js?v=0.82"
-            val websiteCustomJavascript = app.get(jsUrl).text
+            val websiteCustomJavascript = app.get(jsUrl, interceptor = interceptor).text
             val dataAlternatifAsp = Regex("""dataAlternatif(\d+)\.asp""").find(websiteCustomJavascript)?.groupValues?.get(1) ?: "22"
             val dataEmbedAsp = Regex("""dataEmbed(\d+)\.asp""").find(websiteCustomJavascript)?.groupValues?.get(1) ?: "22"
             AspData(dataAlternatifAsp, dataEmbedAsp)
