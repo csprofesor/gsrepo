@@ -2,6 +2,7 @@ package com.gsrepo
 
 import android.util.Log
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -88,6 +89,7 @@ class HDFilmIzle : MainAPI() {
         ).document
         val searchResults = mutableListOf<SearchResponse>()
         val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false) // site JSON yeni alanlar ekleyebiliyor (ör. "type")
         try {
             val videos: List<Video> = objectMapper.readValue(response.body().text())
             videos.forEach { video ->
@@ -147,6 +149,7 @@ class HDFilmIzle : MainAPI() {
         Log.d("HDF", "data » $data")
         val document = app.get(data).document
         val objectMapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false) // site JSON yeni alanlar ekleyebiliyor (ör. "type")
 
         val partsJson = document.select("script").asSequence()
             .map { it.data() }

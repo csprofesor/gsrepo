@@ -66,10 +66,11 @@ class JetFilmizle : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.post(
-            "${mainUrl}/arama?q=",
+        // Site artık aramayı GET ile alıyor; POST /arama 404 dönüyor
+        val document = app.get(
+            "${mainUrl}/arama",
             referer = "${mainUrl}/",
-            data    = mapOf("s" to query)
+            params  = mapOf("q" to query)
         ).document
 
         return document.select("div.film-card").mapNotNull { it.toSearchResult() }
