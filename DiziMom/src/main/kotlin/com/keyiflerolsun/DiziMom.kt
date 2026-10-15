@@ -24,7 +24,7 @@ class DiziMom : MainAPI() {
     override var sequentialMainPageDelay       = 50L
     override var sequentialMainPageScrollDelay = 50L
 
-    // ! CloudFlare v2
+    // ! Cloudflare v2
     private val cloudflareKiller by lazy { CloudflareKiller() }
     private val interceptor      by lazy { CloudflareInterceptor(cloudflareKiller) }
 
@@ -33,6 +33,8 @@ class DiziMom : MainAPI() {
         "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
     )
+
+    private val globalSeenUrls = mutableSetOf<String>()
 
     class CloudflareInterceptor(private val cloudflareKiller: CloudflareKiller) : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
@@ -113,22 +115,48 @@ class DiziMom : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page == 1) {
-            request.data.trimEnd('/')
-        } else {
-            if (request.data.contains("?")) "${request.data}&page=$page" else "${request.data}?page=$page"
+        val firstCatUrl = mainPage.firstOrNull()?.data
+        if (page == 1 && (firstCatUrl == null || request.data.trimEnd('/') == firstCatUrl.trimEnd('/'))) {
+            synchronized(globalSeenUrls) {
+                globalSeenUrls.clear()
+            }
         }
 
-        val document = try {
-            app.get(url, headers = baseHeaders, interceptor = interceptor).document
-        } catch (e: Exception) {
-            Log.d("DZM", "Error loading main page: ${e.message}")
-            return newHomePageResponse(request.name, emptyList())
-        }
+        val items = mutableListOf<SearchResponse>()
+        var currentPage = page
+        val maxPagesToFetch = if (page == 1) 2 else 1
 
-        val items = document.select("a.group, a[href*='/dizi/'], a[href*='/film/'], a[href*='/anime/']")
-            .mapNotNull { it.toSearchResponse() }
-            .distinctBy { it.url }
+        while (items.size < 15 && currentPage <= page + maxPagesToFetch - 1) {
+            val fetchUrl = if (currentPage == 1) {
+                request.data.trimEnd('/')
+            } else {
+                if (request.data.contains("?")) "${request.data}&page=$currentPage" else "${request.data}?page=$currentPage"
+            }
+
+            val document = try {
+                app.get(fetchUrl, headers = baseHeaders, interceptor = interceptor).document
+            } catch (e: Exception) {
+                Log.d("DZM", "Error loading main page: ${e.message}")
+                break
+            }
+
+            val pageItems = document.select("a.group, a[href*='/dizi/'], a[href*='/film/'], a[href*='/anime/']")
+                .mapNotNull { it.toSearchResponse() }
+
+            var addedInThisPage = 0
+            for (item in pageItems) {
+                val isNew = synchronized(globalSeenUrls) {
+                    globalSeenUrls.add(item.url)
+                }
+                if (isNew) {
+                    items.add(item)
+                    addedInThisPage++
+                }
+            }
+
+            if (addedInThisPage == 0 || pageItems.isEmpty()) break
+            currentPage++
+        }
 
         return newHomePageResponse(request.name, items)
     }
