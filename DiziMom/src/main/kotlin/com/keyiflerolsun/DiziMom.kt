@@ -73,6 +73,23 @@ class DiziMom : MainAPI() {
         "$mainUrl/tur/belgesel"    to "Belgeseller",
     )
 
+    private fun fixPosterUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        val cleanUrl = fixUrlNull(url) ?: return null
+
+        val tmdbMatch = Regex("""/posters/(?:w\d+/)?([^?/.]+)""").find(cleanUrl)
+            ?: Regex("""/storage/tmdb/[^?/.]*?/([^?/.]+)""").find(cleanUrl)
+
+        if (tmdbMatch != null) {
+            val hash = tmdbMatch.groupValues[1]
+            if (hash.length >= 15) {
+                return "https://image.tmdb.org/t/p/w500/$hash.jpg"
+            }
+        }
+
+        return cleanUrl
+    }
+
     private fun Element.toSearchResponse(): SearchResponse? {
         val href = fixUrlNull(this.attr("href")) ?: return null
         if (!href.contains("/dizi/") && !href.contains("/film/") && !href.contains("/anime/")) return null
@@ -87,10 +104,10 @@ class DiziMom : MainAPI() {
 
         if (rawTitle.isBlank()) return null
 
-        val posterUrl = fixUrlNull(
-            img?.attr("src")
-                ?: img?.attr("data-src")
-        )
+        val rawImgSrc = img?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: img?.attr("data-src")?.takeIf { it.isNotBlank() }
+
+        val posterUrl = fixPosterUrl(rawImgSrc)
 
         val scoreStr = this.selectFirst("span.badge-rating, .rating, .score")?.text()?.trim()
             ?: Regex("""(?i)(?:imdb|score|puan)\s*:?\s*([0-9]+(?:[.,][0-9]+)?)""").find(this.text())?.groupValues?.get(1)
@@ -191,10 +208,10 @@ class DiziMom : MainAPI() {
             ?.replace(" Film izle", "")
             ?.trim() ?: return null
 
-        val poster = fixUrlNull(
-            document.selectFirst("img[src*='posters'], img[src*='storage/tmdb'], div.poster img")?.attr("src")
-                ?: document.selectFirst("img")?.attr("src")
-        )
+        val rawPoster = document.selectFirst("img[src*='posters'], img[src*='storage/tmdb'], div.poster img")?.attr("src")
+            ?: document.selectFirst("img")?.attr("src")
+
+        val poster = fixPosterUrl(rawPoster)
 
         val year = document.selectFirst("p.text-content-muted, span.year")?.text()
             ?.let { Regex("""\b(19\d\d|20\d\d)\b""").find(it)?.value?.toIntOrNull() }
@@ -209,7 +226,7 @@ class DiziMom : MainAPI() {
         val actors = actorElements.mapNotNull { el ->
             val actorName = el.selectFirst("span, p, .name")?.text()?.trim() ?: el.text().trim().takeIf { it.isNotBlank() }
             if (actorName == null) return@mapNotNull null
-            val actorImage = fixUrlNull(el.selectFirst("img")?.attr("src"))
+            val actorImage = fixPosterUrl(el.selectFirst("img")?.attr("src"))
             Actor(actorName, actorImage)
         }
 
