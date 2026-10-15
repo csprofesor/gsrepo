@@ -326,36 +326,47 @@ class DiziMom : MainAPI() {
         val html = document.html()
         var foundAny = false
 
+        // Extract script hosts dynamically from the page
+        val scriptHosts = Regex("""https?://([a-zA-Z0-9.-]+)/(?:assets/js/core\.js|e/c\.js)""")
+            .findAll(html)
+            .map { it.groupValues[1] }
+            .toList()
+
+        val candidateHosts = (scriptHosts + listOf("pilavyerplay.top", "play2.pilavyerplay.top", "play.pilavyerplay.top", "pilavyer.top")).distinct()
+
         // Extract data-pv="SLUG"
         val pvRegex = Regex("""data-pv="([^"]+)"""")
         val pvSlugs = pvRegex.findAll(html).map { it.groupValues[1] }.distinct().toList()
 
         for (slug in pvSlugs) {
-            val sPhpUrl = "https://play2.pilavyerplay.top/assets/js/s.php?s=$slug"
-            try {
-                val embedDoc = app.get(sPhpUrl, referer = "$mainUrl/", headers = baseHeaders, interceptor = interceptor).text
-                val playerMatch = Regex("""window\.__PLAYER__\s*=\s*(\{.*?\}|\{.*?\n\});""").find(embedDoc)
-                if (playerMatch != null) {
-                    val playerJsonStr = playerMatch.groupValues[1]
-                    val streamMatch = Regex(""""stream"\s*:\s*"([^"]+)"""").find(playerJsonStr)
-                    val streamUrl = streamMatch?.groupValues?.get(1)?.replace("""\u0026""", "&")
-                    if (!streamUrl.isNullOrBlank()) {
-                        callback.invoke(
-                            newExtractorLink(
-                                source = "Pilavyer",
-                                name = "Pilavyer",
-                                url = streamUrl,
-                                type = ExtractorLinkType.M3U8
-                            ) {
-                                this.referer = "https://play2.pilavyerplay.top/"
-                                this.quality = Qualities.Unknown.value
-                            }
-                        )
-                        foundAny = true
+            for (host in candidateHosts) {
+                val sPhpUrl = "https://$host/assets/js/s.php?s=$slug"
+                try {
+                    val embedDoc = app.get(sPhpUrl, referer = "$mainUrl/", headers = baseHeaders, interceptor = interceptor).text
+                    val playerMatch = Regex("""window\.__PLAYER__\s*=\s*(\{.*?\}|\{.*?\n\});""").find(embedDoc)
+                    if (playerMatch != null) {
+                        val playerJsonStr = playerMatch.groupValues[1]
+                        val streamMatch = Regex(""""stream"\s*:\s*"([^"]+)"""").find(playerJsonStr)
+                        val streamUrl = streamMatch?.groupValues?.get(1)?.replace("""\u0026""", "&")
+                        if (!streamUrl.isNullOrBlank()) {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "Pilavyer",
+                                    name = "Pilavyer",
+                                    url = streamUrl,
+                                    type = ExtractorLinkType.M3U8
+                                ) {
+                                    this.referer = "https://$host/"
+                                    this.quality = Qualities.Unknown.value
+                                }
+                            )
+                            foundAny = true
+                            break
+                        }
                     }
+                } catch (e: Exception) {
+                    Log.d("DZM", "Error loading Pilavyer embed from $host: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.d("DZM", "Error loading Pilavyer embed: ${e.message}")
             }
         }
 
