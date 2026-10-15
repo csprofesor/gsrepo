@@ -85,7 +85,7 @@ class SineWix : MainAPI() {
     @Volatile
     private var cachedToken: CachedToken? = null
 
-    private val seenMediaIds = Collections.synchronizedSet(HashSet<Int>())
+
 
 
 
@@ -262,10 +262,7 @@ class SineWix : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        if (page == 1 && request.data == mainPage.first().data) {
-            seenMediaIds.clear()
-        }
-
+        val rowSeenIds = HashSet<Int>()
         val baseUrlPath = request.data
         val itemsList = mutableListOf<SearchResponse>()
         var currentPage = page
@@ -287,7 +284,7 @@ class SineWix : MainAPI() {
             if (rawItems.isEmpty()) break
 
             for (item in rawItems) {
-                val searchResp = item.toSearchResponse(filterDuplicates = (page == 1))
+                val searchResp = item.toSearchResponse(rowSeenIds)
                 if (searchResp != null) {
                     itemsList.add(searchResp)
                     if (itemsList.size >= 12 && page == 1) break
@@ -299,7 +296,7 @@ class SineWix : MainAPI() {
         return newHomePageResponse(request.name, itemsList)
     }
 
-    private fun SineData.toSearchResponse(filterDuplicates: Boolean = false): SearchResponse? {
+    private fun SineData.toSearchResponse(rowSeenIds: HashSet<Int>? = null): SearchResponse? {
         val title = this.title ?: this.name ?: return null
         val id = this.id ?: return null
 
@@ -309,8 +306,8 @@ class SineWix : MainAPI() {
 
         val posterUrl = fixUrl(rawPoster) ?: return null
 
-        if (filterDuplicates) {
-            if (!seenMediaIds.add(id)) {
+        if (rowSeenIds != null) {
+            if (!rowSeenIds.add(id)) {
                 return null
             }
         }
@@ -357,7 +354,7 @@ class SineWix : MainAPI() {
         val result = tryParseJson<SineSearch>(resText)
 
         val items = result?.results ?: result?.search ?: emptyList()
-        return items.mapNotNull { it.toSearchResponse(filterDuplicates = false) }
+        return items.mapNotNull { it.toSearchResponse() }
     }
 
     override suspend fun quickSearch(query: String): List<SearchResponse> = search(query)
