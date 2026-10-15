@@ -208,11 +208,11 @@ class SineWix : MainAPI() {
         val rawText = response.text
 
         if (encHeader == "AES-256-GCM") {
-            val jsonNode = tryParseJson<Map<String, String>>(rawText)
-            val iv = jsonNode?.get("iv") ?: return rawText
-            val tag = jsonNode.get("tag") ?: return rawText
-            val aad = jsonNode.get("aad") ?: return rawText
-            val ciphertext = jsonNode.get("ciphertext") ?: return rawText
+            val jsonNode = tryParseJson<SineEncryptedResponse>(rawText)
+            val iv = jsonNode?.iv ?: return rawText
+            val tag = jsonNode.tag ?: return rawText
+            val aad = jsonNode.aad ?: return rawText
+            val ciphertext = jsonNode.ciphertext ?: return rawText
             return try {
                 decryptGcmResponse(ciphertext, iv, tag, aad, respSessionId, nonce, timestamp)
             } catch (e: Exception) {
@@ -298,7 +298,11 @@ class SineWix : MainAPI() {
 
     private fun SineData.toSearchResponse(rowSeenIds: HashSet<Int>? = null): SearchResponse? {
         val title = this.title ?: this.name ?: return null
-        val id = this.id ?: return null
+        val id = when (val i = this.id) {
+            is Number -> i.toInt()
+            is String -> i.toIntOrNull()
+            else -> null
+        } ?: return null
 
         val rawPoster = this.posterPath?.trim()?.ifBlank { null }
             ?: this.backdropPath?.trim()?.ifBlank { null }

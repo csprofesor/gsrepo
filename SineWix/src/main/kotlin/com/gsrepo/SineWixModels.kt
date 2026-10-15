@@ -11,8 +11,15 @@ data class SineSearch(
     @JsonProperty("search") val search: List<SineData>? = null
 )
 
+data class SineEncryptedResponse(
+    @JsonProperty("iv") val iv: String? = null,
+    @JsonProperty("tag") val tag: String? = null,
+    @JsonProperty("aad") val aad: String? = null,
+    @JsonProperty("ciphertext") val ciphertext: String? = null,
+)
+
 data class SineData(
-    @JsonProperty("id") val id: Int? = null,
+    @JsonProperty("id") val id: Any? = null,
     @JsonProperty("title") val title: String? = null,
     @JsonProperty("name") val name: String? = null,
     @JsonProperty("poster_path") val posterPath: String? = null,
