@@ -77,12 +77,21 @@ class DiziMom : MainAPI() {
         if (url.isNullOrBlank()) return null
         val cleanUrl = fixUrlNull(url) ?: return null
 
+        // Explicitly reject platform logos (Amazon Prime, Netflix, Disney+, etc.) and avatars
+        if (cleanUrl.contains("platforms", ignoreCase = true) ||
+            cleanUrl.contains("logo", ignoreCase = true) ||
+            cleanUrl.contains("flag", ignoreCase = true) ||
+            cleanUrl.contains("avatar", ignoreCase = true)
+        ) {
+            return null
+        }
+
         val tmdbMatch = Regex("""/posters/(?:w\d+/)?([^?/.]+)""").find(cleanUrl)
             ?: Regex("""/storage/tmdb/[^?/.]*?/([^?/.]+)""").find(cleanUrl)
 
         if (tmdbMatch != null) {
             val hash = tmdbMatch.groupValues[1]
-            if (hash.length >= 15) {
+            if (hash.length >= 15 && !hash.contains("platform", ignoreCase = true)) {
                 return "https://image.tmdb.org/t/p/w500/$hash.jpg"
             }
         }
@@ -93,19 +102,23 @@ class DiziMom : MainAPI() {
     private fun Element.toSearchResponse(): SearchResponse? {
         val href = fixUrlNull(this.attr("href")) ?: return null
         if (!href.contains("/dizi/") && !href.contains("/film/") && !href.contains("/anime/")) return null
-        if (href.contains("/sezon-") || href.contains("/bolum-")) return null
+        if (href.contains("/sezon-") || href.contains("/bolum-") || href.contains("locale/")) return null
 
         val h3 = this.selectFirst("h3, h2, .entry-title")
-        val img = this.selectFirst("img")
+        val imgEl = this.selectFirst("img[src*='posters']")
+            ?: this.select("img").firstOrNull { el ->
+                val s = el.attr("src").ifBlank { el.attr("data-src") }
+                s.isNotBlank() && !s.contains("platforms") && !s.contains("logo") && !s.contains("flag")
+            }
 
         val rawTitle = h3?.text()?.trim()
-            ?: img?.attr("alt")?.replace(" Dizi izle", "")?.replace(" Film izle", "")?.trim()
+            ?: imgEl?.attr("alt")?.replace(" Dizi izle", "")?.replace(" Film izle", "")?.trim()
             ?: this.attr("title").replace(" izle", "").trim()
 
         if (rawTitle.isBlank()) return null
 
-        val rawImgSrc = img?.attr("src")?.takeIf { it.isNotBlank() }
-            ?: img?.attr("data-src")?.takeIf { it.isNotBlank() }
+        val rawImgSrc = imgEl?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: imgEl?.attr("data-src")?.takeIf { it.isNotBlank() }
 
         val posterUrl = fixPosterUrl(rawImgSrc)
 
@@ -208,9 +221,13 @@ class DiziMom : MainAPI() {
             ?.replace(" Film izle", "")
             ?.trim() ?: return null
 
-        val rawPoster = document.selectFirst("img[src*='posters'], img[src*='storage/tmdb'], div.poster img")?.attr("src")
-            ?: document.selectFirst("img")?.attr("src")
+        val posterElement = document.select("img[src*='posters']").firstOrNull()
+            ?: document.select("img").firstOrNull { el ->
+                val src = el.attr("src")
+                src.isNotBlank() && !src.contains("platforms") && !src.contains("logo") && !src.contains("flag") && !src.contains("avatar")
+            }
 
+        val rawPoster = posterElement?.attr("src")
         val poster = fixPosterUrl(rawPoster)
 
         val year = document.selectFirst("p.text-content-muted, span.year")?.text()
