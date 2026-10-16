@@ -266,16 +266,16 @@
     "fileHash": "sha256-096ece0e2947716e9df05b4fcb380b96edb292dc1453bc71050a275e22f6fba2"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmModu.cs3?v=f0f64f904daf14bdf195b5e8ef27db57de7fd9d9b04988bd583f0ea62d3cf551",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmModu.cs3?v=946acc4d89b704799a6417d0dbd1de9dcea3092730362d3ab9131c442e1c60ac",
     "status": 1,
-    "version": 20,
+    "version": 21,
     "name": "FilmModu",
     "internalName": "FilmModu",
     "authors": [
       "csprofesor"
     ],
     "description": "Film modun geldiyse yüksek kalitede en yeni filmleri izle, 1080p izleyebileceğiniz reklamsiz film sitesi.",
-    "fileSize": 19895,
+    "fileSize": 19922,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -283,7 +283,7 @@
     ],
     "iconUrl": "https://www.filmmodu.one/icon/favicon.ico",
     "apiVersion": 1,
-    "fileHash": "sha256-f0f64f904daf14bdf195b5e8ef27db57de7fd9d9b04988bd583f0ea62d3cf551"
+    "fileHash": "sha256-946acc4d89b704799a6417d0dbd1de9dcea3092730362d3ab9131c442e1c60ac"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FullHDFilm.cs3?v=be1dd86ef87d18990b60a0aa79393c00473d58b787bd57a9229991018b430d27",
