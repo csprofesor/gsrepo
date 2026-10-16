@@ -16,7 +16,6 @@ gsrepo Türkçe CloudStream eklentilerini içeren sağlayıcı deposudur.
 | **DiziMag** | Yabancı Dizi, Film | Türkçe | Active |
 | **DiziMom** | Yabancı Dizi | Türkçe | Active |
 | **DiziPal** | Dizi, Film | Türkçe | Active |
-| **DiziPalOriginal** | Dizi, Film | Türkçe | Active |
 | **Dizilla** | Yabancı Dizi | Türkçe | Active |
 | **FilmMakinesi** | Film, Dizi | Türkçe | Active |
 | **FilmModu** | Film | Türkçe | Active |

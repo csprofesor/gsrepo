@@ -224,27 +224,6 @@
     "fileHash": "sha256-aa4443570aff1af1a7b5f56adffd9d35fb083f5d84e026017561aae0508b1803"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DiziPalOriginal.cs3?v=8e56b2a8e043c15884ecbc5f28cf5bbd8a0c657fa46aba971f1fcfa284883db4",
-    "status": 1,
-    "version": 100,
-    "name": "DiziPalOriginal",
-    "internalName": "DiziPalOriginal",
-    "authors": [
-      "csprofesor"
-    ],
-    "description": "en yeni dizileri güvenli ve hızlı şekilde sunar.",
-    "fileSize": 36464,
-    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
-    "language": "tr",
-    "tvTypes": [
-      "TvSeries",
-      "Movie"
-    ],
-    "iconUrl": "https://www.google.com/s2/favicons?domain=dizipal2224.com&sz=%size%",
-    "apiVersion": 1,
-    "fileHash": "sha256-8e56b2a8e043c15884ecbc5f28cf5bbd8a0c657fa46aba971f1fcfa284883db4"
-  },
-  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/FilmMakinesi.cs3?v=096ece0e2947716e9df05b4fcb380b96edb292dc1453bc71050a275e22f6fba2",
     "status": 1,
     "version": 96,
