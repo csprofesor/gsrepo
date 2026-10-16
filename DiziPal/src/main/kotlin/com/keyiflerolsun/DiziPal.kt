@@ -548,157 +548,128 @@ class DiziPal : MainAPI() {
             updateCookies(pageResp.headers)
             val doc = pageResp.document
 
-            val cfgElements = doc.select(".video-player-container[data-cfg], [data-cfg]")
-            val cfgList = cfgElements.mapNotNull { it.attr("data-cfg").takeIf { c -> c.isNotBlank() } }.distinct()
+            // 1. Try div[data-rm-k=true] encrypted player payload first
+            val encryptedText = doc.selectFirst("div[data-rm-k=true]")?.text() ?: ""
+            if (encryptedText.isNotBlank()) {
+                iframeUrl = decryptDizipalData(encryptedText)
+            }
 
-            for (cfg in cfgList) {
-                try {
-                    val cookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                    val tokResp = app.get(
-                        "$mainUrl/ajax-token",
+            // 2. Try legacy ajax-player-config if iframeUrl is still blank
+            if (iframeUrl.isBlank()) {
+                val cfgElements = doc.select(".video-player-container[data-cfg], [data-cfg]")
+                val cfgList = cfgElements.mapNotNull { it.attr("data-cfg").takeIf { c -> c.isNotBlank() } }.distinct()
+
+                for (cfg in cfgList) {
+                    try {
+                        val cookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                        val tokResp = app.get(
+                            "$mainUrl/ajax-token",
+                            headers = mapOf(
+                                "User-Agent" to USER_AGENT,
+                                "Accept" to "*/*",
+                                "X-Requested-With" to "XMLHttpRequest",
+                                "Referer" to targetUrl,
+                                "Cookie" to cookieHeader
+                            ),
+                            interceptor = interceptor
+                        )
+                        updateCookies(tokResp.headers)
+
+                        val tokText = tokResp.text
+                        val tokenVal = Regex(""""t"\s*:\s*"([^"]+)"""").find(tokText)?.groupValues?.get(1)
+                        if (!tokenVal.isNullOrBlank()) {
+                            cookieMap["_ct"] = tokenVal
+                        }
+                    } catch (e: Exception) {
+                        Log.e("DiziPal", "ajax-token hatası: ${e.message}")
+                    }
+
+                    val finalCookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
+                    val configResp = app.post(
+                        "$mainUrl/ajax-player-config",
+                        data = mapOf("cfg" to cfg),
                         headers = mapOf(
                             "User-Agent" to USER_AGENT,
                             "Accept" to "*/*",
                             "X-Requested-With" to "XMLHttpRequest",
+                            "Content-Type" to "application/x-www-form-urlencoded",
                             "Referer" to targetUrl,
-                            "Cookie" to cookieHeader
+                            "Cookie" to finalCookieHeader
                         ),
+                        cookies = cookieMap,
                         interceptor = interceptor
-                    )
-                    updateCookies(tokResp.headers)
+                    ).text
 
-                    val tokText = tokResp.text
-                    val tokenVal = Regex(""""t"\s*:\s*"([^"]+)"""").find(tokText)?.groupValues?.get(1)
-                    if (!tokenVal.isNullOrBlank()) {
-                        cookieMap["_ct"] = tokenVal
+                    val mapper = jacksonObjectMapper()
+                    val configData: DizipalPlayerConfigResponse = mapper.readValue(configResp)
+                    if (configData.enc != null) {
+                        iframeUrl = decryptPlayerConfig(configData.enc) ?: ""
                     }
-                } catch (e: Exception) {
-                    Log.e("DiziPal", "ajax-token hatası: ${e.message}")
-                }
-
-                val finalCookieHeader = cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                val configResp = app.post(
-                    "$mainUrl/ajax-player-config",
-                    data = mapOf("cfg" to cfg),
-                    headers = mapOf(
-                        "User-Agent" to USER_AGENT,
-                        "Accept" to "*/*",
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "Content-Type" to "application/x-www-form-urlencoded",
-                        "Referer" to targetUrl,
-                        "Cookie" to finalCookieHeader
-                    ),
-                    cookies = cookieMap,
-                    interceptor = interceptor
-                ).text
-
-                val mapper = jacksonObjectMapper()
-                val configData: DizipalPlayerConfigResponse = mapper.readValue(configResp)
-                if (configData.enc != null) {
-                    iframeUrl = decryptPlayerConfig(configData.enc) ?: ""
-                }
-                if (iframeUrl.isBlank() && !configData.config?.v.isNullOrBlank()) {
-                    iframeUrl = configData.config.v
-                }
-
-                if (iframeUrl.isNotBlank()) {
-                    if (iframeUrl.contains("<iframe")) {
-                        val extracted = Regex("""src=["']([^"']+)["']""").find(iframeUrl)?.groupValues?.get(1)
-                        if (!extracted.isNullOrBlank()) {
-                            iframeUrl = extracted
-                        }
+                    if (iframeUrl.isBlank() && !configData.config?.v.isNullOrBlank()) {
+                        iframeUrl = configData.config.v ?: ""
                     }
 
-                    if (iframeUrl.startsWith("//")) iframeUrl = "https:$iframeUrl"
-                    else if (iframeUrl.startsWith("://")) iframeUrl = "https$iframeUrl"
-                    else if (!iframeUrl.startsWith("http")) iframeUrl = "https://$iframeUrl"
-
-                    Log.d("DiziPal", "--> Extractor'a gönderilen Final URL: $iframeUrl")
-
-                    if (iframeUrl.contains(".m3u8") || iframeUrl.contains(".mp4")) {
-                        val isM3u8 = iframeUrl.contains(".m3u8")
-                        callback.invoke(
-                            newExtractorLink(
-                                source = name,
-                                name = "DiziPal Direct",
-                                url = iframeUrl,
-                                type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                            ) {
-                                headers = mapOf(
-                                    "Referer" to targetUrl,
-                                    "User-Agent" to USER_AGENT
-                                )
-                                Qualities.Unknown.value
-                            }
-                        )
-                    } else {
-                        val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
-                        if (!loadedExt) {
-                            try {
-                                val embedResp = app.get(
-                                    iframeUrl,
-                                    interceptor = interceptor,
-                                    timeout = 15000,
-                                    headers = mapOf(
-                                        "Referer" to targetUrl,
-                                        "User-Agent" to USER_AGENT
-                                    )
-                                )
-                                DizipalPlayer().extractFromHtml(
-                                    url = iframeUrl,
-                                    referer = targetUrl,
-                                    html = embedResp.text,
-                                    subtitleCallback = subtitleCallback,
-                                    callback = callback
-                                )
-                            } catch (e: Exception) {
-                                Log.e("DiziPal", "embed fetch hatası: ${e.message}")
-                                DizipalPlayer().getUrl(
-                                    url = iframeUrl,
-                                    referer = targetUrl,
-                                    subtitleCallback = subtitleCallback,
-                                    callback = callback
-                                )
-                            }
-                        }
-                    }
+                    if (iframeUrl.isNotBlank()) break
                 }
             }
 
+            // 3. Fallback to iframe src if still blank
             if (iframeUrl.isBlank()) {
-                val encryptedText = doc.selectFirst("div[data-rm-k=true]")?.text() ?: ""
-                if (encryptedText.isNotEmpty()) {
-                    iframeUrl = decryptDizipalData(encryptedText)
-                } else {
-                    iframeUrl = doc.selectFirst("iframe")?.attr("src") ?: ""
+                iframeUrl = doc.selectFirst("iframe")?.attr("src") ?: ""
+            }
+
+            if (iframeUrl.isNotBlank()) {
+                if (iframeUrl.contains("<iframe")) {
+                    val extracted = Regex("""src=["']([^"']+)["']""").find(iframeUrl)?.groupValues?.get(1)
+                    if (!extracted.isNullOrBlank()) {
+                        iframeUrl = extracted
+                    }
                 }
 
-                if (iframeUrl.isNotBlank()) {
-                    if (iframeUrl.startsWith("//")) iframeUrl = "https:$iframeUrl"
-                    else if (iframeUrl.startsWith("://")) iframeUrl = "https$iframeUrl"
-                    else if (!iframeUrl.startsWith("http")) iframeUrl = "https://$iframeUrl"
+                if (iframeUrl.startsWith("//")) iframeUrl = "https:$iframeUrl"
+                else if (iframeUrl.startsWith("://")) iframeUrl = "https$iframeUrl"
+                else if (!iframeUrl.startsWith("http")) iframeUrl = "https://$iframeUrl"
 
-                    val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
-                    if (!loadedExt) {
-                        try {
-                            val embedResp = app.get(
-                                iframeUrl,
-                                interceptor = interceptor,
-                                timeout = 15000,
-                                headers = mapOf(
-                                    "Referer" to targetUrl,
-                                    "User-Agent" to USER_AGENT
-                                )
+                Log.d("DiziPal", "--> Extractor'a gönderilen Final URL: $iframeUrl")
+
+                if (iframeUrl.contains(".m3u8") || iframeUrl.contains(".mp4")) {
+                    val isM3u8 = iframeUrl.contains(".m3u8")
+                    callback.invoke(
+                        newExtractorLink(
+                            source = name,
+                            name = "DiziPal Direct",
+                            url = iframeUrl,
+                            type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                        ) {
+                            headers = mapOf(
+                                "Referer" to targetUrl,
+                                "User-Agent" to USER_AGENT
                             )
-                            DizipalPlayer().extractFromHtml(
-                                url = iframeUrl,
-                                referer = targetUrl,
-                                html = embedResp.text,
-                                subtitleCallback = subtitleCallback,
-                                callback = callback
+                            Qualities.Unknown.value
+                        }
+                    )
+                } else {
+                    try {
+                        val embedResp = app.get(
+                            iframeUrl,
+                            interceptor = interceptor,
+                            timeout = 15000,
+                            headers = mapOf(
+                                "Referer" to targetUrl,
+                                "User-Agent" to USER_AGENT
                             )
-                        } catch (e: Exception) {
-                            Log.e("DiziPal", "embed fetch hatası: ${e.message}")
+                        )
+                        DizipalPlayer().extractFromHtml(
+                            url = iframeUrl,
+                            referer = targetUrl,
+                            html = embedResp.text,
+                            subtitleCallback = subtitleCallback,
+                            callback = callback
+                        )
+                    } catch (e: Exception) {
+                        Log.e("DiziPal", "embed fetch hatası: ${e.message}")
+                        val loadedExt = loadExtractor(iframeUrl, targetUrl, subtitleCallback, callback)
+                        if (!loadedExt) {
                             DizipalPlayer().getUrl(
                                 url = iframeUrl,
                                 referer = targetUrl,
