@@ -75,7 +75,9 @@ class FilmModu : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val document = app.get(url).document
 
-        val orgTitle    = document.selectFirst("div.titles h1")?.text()?.trim() ?: return null
+        val orgTitle    = document.selectFirst("div.titles h1")?.text()?.trim()
+            ?: document.selectFirst("h1")?.text()?.trim()
+            ?: return null
         val altTitle    = document.selectFirst("div.titles h2")?.text()?.trim() ?: ""
         val title       = if (altTitle.isNotEmpty()) "$orgTitle - $altTitle" else orgTitle
         val poster      = fixUrlNull(
