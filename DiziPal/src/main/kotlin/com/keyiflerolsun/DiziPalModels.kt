@@ -46,6 +46,17 @@ data class DizipalEncData(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+data class BgSearchResponse(
+    @JsonProperty("data") val data: BgSearchData? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class BgSearchData(
+    @JsonProperty("state") val state: Boolean? = null,
+    @JsonProperty("result") val result: List<SearchItem>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class SearchItem(
     @JsonProperty("object_id")
     val id: Any? = null,

@@ -46,12 +46,26 @@ data class DizipalEncData(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class DizipalSearchResult(
+data class BgSearchResponse(
+    @JsonProperty("data") val data: BgSearchData? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class BgSearchData(
+    @JsonProperty("state") val state: Boolean? = null,
+    @JsonProperty("result") val result: List<SearchItem>? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SearchItem(
     @JsonProperty("object_id")
     val id: Any? = null,
 
     @JsonProperty("object_name")
     val title: String? = null,
+
+    @JsonProperty("object_alternative_name")
+    val trTitle: String? = null,
 
     @JsonProperty("object_poster_url")
     val poster: String? = null,
@@ -59,8 +73,14 @@ data class DizipalSearchResult(
     @JsonProperty("object_back_url")
     val backUrl: String? = null,
 
+    @JsonProperty("object_categories")
+    val genres: String? = null,
+
     @JsonProperty("object_related_imdb_point")
     val imdb: Any? = null,
+
+    @JsonProperty("object_release_year")
+    val year: Any? = null,
 
     @JsonProperty("used_type")
     val type: String? = null,
