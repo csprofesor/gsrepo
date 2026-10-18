@@ -34,7 +34,7 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
     suspend fun extract(
         url: String,
         referer: String = "https://sezonlukdizi.cc/",
-    ): String? = withTimeoutOrNull(20000) {
+    ): String? = withTimeoutOrNull(15000) {
         suspendCancellableCoroutine { continuation ->
             val foundStream = AtomicBoolean(false)
 
@@ -151,6 +151,8 @@ class SezonlukDizi : MainAPI() {
                 body.contains("Checking your browser", ignoreCase = true) ||
                 body.contains("cf-challenge", ignoreCase = true) ||
                 body.contains("turnstile", ignoreCase = true) ||
+                body.contains("reCAPTCHA", ignoreCase = true) ||
+                body.contains("reCAPTCHADATA", ignoreCase = true) ||
                 doc.title().contains("Just a moment", ignoreCase = true) ||
                 doc.title().contains("Attention Required", ignoreCase = true)
             ) {
@@ -369,6 +371,13 @@ class SezonlukDizi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ) {
         Log.d("SZD", "invokeExtractor | prefix=$prefix | baslik=${veri.baslik} | iframe=$iframe")
+
+        // If iframe is reCAPTCHADATA, skip to avoid wasting 80s timeouts in WebViews
+        if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
+            Log.d("SZD", "Skipping reCAPTCHA iframe: $iframe")
+            return
+        }
+
         var found = false
 
         // 1. VidMoly direct extraction
@@ -500,7 +509,7 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 5. Custom WebView extractor for Byse, Filemoon, SPA players, reCAPTCHADATA
+        // 5. Custom WebView extractor for Byse, Filemoon, SPA players
         if (!found) {
             val ctx = SezonlukDiziPlugin.pluginContext
             if (ctx != null) {
