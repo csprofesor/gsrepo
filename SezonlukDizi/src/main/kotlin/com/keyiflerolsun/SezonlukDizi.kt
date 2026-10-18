@@ -438,6 +438,120 @@ class SezonlukDizi : MainAPI() {
         }
     }
 
+    private fun parseIframeFromHtml(html: String): String? {
+        val doc = Jsoup.parse(html)
+        var iframeSrc = fixUrlNull(doc.selectFirst("iframe")?.attr("src"))
+        if (iframeSrc == null || iframeSrc.contains("reCAPTCHADATA", ignoreCase = true)) {
+            val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(html)
+            if (functionMatch != null) {
+                val platform = functionMatch.groupValues[1]
+                val vidId = functionMatch.groupValues[2]
+
+                iframeSrc = when (platform) {
+                    "vidmoly" -> "https://vidmoly.to/embed-$vidId.html"
+                    "sruby" -> "https://rubyvidhub.com/embed-$vidId.html"
+                    "filemoon" -> "https://bysejikuar.com/e/$vidId"
+                    "pixel" -> "https://pixeldrain.com/u/$vidId"
+                    "okru" -> "https://ok.ru/videoembed/$vidId"
+                    "mailru" -> "https://my.mail.ru/video/embed/$vidId"
+                    else -> iframeSrc
+                }
+            }
+        }
+        return iframeSrc
+    }
+
+    private suspend fun processVeriList(
+        prefix: String,
+        veriList: List<Veri>,
+        aspData: AspData,
+        data: String,
+        dil: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        var isCaptchaSolved = false
+        val pendingVeris = mutableListOf<Pair<Veri, String>>()
+
+        // Step 1: Immediate extraction for non-captcha sources
+        for (veri in veriList) {
+            Log.d("SZD", "dil»$dil | veri.baslik » ${veri.baslik}")
+            try {
+                val veriResponseHtml = app.post(
+                    "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
+                    headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
+                    referer = data,
+                    interceptor = interceptor,
+                    data = mapOf("id" to veri.id.toString()),
+                ).text
+
+                val iframe = parseIframeFromHtml(veriResponseHtml)
+                if (iframe != null && !iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
+                    Log.d("SZD", "dil»$dil | Ready iframe (no captcha) » $iframe")
+                    invokeExtractor(prefix, veri, iframe, subtitleCallback, callback)
+                } else {
+                    pendingVeris.add(veri to veriResponseHtml)
+                }
+            } catch (e: Exception) {
+                Log.e("SZD", "dataEmbed error for ${veri.baslik}: ${e.message}")
+            }
+        }
+
+        // Step 2: Solve Turnstile captcha ONCE for remaining protected sources
+        if (pendingVeris.isNotEmpty()) {
+            Log.d("SZD", "dil»$dil | Pending veris requiring Captcha: ${pendingVeris.size}")
+            val ctx = SezonlukDiziPlugin.pluginContext
+            if (ctx != null) {
+                isCaptchaSolved = SezonlukDiziCaptchaSolver(ctx).solve(mainUrl)
+                Log.d("SZD", "Captcha Solved: $isCaptchaSolved")
+            }
+
+            if (isCaptchaSolved) {
+                val cookieManager = CookieManager.getInstance()
+                val webCookiesStr = cookieManager.getCookie(mainUrl) ?: ""
+                if (webCookiesStr.isNotBlank()) {
+                    val urlObj = "$mainUrl/".toHttpUrl()
+                    val cookiesList = webCookiesStr.split(";").mapNotNull {
+                        val parts = it.split("=", limit = 2)
+                        if (parts.size == 2) {
+                            Cookie.Builder()
+                                .name(parts[0].trim())
+                                .value(parts[1].trim())
+                                .domain(urlObj.host)
+                                .build()
+                        } else null
+                    }
+                    app.baseClient.cookieJar.saveFromResponse(urlObj, cookiesList)
+                }
+
+                for ((veri, _) in pendingVeris) {
+                    try {
+                        val newVeriResponseHtml = app.post(
+                            "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
+                            headers = mapOf(
+                                "X-Requested-With" to "XMLHttpRequest",
+                                "Cookie" to webCookiesStr
+                            ),
+                            referer = data,
+                            interceptor = interceptor,
+                            data = mapOf("id" to veri.id.toString()),
+                        ).text
+
+                        val iframe = parseIframeFromHtml(newVeriResponseHtml)
+                        if (iframe != null && !iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
+                            Log.d("SZD", "dil»$dil | Post-captcha iframe » $iframe")
+                            invokeExtractor(prefix, veri, iframe, subtitleCallback, callback)
+                        } else {
+                            Log.w("SZD", "dil»$dil | Still captcha or null for ${veri.baslik}: $iframe")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("SZD", "Post-captcha error for ${veri.baslik}: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -452,74 +566,6 @@ class SezonlukDizi : MainAPI() {
             ?: return false
         Log.d("SZD", "bid » $bid")
 
-        var isCaptchaSolved = false
-
-        suspend fun handleCaptcha(veri: Veri, initialIframe: String?): String? {
-            var currentIframe = initialIframe
-            if (currentIframe == null || currentIframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-                if (!isCaptchaSolved) {
-                    Log.d("SZD", "Solving Turnstile Captcha...")
-                    val ctx = SezonlukDiziPlugin.pluginContext
-                    if (ctx != null) {
-                        isCaptchaSolved = SezonlukDiziCaptchaSolver(ctx).solve(mainUrl)
-                        Log.d("SZD", "Captcha Solved: $isCaptchaSolved")
-                    }
-                }
-
-                if (isCaptchaSolved) {
-                    val cookieManager = CookieManager.getInstance()
-                    val webCookiesStr = cookieManager.getCookie(mainUrl) ?: ""
-                    if (webCookiesStr.isNotBlank()) {
-                        val urlObj = "$mainUrl/".toHttpUrl()
-                        val cookiesList = webCookiesStr.split(";").mapNotNull {
-                            val parts = it.split("=", limit = 2)
-                            if (parts.size == 2) {
-                                Cookie.Builder()
-                                    .name(parts[0].trim())
-                                    .value(parts[1].trim())
-                                    .domain(urlObj.host)
-                                    .build()
-                            } else null
-                        }
-                        app.baseClient.cookieJar.saveFromResponse(urlObj, cookiesList)
-                    }
-
-                    val newVeriResponse = app.post(
-                        "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
-                        headers = mapOf(
-                            "X-Requested-With" to "XMLHttpRequest",
-                            "Cookie" to webCookiesStr
-                        ),
-                        referer = data,
-                        interceptor = interceptor,
-                        data = mapOf("id" to veri.id.toString()),
-                    ).document
-                    currentIframe = fixUrlNull(newVeriResponse.selectFirst("iframe")?.attr("src"))
-                }
-            }
-
-            if (currentIframe == null || currentIframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-                val scriptSource = document.html()
-                val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
-                if (functionMatch != null) {
-                    val platform = functionMatch.groupValues[1]
-                    val vidId = functionMatch.groupValues[2]
-
-                    currentIframe = when (platform) {
-                        "vidmoly" -> "https://vidmoly.to/embed-$vidId.html"
-                        "sruby" -> "https://rubyvidhub.com/embed-$vidId.html"
-                        "filemoon" -> "https://bysejikuar.com/e/$vidId"
-                        "pixel" -> "https://pixeldrain.com/u/$vidId"
-                        "okru" -> "https://ok.ru/videoembed/$vidId"
-                        "mailru" -> "https://my.mail.ru/video/embed/$vidId"
-                        else -> currentIframe
-                    }
-                }
-            }
-
-            return currentIframe
-        }
-
         // --- ALTYAZI KISMI ---
         val altyaziResponse = app.post(
             "$mainUrl/ajax/dataAlternatif${aspData.alternatif}.asp",
@@ -533,29 +579,7 @@ class SezonlukDizi : MainAPI() {
         ).parsedSafe<Kaynak>()
 
         if (altyaziResponse?.status == "success") {
-            for (veri in altyaziResponse.data) {
-                Log.d("SZD", "dil»1 | veri.baslik » ${veri.baslik}")
-
-                val veriResponse = app.post(
-                    "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
-                    headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
-                    referer = data,
-                    interceptor = interceptor,
-                    data = mapOf("id" to veri.id.toString()),
-                ).document
-
-                var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
-                iframeSrc = handleCaptcha(veri, iframeSrc)
-
-                val iframe = fixUrlNull(iframeSrc) ?: continue
-                if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-                    Log.d("SZD", "Skipping reCAPTCHA iframe: $iframe")
-                    continue
-                }
-
-                Log.d("SZD", "dil»1 | iframe » $iframe")
-                invokeExtractor("AltYazı", veri, iframe, subtitleCallback, callback)
-            }
+            processVeriList("AltYazı", altyaziResponse.data, aspData, data, "1", subtitleCallback, callback)
         }
 
         // --- DUBLAJ KISMI ---
@@ -571,29 +595,7 @@ class SezonlukDizi : MainAPI() {
         ).parsedSafe<Kaynak>()
 
         if (dublajResponse?.status == "success") {
-            for (veri in dublajResponse.data) {
-                Log.d("SZD", "dil»0 | veri.baslik » ${veri.baslik}")
-
-                val veriResponse = app.post(
-                    "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
-                    headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
-                    referer = data,
-                    interceptor = interceptor,
-                    data = mapOf("id" to veri.id.toString()),
-                ).document
-
-                var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
-                iframeSrc = handleCaptcha(veri, iframeSrc)
-
-                val iframe = fixUrlNull(iframeSrc) ?: continue
-                if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-                    Log.d("SZD", "Skipping reCAPTCHA iframe: $iframe")
-                    continue
-                }
-
-                Log.d("SZD", "dil»0 | iframe » $iframe")
-                invokeExtractor("Dublaj", veri, iframe, subtitleCallback, callback)
-            }
+            processVeriList("Dublaj", dublajResponse.data, aspData, data, "0", subtitleCallback, callback)
         }
 
         return true
