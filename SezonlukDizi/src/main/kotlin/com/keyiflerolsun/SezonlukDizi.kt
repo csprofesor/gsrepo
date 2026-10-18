@@ -4,7 +4,9 @@ package com.keyiflerolsun
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
+import android.view.MotionEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -54,13 +56,16 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
                             override fun onPageFinished(view: WebView?, pageUrl: String?) {
                                 super.onPageFinished(view, pageUrl)
                                 CoroutineScope(Dispatchers.Main).launch {
-                                    delay(1000)
-                                    if (!foundStream.get()) {
+                                    while (!foundStream.get()) {
+                                        delay(1000)
                                         val js = """
                                             (function() {
                                                 try {
                                                     let btn = document.querySelector('.jw-display-icon-container, .jw-icon-play, button[aria-label="Play"], video, .vjs-big-play-button, #play, .play');
                                                     if (btn) btn.click();
+                                                    
+                                                    let ifr = document.querySelector('iframe');
+                                                    if (ifr) ifr.click();
                                                 } catch(e) {}
                                             })();
                                         """.trimIndent()
@@ -110,6 +115,27 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
                             }
                         }
 
+                        CoroutineScope(Dispatchers.Main).launch {
+                            repeat(30) {
+                                delay(500)
+                                if (foundStream.get()) return@launch
+                                try {
+                                    val v = webView ?: return@launch
+                                    val w = v.width.coerceAtLeast(600)
+                                    val h = v.height.coerceAtLeast(600)
+                                    val x = w / 2f
+                                    val y = h / 2f
+                                    val now = SystemClock.uptimeMillis()
+                                    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+                                    val up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, x, y, 0)
+                                    v.dispatchTouchEvent(down)
+                                    v.dispatchTouchEvent(up)
+                                    down.recycle()
+                                    up.recycle()
+                                } catch (_: Exception) {}
+                            }
+                        }
+
                         loadUrl(url, mapOf("Referer" to referer))
                     }
                 } catch (e: Exception) {
@@ -151,8 +177,6 @@ class SezonlukDizi : MainAPI() {
                 body.contains("Checking your browser", ignoreCase = true) ||
                 body.contains("cf-challenge", ignoreCase = true) ||
                 body.contains("turnstile", ignoreCase = true) ||
-                body.contains("reCAPTCHA", ignoreCase = true) ||
-                body.contains("reCAPTCHADATA", ignoreCase = true) ||
                 doc.title().contains("Just a moment", ignoreCase = true) ||
                 doc.title().contains("Attention Required", ignoreCase = true)
             ) {
