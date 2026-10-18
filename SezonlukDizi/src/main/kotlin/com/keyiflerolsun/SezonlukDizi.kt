@@ -19,6 +19,7 @@ import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
 import okhttp3.Interceptor
 import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.network.CloudflareKiller
@@ -30,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.Cookie
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
@@ -52,9 +54,21 @@ class SezonlukDiziCaptchaSolver(private val context: Context) {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 val js = """
                                     setInterval(function() {
-                                        var msg = document.getElementById('statusMsg');
-                                        if (msg && msg.innerText.includes('yönlendiriliyorsunuz')) {
-                                            document.title = 'CAPTCHA_SOLVED';
+                                        if (typeof window.submitVerification === 'function' && !window.injectedSubmit) {
+                                            window.injectedSubmit = true;
+                                            var oldSubmit = window.submitVerification;
+                                            window.submitVerification = function(token) {
+                                                document.getElementById('statusMsg').innerText = 'Doğrulama başarılı, ajax gönderiliyor...';
+                                                ${'$'}.post(
+                                                  "/ajax/reCAPTCHA.asp",
+                                                  { 'cf-turnstile-response': token },
+                                                  function(data) {
+                                                    if (data == "ok") {
+                                                      document.title = 'CAPTCHA_SOLVED';
+                                                    }
+                                                  }
+                                                );
+                                            };
                                         }
                                     }, 500);
                                 """.trimIndent()
@@ -68,6 +82,7 @@ class SezonlukDiziCaptchaSolver(private val context: Context) {
                                     isSolved = true
                                     if (continuation.isActive) continuation.resume(true)
                                     CoroutineScope(Dispatchers.Main).launch {
+                                        delay(1500)
                                         try { view?.destroy() } catch (_: Exception) {}
                                     }
                                 }
@@ -407,14 +422,25 @@ class SezonlukDizi : MainAPI() {
                     
                     if (isCaptchaSolved) {
                         val cookieManager = CookieManager.getInstance()
-                        val webCookies = cookieManager.getCookie(mainUrl) ?: ""
+                        val webCookiesStr = cookieManager.getCookie(mainUrl) ?: ""
+                        if (webCookiesStr.isNotBlank()) {
+                            val urlObj = "$mainUrl/".toHttpUrl()
+                            val cookiesList = webCookiesStr.split(";").mapNotNull {
+                                val parts = it.split("=", limit = 2)
+                                if (parts.size == 2) {
+                                    Cookie.Builder()
+                                        .name(parts[0].trim())
+                                        .value(parts[1].trim())
+                                        .domain(urlObj.host)
+                                        .build()
+                                } else null
+                            }
+                            app.baseClient.cookieJar.saveFromResponse(urlObj, cookiesList)
+                        }
                         
                         val newVeriResponse = app.post(
                             "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
-                            headers = mapOf(
-                                "X-Requested-With" to "XMLHttpRequest",
-                                "Cookie" to webCookies
-                            ),
+                            headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
                             referer = data,
                             interceptor = interceptor,
                             data = mapOf("id" to veri.id.toString()),
@@ -488,14 +514,25 @@ class SezonlukDizi : MainAPI() {
                     
                     if (isCaptchaSolved) {
                         val cookieManager = CookieManager.getInstance()
-                        val webCookies = cookieManager.getCookie(mainUrl) ?: ""
+                        val webCookiesStr = cookieManager.getCookie(mainUrl) ?: ""
+                        if (webCookiesStr.isNotBlank()) {
+                            val urlObj = "$mainUrl/".toHttpUrl()
+                            val cookiesList = webCookiesStr.split(";").mapNotNull {
+                                val parts = it.split("=", limit = 2)
+                                if (parts.size == 2) {
+                                    Cookie.Builder()
+                                        .name(parts[0].trim())
+                                        .value(parts[1].trim())
+                                        .domain(urlObj.host)
+                                        .build()
+                                } else null
+                            }
+                            app.baseClient.cookieJar.saveFromResponse(urlObj, cookiesList)
+                        }
                         
                         val newVeriResponse = app.post(
                             "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
-                            headers = mapOf(
-                                "X-Requested-With" to "XMLHttpRequest",
-                                "Cookie" to webCookies
-                            ),
+                            headers = mapOf("X-Requested-With" to "XMLHttpRequest"),
                             referer = data,
                             interceptor = interceptor,
                             data = mapOf("id" to veri.id.toString()),
