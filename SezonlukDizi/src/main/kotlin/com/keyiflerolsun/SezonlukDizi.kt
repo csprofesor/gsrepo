@@ -171,8 +171,7 @@ class SezonlukDizi : MainAPI() {
             val body     = response.peekBody(1024 * 1024).string()
             val doc      = Jsoup.parse(body)
 
-            if (response.code == 403 || response.code == 503 ||
-                response.header("cf-mitigated") != null ||
+            if (response.header("cf-mitigated") != null ||
                 body.contains("Just a moment", ignoreCase = true) ||
                 body.contains("Checking your browser", ignoreCase = true) ||
                 body.contains("cf-challenge", ignoreCase = true) ||
@@ -487,53 +486,7 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 4. Filemoon / Byse direct API extraction
-        if (!found && (iframe.contains("filemoon", ignoreCase = true) || iframe.contains("byse", ignoreCase = true))) {
-            try {
-                val fileCode = iframe.split("/e/").lastOrNull()?.split("?")?.firstOrNull()?.split("/")?.firstOrNull()
-                    ?: iframe.split("v=").lastOrNull()?.split("&")?.firstOrNull()
-                if (fileCode != null) {
-                    val detailsUrl = "https://bysejikuar.com/api/videos/$fileCode/embed/details"
-                    val detailsResp = app.get(detailsUrl, headers = mapOf("Referer" to iframe), interceptor = interceptor).text
-                    val frameUrl = Regex(""""embed_frame_url"\s*:\s*["']([^"']+)["']""").find(detailsResp)?.groupValues?.get(1)
-                    if (frameUrl != null) {
-                        val frameDomain = frameUrl.split("/")[2]
-                        val playbackUrl = "https://$frameDomain/api/videos/$fileCode/embed/playback"
-                        val playbackBody = app.post(
-                            playbackUrl,
-                            headers = mapOf(
-                                "Referer" to frameUrl,
-                                "X-Embed-Origin" to "sezonlukdizi.cc",
-                                "X-Embed-Referer" to "$mainUrl/",
-                                "Content-Type" to "application/json"
-                            ),
-                            json = mapOf("fingerprint" to mapOf("token" to "dummy", "viewer_id" to "dummy", "device_id" to "dummy", "confidence" to 1)),
-                            interceptor = interceptor
-                        ).text
-
-                        val fileMatch = Regex(""""file"\s*:\s*["']([^"']+)["']""").find(playbackBody)?.groupValues?.get(1)
-                        if (fileMatch != null) {
-                            callback.invoke(
-                                newExtractorLink(
-                                    source = "$prefix - ${veri.baslik}",
-                                    name = "$prefix - ${veri.baslik}",
-                                    url = fileMatch,
-                                    type = INFER_TYPE
-                                ) {
-                                    this.quality = Qualities.Unknown.value
-                                    this.headers = mapOf("Referer" to frameUrl)
-                                }
-                            )
-                            found = true
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("SZD", "Filemoon API direct error: ${e.message}")
-            }
-        }
-
-        // 5. Custom WebView extractor for Byse, Filemoon, SPA players
+        // 4. Custom WebView extractor for Byse, Filemoon, SPA players
         if (!found) {
             val ctx = SezonlukDiziPlugin.pluginContext
             if (ctx != null) {
