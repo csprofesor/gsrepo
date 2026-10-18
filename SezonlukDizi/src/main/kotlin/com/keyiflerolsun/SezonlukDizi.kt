@@ -4,9 +4,7 @@ package com.keyiflerolsun
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.SystemClock
 import android.util.Log
-import android.view.MotionEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -36,7 +34,7 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
     suspend fun extract(
         url: String,
         referer: String = "https://sezonlukdizi.cc/",
-    ): String? = withTimeoutOrNull(15000) {
+    ): String? = withTimeoutOrNull(20000) {
         suspendCancellableCoroutine { continuation ->
             val foundStream = AtomicBoolean(false)
 
@@ -55,18 +53,20 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
                         webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, pageUrl: String?) {
                                 super.onPageFinished(view, pageUrl)
-                                val js = """
-                                    (function() {
-                                        setInterval(function() {
-                                            try {
-                                                if (document.body) document.body.click();
-                                                let el = document.querySelector('#root, video, button, iframe, .player, svg, div');
-                                                if (el) el.click();
-                                            } catch(e) {}
-                                        }, 300);
-                                    })();
-                                """.trimIndent()
-                                view?.evaluateJavascript(js, null)
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    delay(1000)
+                                    if (!foundStream.get()) {
+                                        val js = """
+                                            (function() {
+                                                try {
+                                                    let btn = document.querySelector('.jw-display-icon-container, .jw-icon-play, button[aria-label="Play"], video, .vjs-big-play-button, #play, .play');
+                                                    if (btn) btn.click();
+                                                } catch(e) {}
+                                            })();
+                                        """.trimIndent()
+                                        view?.evaluateJavascript(js, null)
+                                    }
+                                }
                             }
 
                             override fun shouldInterceptRequest(
@@ -74,7 +74,28 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
                                 request: WebResourceRequest?
                             ): WebResourceResponse? {
                                 val reqUrl = request?.url?.toString() ?: ""
-                                if ((reqUrl.contains(".m3u8") || reqUrl.contains("/hls/")) && !reqUrl.contains("reCAPTCHA", ignoreCase = true)) {
+                                val lowerUrl = reqUrl.lowercase()
+
+                                val isMedia = (lowerUrl.contains(".m3u8") ||
+                                        lowerUrl.contains("/hls/") ||
+                                        lowerUrl.contains(".mp4") ||
+                                        lowerUrl.contains(".mkv") ||
+                                        lowerUrl.contains("/stream/") ||
+                                        lowerUrl.contains("playlist") ||
+                                        lowerUrl.contains("googlevideo.com") ||
+                                        lowerUrl.contains("video.sibnet.ru") ||
+                                        lowerUrl.contains("pixeldrain.com/api/file/")) &&
+                                        !lowerUrl.contains("recaptcha") &&
+                                        !lowerUrl.contains("turnstile") &&
+                                        !lowerUrl.contains("analytics") &&
+                                        !lowerUrl.contains("google") &&
+                                        !lowerUrl.contains("beacon") &&
+                                        !lowerUrl.contains(".png") &&
+                                        !lowerUrl.contains(".jpg") &&
+                                        !lowerUrl.contains(".css") &&
+                                        !lowerUrl.contains(".js")
+
+                                if (isMedia) {
                                     if (!foundStream.getAndSet(true)) {
                                         Log.d("SZD", "SezonlukDiziWebViewExtractor stream found: $reqUrl")
                                         CoroutineScope(Dispatchers.Main).launch {
@@ -86,27 +107,6 @@ class SezonlukDiziWebViewExtractor(private val context: Context) {
                                     }
                                 }
                                 return super.shouldInterceptRequest(view, request)
-                            }
-                        }
-
-                        CoroutineScope(Dispatchers.Main).launch {
-                            repeat(25) {
-                                delay(400)
-                                if (foundStream.get()) return@launch
-                                try {
-                                    val v = webView ?: return@launch
-                                    val w = v.width.coerceAtLeast(600)
-                                    val h = v.height.coerceAtLeast(600)
-                                    val x = w / 2f
-                                    val y = h / 2f
-                                    val now = SystemClock.uptimeMillis()
-                                    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
-                                    val up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, x, y, 0)
-                                    v.dispatchTouchEvent(down)
-                                    v.dispatchTouchEvent(up)
-                                    down.recycle()
-                                    up.recycle()
-                                } catch (_: Exception) {}
                             }
                         }
 
@@ -253,7 +253,9 @@ class SezonlukDizi : MainAPI() {
         Log.d("SZD", "data » $data")
         val document = app.get(data, interceptor = interceptor).document
         val aspData = getAspData(document)
-        val bid = document.selectFirst("div#dilsec")?.attr("data-id") ?: return false
+        val bid = document.selectFirst("div#dilsec")?.attr("data-id")
+            ?: Regex("""data-id=["'](\d+)["']""").find(document.html())?.groupValues?.get(1)
+            ?: return false
         Log.d("SZD", "bid » $bid")
 
         // --- ALTYAZI KISMI ---
@@ -281,7 +283,7 @@ class SezonlukDizi : MainAPI() {
                 ).document
 
                 var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
-                if (iframeSrc == null) {
+                if (iframeSrc == null || iframeSrc.contains("reCAPTCHADATA", ignoreCase = true)) {
                     val scriptSource = veriResponse.html()
                     val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
                     if (functionMatch != null) {
@@ -289,23 +291,18 @@ class SezonlukDizi : MainAPI() {
                         val vidId = functionMatch.groupValues[2]
 
                         iframeSrc = when (platform) {
-                            "vidmoly" -> "https://vidmoly.me/embed-$vidId.html"
+                            "vidmoly" -> "https://vidmoly.to/embed-$vidId.html"
                             "sruby" -> "https://rubyvidhub.com/embed-$vidId.html"
                             "filemoon" -> "https://bysejikuar.com/e/$vidId"
                             "pixel" -> "https://pixeldrain.com/u/$vidId"
                             "okru" -> "https://ok.ru/videoembed/$vidId"
                             "mailru" -> "https://my.mail.ru/video/embed/$vidId"
-                            else -> null
+                            else -> iframeSrc
                         }
                     }
                 }
 
                 val iframe = fixUrlNull(iframeSrc) ?: continue
-                if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-                    Log.d("SZD", "reCAPTCHA iframe skipped: $iframe")
-                    continue
-                }
-
                 Log.d("SZD", "dil»1 | iframe » $iframe")
                 invokeExtractor("AltYazı", veri, iframe, subtitleCallback, callback)
             }
@@ -336,7 +333,7 @@ class SezonlukDizi : MainAPI() {
                 ).document
 
                 var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
-                if (iframeSrc == null) {
+                if (iframeSrc == null || iframeSrc.contains("reCAPTCHADATA", ignoreCase = true)) {
                     val scriptSource = veriResponse.html()
                     val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
                     if (functionMatch != null) {
@@ -344,23 +341,18 @@ class SezonlukDizi : MainAPI() {
                         val vidId = functionMatch.groupValues[2]
 
                         iframeSrc = when (platform) {
-                            "vidmoly" -> "https://vidmoly.me/embed-$vidId.html"
+                            "vidmoly" -> "https://vidmoly.to/embed-$vidId.html"
                             "sruby" -> "https://rubyvidhub.com/embed-$vidId.html"
                             "filemoon" -> "https://bysejikuar.com/e/$vidId"
                             "pixel" -> "https://pixeldrain.com/u/$vidId"
                             "okru" -> "https://ok.ru/videoembed/$vidId"
                             "mailru" -> "https://my.mail.ru/video/embed/$vidId"
-                            else -> null
+                            else -> iframeSrc
                         }
                     }
                 }
 
                 val iframe = fixUrlNull(iframeSrc) ?: continue
-                if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-                    Log.d("SZD", "reCAPTCHA iframe skipped: $iframe")
-                    continue
-                }
-
                 Log.d("SZD", "dil»0 | iframe » $iframe")
                 invokeExtractor("Dublaj", veri, iframe, subtitleCallback, callback)
             }
@@ -382,9 +374,16 @@ class SezonlukDizi : MainAPI() {
         // 1. VidMoly direct extraction
         if (iframe.contains("vidmoly", ignoreCase = true)) {
             try {
-                val iSource = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = interceptor).text
+                var iSource = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = interceptor).text
+                val redirMatch = Regex("""window\.location\.replace\(['"]([^'"]+)['"]""").find(iSource)
+                if (redirMatch != null) {
+                    val redirUrl = redirMatch.groupValues[1]
+                    iSource = app.get(redirUrl, headers = mapOf("Referer" to iframe), interceptor = interceptor).text
+                }
+
                 val m3uLink = Regex("""file:\s*["']([^"']+\.m3u8[^"']*)["']""").find(iSource)?.groupValues?.get(1)
                     ?: Regex("""file:\s*["']([^"']+)["']""").find(iSource)?.groupValues?.get(1)
+                    ?: Regex("""sources:\s*\[\{\s*file:\s*["']([^"']+)["']""").find(iSource)?.groupValues?.get(1)
 
                 if (!m3uLink.isNullOrEmpty() && (m3uLink.contains(".m3u8") || m3uLink.startsWith("http"))) {
                     callback.invoke(
@@ -455,14 +454,60 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 4. Custom WebView extractor for Byse, Filemoon, SPA players
+        // 4. Filemoon / Byse direct API extraction
+        if (!found && (iframe.contains("filemoon", ignoreCase = true) || iframe.contains("byse", ignoreCase = true))) {
+            try {
+                val fileCode = iframe.split("/e/").lastOrNull()?.split("?")?.firstOrNull()?.split("/")?.firstOrNull()
+                    ?: iframe.split("v=").lastOrNull()?.split("&")?.firstOrNull()
+                if (fileCode != null) {
+                    val detailsUrl = "https://bysejikuar.com/api/videos/$fileCode/embed/details"
+                    val detailsResp = app.get(detailsUrl, headers = mapOf("Referer" to iframe), interceptor = interceptor).text
+                    val frameUrl = Regex(""""embed_frame_url"\s*:\s*["']([^"']+)["']""").find(detailsResp)?.groupValues?.get(1)
+                    if (frameUrl != null) {
+                        val frameDomain = frameUrl.split("/")[2]
+                        val playbackUrl = "https://$frameDomain/api/videos/$fileCode/embed/playback"
+                        val playbackBody = app.post(
+                            playbackUrl,
+                            headers = mapOf(
+                                "Referer" to frameUrl,
+                                "X-Embed-Origin" to "sezonlukdizi.cc",
+                                "X-Embed-Referer" to "$mainUrl/",
+                                "Content-Type" to "application/json"
+                            ),
+                            json = mapOf("fingerprint" to mapOf("token" to "dummy", "viewer_id" to "dummy", "device_id" to "dummy", "confidence" to 1)),
+                            interceptor = interceptor
+                        ).text
+
+                        val fileMatch = Regex(""""file"\s*:\s*["']([^"']+)["']""").find(playbackBody)?.groupValues?.get(1)
+                        if (fileMatch != null) {
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "$prefix - ${veri.baslik}",
+                                    name = "$prefix - ${veri.baslik}",
+                                    url = fileMatch,
+                                    type = INFER_TYPE
+                                ) {
+                                    this.quality = Qualities.Unknown.value
+                                    this.headers = mapOf("Referer" to frameUrl)
+                                }
+                            )
+                            found = true
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("SZD", "Filemoon API direct error: ${e.message}")
+            }
+        }
+
+        // 5. Custom WebView extractor for Byse, Filemoon, SPA players, reCAPTCHADATA
         if (!found) {
             val ctx = SezonlukDiziPlugin.pluginContext
             if (ctx != null) {
                 try {
                     Log.d("SZD", "Trying SezonlukDiziWebViewExtractor for $iframe...")
                     val wvUrl = SezonlukDiziWebViewExtractor(ctx).extract(iframe, "$mainUrl/")
-                    if ((wvUrl != null) && (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/"))) {
+                    if (wvUrl != null && wvUrl.isNotBlank()) {
                         callback.invoke(
                             newExtractorLink(
                                 source = "$prefix - ${veri.baslik}",
@@ -483,7 +528,7 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 5. Fallback / Standard loadExtractor
+        // 6. Fallback / Standard loadExtractor
         if (!found) {
             val extractedLinks = mutableListOf<ExtractorLink>()
             loadExtractor(iframe, "$mainUrl/", subtitleCallback) { link ->
@@ -507,11 +552,11 @@ class SezonlukDizi : MainAPI() {
             }
         }
 
-        // 6. WebViewResolver fallback for SPA players
+        // 7. WebViewResolver fallback for SPA players
         if (!found) {
             try {
                 Log.d("SZD", "Trying WebViewResolver for $iframe...")
-                val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|\\.txt|/hls/|playlist).*"))
+                val resolver = WebViewResolver(Regex(".*(?:\\.m3u8|\\.txt|/hls/|playlist|\\.mp4|\\.mkv).*"))
                 val wvResp = app.get(iframe, headers = mapOf("Referer" to "$mainUrl/"), interceptor = resolver)
                 val wvUrl = wvResp.url
                 if (wvUrl.contains(".m3u8") || wvUrl.contains("/hls/") || wvUrl.contains("playlist") || wvUrl.contains(".mp4") || wvUrl.contains(".mkv")) {
