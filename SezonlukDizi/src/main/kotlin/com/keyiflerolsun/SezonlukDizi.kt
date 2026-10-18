@@ -7,6 +7,8 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import android.view.MotionEvent
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -30,6 +32,90 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
+
+class SezonlukDiziCaptchaSolver(private val context: Context) {
+    @SuppressLint("SetJavaScriptEnabled")
+    suspend fun solve(mainUrl: String): Boolean = withTimeoutOrNull(20000) {
+        suspendCancellableCoroutine { continuation ->
+            var isSolved = false
+            CoroutineScope(Dispatchers.Main).launch {
+                var webView: WebView? = null
+                try {
+                    webView = WebView(context).apply {
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                        }
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                val js = """
+                                    setInterval(function() {
+                                        var msg = document.getElementById('statusMsg');
+                                        if (msg && msg.innerText.includes('yönlendiriliyorsunuz')) {
+                                            document.title = 'CAPTCHA_SOLVED';
+                                        }
+                                    }, 500);
+                                """.trimIndent()
+                                view?.evaluateJavascript(js, null)
+                            }
+                        }
+
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onReceivedTitle(view: WebView?, title: String?) {
+                                if (title == "CAPTCHA_SOLVED" && !isSolved) {
+                                    isSolved = true
+                                    if (continuation.isActive) continuation.resume(true)
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        try { view?.destroy() } catch (_: Exception) {}
+                                    }
+                                }
+                            }
+                        }
+
+                        CoroutineScope(Dispatchers.Main).launch {
+                            repeat(40) {
+                                delay(500)
+                                if (isSolved) return@launch
+                                try {
+                                    val v = this@apply
+                                    val w = v.width.coerceAtLeast(600)
+                                    val h = v.height.coerceAtLeast(600)
+                                    val x = w / 2f
+                                    val y = h / 2f
+                                    val now = SystemClock.uptimeMillis()
+                                    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+                                    val up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, x, y, 0)
+                                    v.dispatchTouchEvent(down)
+                                    v.dispatchTouchEvent(up)
+                                    down.recycle()
+                                    up.recycle()
+                                } catch (_: Exception) {}
+                            }
+                            if (!isSolved && continuation.isActive) {
+                                continuation.resume(false)
+                                CoroutineScope(Dispatchers.Main).launch {
+                                    try { webView?.destroy() } catch (_: Exception) {}
+                                }
+                            }
+                        }
+
+                        loadUrl("$mainUrl/ajax/reCAPTCHADATA.asp")
+                    }
+                } catch (e: Exception) {
+                    if (continuation.isActive) continuation.resume(false)
+                }
+
+                continuation.invokeOnCancellation {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        try { webView?.destroy() } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+    } ?: false
+}
 
 class SezonlukDiziWebViewExtractor(private val context: Context) {
     @SuppressLint("SetJavaScriptEnabled")
@@ -282,6 +368,7 @@ class SezonlukDizi : MainAPI() {
             ?: Regex("""data-id=["'](\d+)["']""").find(document.html())?.groupValues?.get(1)
             ?: return false
         Log.d("SZD", "bid » $bid")
+        var isCaptchaSolved = false
 
         // --- ALTYAZI KISMI ---
         val altyaziResponse = app.post(
@@ -308,7 +395,38 @@ class SezonlukDizi : MainAPI() {
                 ).document
 
                 var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
-                if (iframeSrc == null || iframeSrc.contains("reCAPTCHADATA", ignoreCase = true)) {
+                if (iframeSrc?.contains("reCAPTCHADATA", ignoreCase = true) == true) {
+                    if (!isCaptchaSolved) {
+                        Log.d("SZD", "Solving Turnstile Captcha...")
+                        val ctx = SezonlukDiziPlugin.pluginContext
+                        if (ctx != null) {
+                            isCaptchaSolved = SezonlukDiziCaptchaSolver(ctx).solve(mainUrl)
+                            Log.d("SZD", "Captcha Solved: $isCaptchaSolved")
+                        }
+                    }
+                    
+                    if (isCaptchaSolved) {
+                        val cookieManager = CookieManager.getInstance()
+                        val webCookies = cookieManager.getCookie(mainUrl) ?: ""
+                        
+                        val newVeriResponse = app.post(
+                            "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
+                            headers = mapOf(
+                                "X-Requested-With" to "XMLHttpRequest",
+                                "Cookie" to webCookies
+                            ),
+                            referer = data,
+                            interceptor = interceptor,
+                            data = mapOf("id" to veri.id.toString()),
+                        ).document
+                        iframeSrc = fixUrlNull(newVeriResponse.selectFirst("iframe")?.attr("src"))
+                    } else {
+                        Log.w("SZD", "Could not solve Turnstile, skipping: ${veri.baslik}")
+                        continue
+                    }
+                }
+                
+                if (iframeSrc == null) {
                     val scriptSource = veriResponse.html()
                     val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
                     if (functionMatch != null) {
@@ -358,7 +476,38 @@ class SezonlukDizi : MainAPI() {
                 ).document
 
                 var iframeSrc = fixUrlNull(veriResponse.selectFirst("iframe")?.attr("src"))
-                if (iframeSrc == null || iframeSrc.contains("reCAPTCHADATA", ignoreCase = true)) {
+                if (iframeSrc?.contains("reCAPTCHADATA", ignoreCase = true) == true) {
+                    if (!isCaptchaSolved) {
+                        Log.d("SZD", "Solving Turnstile Captcha...")
+                        val ctx = SezonlukDiziPlugin.pluginContext
+                        if (ctx != null) {
+                            isCaptchaSolved = SezonlukDiziCaptchaSolver(ctx).solve(mainUrl)
+                            Log.d("SZD", "Captcha Solved: $isCaptchaSolved")
+                        }
+                    }
+                    
+                    if (isCaptchaSolved) {
+                        val cookieManager = CookieManager.getInstance()
+                        val webCookies = cookieManager.getCookie(mainUrl) ?: ""
+                        
+                        val newVeriResponse = app.post(
+                            "$mainUrl/ajax/dataEmbed${aspData.embed}.asp",
+                            headers = mapOf(
+                                "X-Requested-With" to "XMLHttpRequest",
+                                "Cookie" to webCookies
+                            ),
+                            referer = data,
+                            interceptor = interceptor,
+                            data = mapOf("id" to veri.id.toString()),
+                        ).document
+                        iframeSrc = fixUrlNull(newVeriResponse.selectFirst("iframe")?.attr("src"))
+                    } else {
+                        Log.w("SZD", "Could not solve Turnstile, skipping: ${veri.baslik}")
+                        continue
+                    }
+                }
+                
+                if (iframeSrc == null) {
                     val scriptSource = veriResponse.html()
                     val functionMatch = Regex("""(vidmoly|sruby|filemoon|pixel|okru|mailru)\('([^']+)'""").find(scriptSource)
                     if (functionMatch != null) {
@@ -394,12 +543,6 @@ class SezonlukDizi : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ) {
         Log.d("SZD", "invokeExtractor | prefix=$prefix | baslik=${veri.baslik} | iframe=$iframe")
-
-        // If iframe is reCAPTCHADATA, skip to avoid wasting 80s timeouts in WebViews
-        if (iframe.contains("reCAPTCHA", ignoreCase = true) || iframe.contains("reCAPTCHADATA", ignoreCase = true)) {
-            Log.d("SZD", "Skipping reCAPTCHA iframe: $iframe")
-            return
-        }
 
         var found = false
 
