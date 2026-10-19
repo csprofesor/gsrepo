@@ -29,6 +29,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 class DiziMag : MainAPI() {
     override var mainUrl = "https://dizimag.onl"
@@ -48,9 +49,57 @@ class DiziMag : MainAPI() {
         "$mainUrl/" to "Son Eklenenler",
         "$mainUrl/diziler" to "Diziler",
         "$mainUrl/filmler" to "Filmler",
-        "$mainUrl/tum-diziler" to "Tüm Diziler",
         "$mainUrl/imdbtop250" to "IMDb Top 250",
+        "$mainUrl/seri-filmler" to "Seri Filmler",
+        "$mainUrl/tum-diziler" to "Tüm Diziler",
     )
+
+    private val globalSeenUrls = mutableSetOf<String>()
+
+    private fun extractPoster(element: Element): String? {
+        val imgTags = if (element.tagName() == "img") listOf(element) else element.select("img")
+        for (img in imgTags) {
+            for (attr in listOf("data-src", "data-lazy-src", "data-original", "src")) {
+                val rawSrc = img.attr(attr).trim()
+                if (rawSrc.isNotBlank() && !rawSrc.startsWith("data:image")) {
+                    val lower = rawSrc.lowercase()
+                    if (!lower.endsWith(".svg") && !lower.contains("/logo/") && !lower.contains("/icons/") && !lower.contains("avatar")) {
+                        val fixed = fixUrlNull(rawSrc)
+                        if (fixed != null) return fixed
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun extractRating(element: Element): String? {
+        val ratingEl = element.selectFirst(".rating, .imdb, span.rating, div.imdb, .poster-long-on .rating")
+        if (ratingEl != null) {
+            val text = ratingEl.text().trim()
+            val match = Regex("""\b([1-9]\.\d|10(?:\.0)?|[1-9])\b""").find(text)
+            if (match != null) {
+                val score = match.groupValues[1]
+                if (score != "0" && score != "0.0") {
+                    return score
+                }
+            }
+        }
+        return null
+    }
+
+    private fun extractTitle(card: Element, aTag: Element): String? {
+        var rawTitle = card.selectFirst("h1, h2, h3, h4")?.text()?.trim()
+            ?: aTag.attr("title").takeIf { it.isNotBlank() }
+            ?: card.selectFirst("img")?.attr("alt")?.takeIf { it.isNotBlank() && !it.startsWith("/") }
+            ?: aTag.text().trim().takeIf { it.isNotBlank() }
+            ?: return null
+
+        rawTitle = rawTitle.split("\n")[0].trim()
+        rawTitle = Regex("""\s*(Sezon|Bölüm|\d+\.\s*Sezon|\d+\.\s*Bölüm).*""", RegexOption.IGNORE_CASE).replace(rawTitle, "").trim()
+        if (rawTitle.startsWith("/")) rawTitle = rawTitle.removePrefix("/").trim()
+        return rawTitle.takeIf { it.isNotBlank() }
+    }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page == 1) {
@@ -64,35 +113,49 @@ class DiziMag : MainAPI() {
             }
         }
 
+        if (page == 1 && request.data == "$mainUrl/") {
+            globalSeenUrls.clear()
+        }
+
         val document = app.get(url, headers = mapOf("User-Agent" to "Mozilla/5.0")).document
         val home = mutableListOf<SearchResponse>()
 
-        document.select("a[href*='/dizi/'], a[href*='/film/']").forEach { aTag ->
+        val cards = document.select(".poster-long, .poster-xs, .filter-result-box, .poster-md, .poster-mini, .all-time-trends-series, .serial-movies-item")
+            .ifEmpty { document.select("a[href*='/dizi/'], a[href*='/film/'], a[href*='/seri-filmler/']") }
+
+        for (card in cards) {
+            val aTag = if (card.tagName() == "a") card else card.selectFirst("a[href]") ?: continue
             val rawHref = aTag.attr("href")
-            val href = fixUrlNull(rawHref) ?: return@forEach
-            if (href == "$mainUrl/" || href.endsWith("/diziler") || href.endsWith("/filmler")) return@forEach
+            val href = fixUrlNull(rawHref) ?: continue
+            if (href == "$mainUrl/" || href.endsWith("/diziler") || href.endsWith("/filmler")) continue
 
-            val parent = aTag.parent()
-            val imgTag = aTag.selectFirst("img") ?: parent?.selectFirst("img")
-            val posterUrl = fixUrlNull(imgTag?.attr("data-src")?.takeIf { it.isNotBlank() } ?: imgTag?.attr("src"))
-
-            var title = aTag.attr("title").trim().takeIf { it.isNotBlank() }
-                ?: imgTag?.attr("alt")?.trim()?.takeIf { it.isNotBlank() && !it.startsWith("/") }
-                ?: aTag.text().trim().takeIf { it.isNotBlank() }
-                ?: return@forEach
-
-            if (title.startsWith("/")) title = title.removePrefix("/").trim()
-
-            val isTvSeries = href.contains("/dizi/") || !href.contains("/film/")
-            if (isTvSeries) {
-                home.add(newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                    this.posterUrl = posterUrl
-                })
-            } else {
-                home.add(newMovieSearchResponse(title, href, TvType.Movie) {
-                    this.posterUrl = posterUrl
-                })
+            var cleanHref = href
+            if (href.contains("/sezon-") || href.contains("/bolum-") || href.contains("-bolum-")) {
+                cleanHref = href.substringBefore("/sezon-").substringBefore("/bolum-").substringBefore("-bolum-")
             }
+
+            if (globalSeenUrls.contains(cleanHref)) continue
+
+            val posterUrl = extractPoster(card) ?: extractPoster(aTag)
+            val title = extractTitle(card, aTag) ?: continue
+            val rating = extractRating(card)
+
+            val isTvSeries = cleanHref.contains("/dizi/") || (!cleanHref.contains("/film/") && !cleanHref.contains("/seri-filmler/"))
+
+            val response = if (isTvSeries) {
+                newTvSeriesSearchResponse(title, cleanHref, TvType.TvSeries) {
+                    this.posterUrl = posterUrl
+                    this.score = Score.from10(rating)
+                }
+            } else {
+                newMovieSearchResponse(title, cleanHref, TvType.Movie) {
+                    this.posterUrl = posterUrl
+                    this.score = Score.from10(rating)
+                }
+            }
+
+            globalSeenUrls.add(cleanHref)
+            home.add(response)
         }
 
         return newHomePageResponse(request.name, home.distinctBy { it.url }, hasNext = home.isNotEmpty())
@@ -118,23 +181,33 @@ class DiziMag : MainAPI() {
 
             val document = Jsoup.parse(htmlContent)
 
-            document.select("a[href*='/dizi/'], a[href*='/film/']").forEach { aTag ->
-                val href = fixUrlNull(aTag.attr("href")) ?: return@forEach
-                val imgTag = aTag.selectFirst("img")
-                val posterUrl = fixUrlNull(imgTag?.attr("data-src")?.takeIf { it.isNotBlank() } ?: imgTag?.attr("src"))
+            val cards = document.select(".poster-long, .poster-xs, .filter-result-box, .poster-md, .poster-mini, .leftbar-search-result-in, a[href*='/dizi/'], a[href*='/film/']")
 
-                val title = aTag.text().trim().takeIf { it.isNotBlank() }
-                    ?: imgTag?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
-                    ?: return@forEach
+            cards.forEach { card ->
+                val aTag = if (card.tagName() == "a") card else card.selectFirst("a[href]") ?: return@forEach
+                val rawHref = aTag.attr("href")
+                val href = fixUrlNull(rawHref) ?: return@forEach
+                if (href == "$mainUrl/" || href.endsWith("/diziler") || href.endsWith("/filmler")) return@forEach
 
-                val isTvSeries = href.contains("/dizi/")
+                var cleanHref = href
+                if (href.contains("/sezon-") || href.contains("/bolum-") || href.contains("-bolum-")) {
+                    cleanHref = href.substringBefore("/sezon-").substringBefore("/bolum-").substringBefore("-bolum-")
+                }
+
+                val posterUrl = extractPoster(card) ?: extractPoster(aTag)
+                val title = extractTitle(card, aTag) ?: return@forEach
+                val rating = extractRating(card)
+
+                val isTvSeries = cleanHref.contains("/dizi/") || !cleanHref.contains("/film/")
                 if (isTvSeries) {
-                    results.add(newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                    results.add(newTvSeriesSearchResponse(title, cleanHref, TvType.TvSeries) {
                         this.posterUrl = posterUrl
+                        this.score = Score.from10(rating)
                     })
                 } else {
-                    results.add(newMovieSearchResponse(title, href, TvType.Movie) {
+                    results.add(newMovieSearchResponse(title, cleanHref, TvType.Movie) {
                         this.posterUrl = posterUrl
+                        this.score = Score.from10(rating)
                     })
                 }
             }
@@ -148,7 +221,6 @@ class DiziMag : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val originalDocument = app.get(url, referer = "$mainUrl/").document
 
-        // If an episode URL is passed (from search/home), find parent series URL
         val isEpisodeUrl = url.contains("/sezon-") || url.contains("/bolum-") || url.contains("-bolum-")
         val seriesUrl = if (isEpisodeUrl) {
             originalDocument.select("a[href*='/dizi/']").mapNotNull { fixUrlNull(it.attr("href")) }
@@ -162,26 +234,25 @@ class DiziMag : MainAPI() {
             ?: document.selectFirst("meta[property='og:title']")?.attr("content")
             ?: return null
 
-        val title = titleRaw.substringBefore(" izle").substringBefore(" |").trim()
+        val title = titleRaw.substringBefore(" izle").substringBefore(" |").substringBefore(" Türkçe").trim()
 
         val poster = fixUrlNull(
             document.selectFirst("meta[property='og:image']")?.attr("content")
-                ?: document.selectFirst("img")?.attr("data-src")
-                ?: document.selectFirst("img")?.attr("src")
+                ?: extractPoster(document)
         )
 
         val description = document.selectFirst("meta[name='description']")?.attr("content")
             ?: document.selectFirst("meta[property='og:description']")?.attr("content")
 
-        val ratingText = document.selectFirst("div:contains(IMDB :)")?.text()
-            ?: document.select("div.episode-date, div.imdb").text()
-        val rating = Regex("""\b(\d+(?:\.\d+)?)\b""").find(ratingText ?: "")?.value
+        val ratingText = document.select("div.series-profile-info, li:contains(IMDB Puanı), .episode-date, .imdb").text()
+        val rating = Regex("""\b([1-9]\.\d|10(?:\.0)?|[1-9])\b""").find(ratingText ?: "")?.value
 
-        val actorsText = document.select("div:contains(Oyuncular :)").lastOrNull()?.ownText()?.trim()
-        val actors = actorsText?.split(",")?.mapNotNull {
-            val name = it.trim()
-            if (name.isNotEmpty()) ActorData(Actor(name, null)) else null
-        }
+        val actors = document.select("a[href*='/oyuncu/']").mapNotNull { actorTag ->
+            val actorName = actorTag.text().trim().split("\n")[0].trim()
+            if (actorName.isNotBlank() && !actorName.contains("Oyuncular", ignoreCase = true)) {
+                ActorData(Actor(actorName, null))
+            } else null
+        }.distinctBy { it.actor.name }
 
         val isTvSeries = targetUrl.contains("/dizi/")
 
@@ -233,6 +304,12 @@ class DiziMag : MainAPI() {
         }
     }
 
+    private fun isMediaFile(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.endsWith(".webp") || lower.endsWith(".jpg") || lower.endsWith(".png") ||
+               lower.endsWith(".svg") || lower.endsWith(".jpeg") || lower.contains("/uploads/")
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -244,14 +321,21 @@ class DiziMag : MainAPI() {
         val iframes = mutableSetOf<String>()
 
         document.select("iframe").forEach { iframe ->
-            fixUrlNull(iframe.attr("src")?.takeIf { it.isNotBlank() } ?: iframe.attr("data-src"))?.let { iframes.add(it) }
+            val src = iframe.attr("src")?.takeIf { it.isNotBlank() } ?: iframe.attr("data-src")
+            val fixed = fixUrlNull(src)
+            if (fixed != null && !isMediaFile(fixed)) {
+                iframes.add(fixed)
+            }
         }
 
-        document.select("[data-frame], [data-hhs], [data-video], [data-src], [data-url]").forEach { el ->
-            for (attr in listOf("data-frame", "data-hhs", "data-video", "data-src", "data-url")) {
+        document.select("[data-frame], [data-hhs], [data-video], [data-url], [data-embed]").forEach { el ->
+            for (attr in listOf("data-frame", "data-hhs", "data-video", "data-url", "data-embed")) {
                 val value = el.attr(attr)
                 if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("//")) {
-                    fixUrlNull(value)?.let { iframes.add(it) }
+                    val fixed = fixUrlNull(value)
+                    if (fixed != null && !isMediaFile(fixed)) {
+                        iframes.add(fixed)
+                    }
                 }
             }
         }
