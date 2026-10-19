@@ -1,8 +1,0 @@
-{
-  "name": "gsrepo",
-  "description": "gsrepo Türkçe CloudStream eklenti havuzu",
-  "manifestVersion": 1,
-  "pluginLists": [
-    "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/plugins.json"
-  ]
-}
