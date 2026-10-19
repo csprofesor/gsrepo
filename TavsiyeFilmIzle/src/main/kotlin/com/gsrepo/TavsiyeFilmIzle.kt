@@ -29,7 +29,7 @@ class TavsiyeFilmIzle : MainAPI() {
     override var sequentialMainPageDelay = 100L
     override var sequentialMainPageScrollDelay = 100L
 
-    private val seenUrls = Collections.synchronizedSet(mutableSetOf<String>())
+    private val categorySeenUrls = Collections.synchronizedMap(mutableMapOf<String, MutableSet<String>>())
 
     companion object {
         private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -66,17 +66,17 @@ class TavsiyeFilmIzle : MainAPI() {
         if (page <= 1) base else base.trimEnd('/') + "/page/$page/"
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val firstCategory = mainPage.firstOrNull()
-        if (page == 1 && (firstCategory == null || request.data == firstCategory.data || request.name == firstCategory.name)) {
-            seenUrls.clear()
+        if (page == 1) {
+            categorySeenUrls[request.name] = Collections.synchronizedSet(mutableSetOf())
         }
+        val seenUrls = categorySeenUrls.getOrPut(request.name) { Collections.synchronizedSet(mutableSetOf()) }
 
         val items = mutableListOf<SearchResponse>()
-        var webPage = if (page == 1) 1 else page + 3
+        var webPage = if (page == 1) 1 else page + 1
         var pagesFetched = 0
-        val maxPagesToFetch = if (page == 1) 4 else 1
+        val maxPagesToFetch = if (page == 1) 2 else 1
 
-        while (items.size < 12 && pagesFetched < maxPagesToFetch) {
+        while (items.size < 16 && pagesFetched < maxPagesToFetch) {
             val doc = try { app.get(pageUrl(request.data, webPage), headers = baseHeaders).document } catch (_: Exception) { null }
             if (doc == null) break
 
