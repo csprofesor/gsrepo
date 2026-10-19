@@ -71,10 +71,27 @@ class TavsiyeFilmIzle : MainAPI() {
             seenUrls.clear()
         }
 
-        val doc = app.get(pageUrl(request.data, page), headers = baseHeaders).document
-        val items = doc.select("div.movie-preview, div.movie-preview-content, div.slide-item")
-            .mapNotNull { it.toSearchResult() }
-            .filter { seenUrls.add(it.url) }
+        val items = mutableListOf<SearchResponse>()
+        var webPage = if (page == 1) 1 else page + 3
+        var pagesFetched = 0
+        val maxPagesToFetch = if (page == 1) 4 else 1
+
+        while (items.size < 12 && pagesFetched < maxPagesToFetch) {
+            val doc = try { app.get(pageUrl(request.data, webPage), headers = baseHeaders).document } catch (_: Exception) { null }
+            if (doc == null) break
+
+            val elements = doc.select("div.movie-preview, div.movie-preview-content, div.slide-item")
+            if (elements.isEmpty()) break
+
+            for (element in elements) {
+                val searchResult = element.toSearchResult() ?: continue
+                if (seenUrls.add(searchResult.url)) {
+                    items.add(searchResult)
+                }
+            }
+            webPage++
+            pagesFetched++
+        }
 
         return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
     }
