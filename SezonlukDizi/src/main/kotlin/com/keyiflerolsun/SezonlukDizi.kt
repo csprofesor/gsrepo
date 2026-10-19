@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.Request
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
@@ -359,19 +360,23 @@ class SezonlukDizi : MainAPI() {
                 val js = """
                     if (!window.injectedSubmitHook) {
                         window.injectedSubmitHook = true;
-                        var origSubmit = window.submitVerification;
-                        window.submitVerification = function(token) {
-                            if (typeof ${'$'} !== 'undefined' && ${'$'}.post) {
-                                ${'$'}.post("/ajax/reCAPTCHA.asp", { 'cf-turnstile-response': token }, function(data) {
-                                    if (data === "ok") {
+                        
+                        var originalOpen = XMLHttpRequest.prototype.open;
+                        XMLHttpRequest.prototype.open = function(method, url) {
+                            this._url = url;
+                            return originalOpen.apply(this, arguments);
+                        };
+                        
+                        var originalSend = XMLHttpRequest.prototype.send;
+                        XMLHttpRequest.prototype.send = function() {
+                            this.addEventListener('load', function() {
+                                if (this._url && this._url.includes('/ajax/reCAPTCHA.asp')) {
+                                    if (this.responseText === 'ok') {
                                         window.location.href = 'https://sezonlukdizi.cc/CAPTCHA_SOLVED';
-                                    } else if (typeof origSubmit === 'function') {
-                                        origSubmit(token);
                                     }
-                                });
-                            } else if (typeof origSubmit === 'function') {
-                                origSubmit(token);
-                            }
+                                }
+                            });
+                            return originalSend.apply(this, arguments);
                         };
                     }
                 """.trimIndent()
@@ -380,7 +385,8 @@ class SezonlukDizi : MainAPI() {
                     interceptUrl = Regex(".*CAPTCHA_SOLVED.*"),
                     script = js
                 )
-                app.get("$mainUrl/ajax/reCAPTCHADATA.asp", interceptor = resolver)
+                val request = Request.Builder().url("$mainUrl/ajax/reCAPTCHADATA.asp").build()
+                resolver.resolveUsingWebView(request)
                 
                 isCaptchaSolved = true
                 Log.d("SZD", "Native Captcha UI closed and resolved.")
@@ -390,6 +396,7 @@ class SezonlukDizi : MainAPI() {
 
             if (isCaptchaSolved) {
                 val cookieManager = CookieManager.getInstance()
+                cookieManager.flush()
                 val webCookiesStr = cookieManager.getCookie(mainUrl) ?: ""
                 if (webCookiesStr.isNotBlank()) {
                     val urlObj = "$mainUrl/".toHttpUrl()
