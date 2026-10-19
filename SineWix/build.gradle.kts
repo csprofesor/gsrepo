@@ -1,4 +1,4 @@
-version = 10
+version = 40
 
 cloudstream {
     authors = listOf("csprofesor")

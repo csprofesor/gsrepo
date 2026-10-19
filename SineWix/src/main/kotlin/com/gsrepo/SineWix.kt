@@ -44,7 +44,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class SineWix : MainAPI() {
-    override var mainUrl = "https://ydfvfdizipanel.ru/public/api"
+    override var mainUrl = "https://ydfvfdizipanel.ru/api"
     override var name = "SineWix"
     override val hasMainPage = true
     override var lang = "tr"
@@ -54,8 +54,6 @@ class SineWix : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
 
     private val apiKey = "9174121c-b15d-4d6b-9e64-5cee5389bfe9"
-    private val hmacSecret = "4962QZiZZqWbQlC0k0pdIvojy-STtR8NTq7oQCxMGBF2kwsVX2DBxgK72BovMy4U"
-    private val encSecret = "H1KKG-JCt1RqHQawNxw7xujy2-vevYuyBqX3Aei1EAdi9VwDnmRL-3Oz2xxvy1VU"
     private val sigCert = "308202c3308201aba0030201020204075cec01300d06092a864886f70d01010b050030123110300e0603550403130753696e65776978301e1" +
             "70d3231303932313233333334395a170d3436303931353233333334395a30123110300e0603550403130753696e6577697830820122300d06092a864" +
             "886f70d01010105000382010f003082010a0282010100b0a2a1bc5c3f16f19c3b2456cfd0a6128ced9f5e2e2c4cca1a100e17b07b86256258f372e76" +
@@ -68,7 +66,7 @@ class SineWix : MainAPI() {
             "82e188bf8ef7c42a44e3fbfb693bb00ee2a727096b42360ddce1bdcd3536f50c8693bcc62a7b7204bcefe2ecf1f7c820bcd63e1d7a6acc8bf6163086" +
             "915fc5f607cf51bc7a8635f98bb4c65a8f24b7b5a82c7b06868f565cb0d6ac4775c4aac777536ddd1a565f990fd8cbe539185fa7aab610b7855a687a" +
             "00f4e55536d72873444552c50fd10727dbf298a9be6ed6ae62148dd1de365f3729915dd31975e28a472d752ac14db3db548405cc31e1e"
-    private val hash256 = "f4d4bc98a3fc4600e7f2c2bab7533f1f03d8a70ff03c256bb11dc57050536bd0"
+    private val hash256 = "f0a3245335bb305f17062b135a424b9f4b423a92a919cdde7f3b32b2b3e7bb04"
 
     private val headers = mapOf(
         "signature" to sigCert,
@@ -85,9 +83,9 @@ class SineWix : MainAPI() {
     @Volatile
     private var cachedToken: CachedToken? = null
 
-
-
-
+    companion object {
+        private val globalSeenIds = Collections.synchronizedSet(HashSet<Int>())
+    }
 
     override val mainPage = mainPageOf(
         "/api/genres/topteen/all/$apiKey" to "Top 10 Listesi",
@@ -126,7 +124,7 @@ class SineWix : MainAPI() {
 
         val keyString = "easyplex-response-v1|$sessionId|$nonce|$timestamp"
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(encSecret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        mac.init(SecretKeySpec("827EBD30AF15ADAAE62FDAF02731B08978B8398CED65927B732380BF159E659F".toByteArray(Charsets.UTF_8), "HmacSHA256"))
         val aesKeyBytes = mac.doFinal(keyString.toByteArray(Charsets.UTF_8))
 
         val combinedCiphertext = ByteArray(cipherBytes.size + tag.size)
@@ -174,7 +172,7 @@ class SineWix : MainAPI() {
         val bodyHash = md.digest(bodyBytes).joinToString("") { "%02x".format(it) }
 
         val stringToSign = "$method\n$apiPath\n$timestamp\n$nonce\n$bodyHash"
-        val hmacSig = hmacSha256(hmacSecret, stringToSign)
+        val hmacSig = hmacSha256("32FD53071AAF9D36080510C617DCD08B7B19A1AABA8502C1484FC4961BD630DB", stringToSign)
 
         val reqHeaders = headers.toMutableMap()
         reqHeaders["X-Timestamp"] = timestamp
@@ -254,7 +252,7 @@ class SineWix : MainAPI() {
     }
 
     private fun fixUrl(url: String?): String? {
-        if (url.isNullOrBlank()) return null
+        if (url.isNullOrBlank() || url.equals("null", true) || url.equals("none", true)) return null
         val clean = url.trim()
         if (clean.startsWith("http://") || clean.startsWith("https://")) return clean
         if (clean.startsWith("/")) return "https://image.tmdb.org/t/p/w500$clean"
@@ -262,7 +260,10 @@ class SineWix : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val rowSeenIds = HashSet<Int>()
+        if (page == 1 && request.name == "Top 10 Listesi") {
+            globalSeenIds.clear()
+        }
+
         val baseUrlPath = request.data
         val itemsList = mutableListOf<SearchResponse>()
         var currentPage = page
@@ -276,15 +277,18 @@ class SineWix : MainAPI() {
                 null
             }
 
-            val result = if (!resText.isNullOrBlank()) {
-                tryParseJson<SineSonuc>(resText)
-            } else null
+            val rawItems = if (!resText.isNullOrBlank()) {
+                tryParseJson<SineSonuc>(resText)?.data
+                    ?: tryParseJson<SineSearch>(resText)?.results
+                    ?: tryParseJson<SineSearch>(resText)?.search
+                    ?: tryParseJson<List<SineData>>(resText)
+                    ?: emptyList()
+            } else emptyList()
 
-            val rawItems = result?.data ?: emptyList()
             if (rawItems.isEmpty()) break
 
             for (item in rawItems) {
-                val searchResp = item.toSearchResponse(rowSeenIds)
+                val searchResp = item.toSearchResponse(globalSeenIds)
                 if (searchResp != null) {
                     itemsList.add(searchResp)
                     if (itemsList.size >= 12 && page == 1) break
@@ -296,7 +300,7 @@ class SineWix : MainAPI() {
         return newHomePageResponse(request.name, itemsList)
     }
 
-    private fun SineData.toSearchResponse(rowSeenIds: HashSet<Int>? = null): SearchResponse? {
+    private fun SineData.toSearchResponse(rowSeenIds: MutableSet<Int>? = null): SearchResponse? {
         val title = this.title ?: this.name ?: return null
         val id = when (val i = this.id) {
             is Number -> i.toInt()
