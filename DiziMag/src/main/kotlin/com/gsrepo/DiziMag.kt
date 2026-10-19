@@ -1,5 +1,6 @@
 package com.gsrepo
 
+import android.util.Base64
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.Episode
@@ -30,6 +31,11 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import org.mozilla.javascript.Context
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class DiziMag : MainAPI() {
     override var mainUrl = "https://dizimag.onl"
@@ -310,6 +316,193 @@ class DiziMag : MainAPI() {
                lower.endsWith(".svg") || lower.endsWith(".jpeg") || lower.contains("/uploads/")
     }
 
+    private fun extractJapierdoleVariables(html: String): Triple<String, String, String>? {
+        val scriptMatch = Regex("""(?s)<script[^>]*>(.*?_resolve.*?)</script>""").find(html)?.groupValues?.get(1) ?: return null
+        val rhino = Context.enter()
+        rhino.optimizationLevel = -1
+        return try {
+            val scope = rhino.initStandardObjects()
+            rhino.evaluateString(
+                scope,
+                "var window = { location: { pathname: '/v/stream' } }; var document = { readyState: 'complete', addEventListener: function(){} };",
+                "init", 1, null
+            )
+
+            val modifiedScript = scriptMatch.trim()
+                .replace(Regex("""^\s*\(function\(\)\s*\{"""), "function extractData() {")
+                .replace(Regex("""\}\)\(\);?\s*$"""), "\nreturn JSON.stringify({ cr: _cr, ept: _ept, ws: _ws });\n}")
+
+            rhino.evaluateString(scope, modifiedScript, "script", 1, null)
+            val resultJsonStr = rhino.evaluateString(scope, "extractData()", "exec", 1, null)?.toString() ?: return null
+
+            val jsonObj = JSONObject(resultJsonStr)
+            val cr = jsonObj.optString("cr")
+            val ept = jsonObj.optString("ept")
+            val ws = jsonObj.optString("ws")
+
+            if (cr.isNotBlank() && ept.isNotBlank() && ws.isNotBlank()) {
+                Triple(cr, ept, ws)
+            } else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            Context.exit()
+        }
+    }
+
+    private fun xd(enc: String, key: String): String {
+        val sb = StringBuilder()
+        for (i in enc.indices) {
+            val encChar = enc[i].toString().toInt(16)
+            val keyChar = key[i % key.length].toString().toInt(16)
+            sb.append((encChar xor keyChar).toString(16))
+        }
+        return sb.toString()
+    }
+
+    private fun sha256Hex(str: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(str.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun wc(seed: String, challenge: String): String {
+        return sha256Hex(seed + challenge).take(16)
+    }
+
+    private fun aesDecryptHexKey(cipherTextBase64: String, keyHex: String, ivHex: String): String {
+        val cipherBytes = Base64.decode(cipherTextBase64, Base64.DEFAULT)
+        val keyBytes = keyHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val ivBytes = ivHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val secretKey = SecretKeySpec(keyBytes, "AES")
+        val ivSpec = IvParameterSpec(ivBytes)
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+        return String(cipher.doFinal(cipherBytes), Charsets.UTF_8)
+    }
+
+    private suspend fun extractJapierdoleStream(
+        embedUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        try {
+            val pageResp = app.get(embedUrl, headers = mapOf("Referer" to "$mainUrl/"))
+            val html = pageResp.text
+
+            val (cr, ept, ws) = extractJapierdoleVariables(html) ?: return false
+
+            val pt = xd(ept, cr)
+            val wcr = wc(ws, cr)
+
+            val sig = java.util.UUID.randomUUID().toString().replace("-", "") +
+                      java.util.UUID.randomUUID().toString().replace("-", "")
+
+            val streamPath = embedUrl.substringAfter("japierdolevid.com").substringBefore("?")
+            val streamUrl = "https://japierdolevid.com${streamPath.removeSuffix("/")}/stream"
+
+            val refB64 = Base64.encodeToString(embedUrl.toByteArray(), Base64.NO_WRAP).take(30)
+
+            val postPayload = JSONObject().apply {
+                put("_sig", sig)
+                put("_nonce", sig.take(32))
+                put("_ts2", System.currentTimeMillis() - 250)
+                put("_v", "2.8.71")
+                put("_sid", sig.take(24))
+                put("_ref", refB64)
+                put("_enc", "rsa4096")
+                put("_mode", "cfb8")
+                put("_iter", 3000)
+                put("_salt", sig.take(16))
+                put("_hmac", sig.take(40))
+                put("_pad", "iso7816")
+                put("_cmp", "none")
+                put("_fmt", 3)
+                put("_fl", 6)
+                put("pt", pt)
+                put("cr", cr)
+                put("wc", wcr)
+                put("bs", JSONObject().apply {
+                    put("ts", System.currentTimeMillis())
+                    put("sw", 1920)
+                    put("sh", 1080)
+                    put("plt", 100)
+                    put("tz", -180)
+                    put("lang", "tr")
+                    put("pl", "Linux")
+                    put("ct", 8)
+                    put("dm", 24)
+                    put("td", 0)
+                    put("cv", 1)
+                    put("wg", 0)
+                })
+                put("_x", sig.take(8))
+            }
+
+            val responseText = app.post(
+                streamUrl,
+                json = postPayload,
+                headers = mapOf(
+                    "Content-Type" to "application/json",
+                    "Referer" to embedUrl,
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                )
+            ).text
+
+            val resJson = JSONObject(responseText)
+            if (!resJson.optBoolean("s")) return false
+
+            val p1 = resJson.getString("p1")
+            val p2 = resJson.getString("p2")
+            val p3 = resJson.getString("p3")
+            val p4 = resJson.getString("p4")
+            val d = resJson.getString("d")
+            val v = resJson.getString("v")
+            val x = resJson.getString("x")
+
+            val seed = p1 + p2 + p3 + p4
+            val derivedKey = sha256Hex(seed + cr + x)
+            val payloadStr = aesDecryptHexKey(d, derivedKey, v)
+            val payloadJson = JSONObject(payloadStr)
+
+            val epd = payloadJson.optJSONObject("encrypted_player_data") ?: return false
+            val innerKey = epd.getString("k1") + epd.getString("k2") + epd.getString("k3") + epd.getString("k4")
+            val playerHtml = aesDecryptHexKey(epd.getString("ct"), innerKey, epd.getString("iv"))
+
+            var found = false
+
+            val m3u8Url = Regex("""videoSrc\s*:\s*['"]([^'"]+)['"]""").find(playerHtml)?.groupValues?.get(1)
+                ?: Regex("""file\s*:\s*['"]([^'"]+)['"]""").find(playerHtml)?.groupValues?.get(1)
+
+            if (m3u8Url != null) {
+                val unescapedUrl = m3u8Url.replace("\\/", "/")
+                callback.invoke(
+                    newExtractorLink(
+                        source = this.name,
+                        name = this.name,
+                        url = unescapedUrl,
+                        type = if (unescapedUrl.contains(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    ) {
+                        this.referer = embedUrl
+                        this.quality = Qualities.Unknown.value
+                    }
+                )
+                found = true
+            }
+
+            Regex("""\{\s*"src"\s*:\s*"([^"]+)"\s*,\s*"label"\s*:\s*"([^"]+)"""").findAll(playerHtml).forEach { match ->
+                val subFile = fixUrlNull(match.groupValues[1].replace("\\/", "/")) ?: return@forEach
+                val subLabel = unescapeUnicode(match.groupValues[2]).replace("\\/", "/")
+                subtitleCallback(newSubtitleFile(subLabel, subFile))
+            }
+
+            return found
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -344,6 +537,14 @@ class DiziMag : MainAPI() {
 
         for (iframe in iframes) {
             try {
+                if (iframe.contains("japierdolevid.com/v/")) {
+                    val extracted = extractJapierdoleStream(iframe, subtitleCallback, callback)
+                    if (extracted) {
+                        foundLinks = true
+                        continue
+                    }
+                }
+
                 var targetUrl = iframe
                 var referer = "$mainUrl/"
 
