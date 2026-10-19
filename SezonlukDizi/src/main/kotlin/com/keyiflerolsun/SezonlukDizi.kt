@@ -376,12 +376,11 @@ class SezonlukDizi : MainAPI() {
                     }
                 """.trimIndent()
 
-                WebViewResolver(
+                val resolver = WebViewResolver(
                     interceptUrl = Regex(".*CAPTCHA_SOLVED.*"),
                     script = js
-                ).resolveUsingWebView(
-                    url = "$mainUrl/ajax/reCAPTCHADATA.asp",
                 )
+                app.get("$mainUrl/ajax/reCAPTCHADATA.asp", interceptor = resolver)
                 
                 isCaptchaSolved = true
                 Log.d("SZD", "Native Captcha UI closed and resolved.")
