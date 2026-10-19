@@ -2,6 +2,7 @@
 
 package com.keyiflerolsun
 
+import android.R
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
@@ -35,23 +36,43 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
+import android.app.Activity
+import android.app.AlertDialog
+import android.widget.FrameLayout
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.graphics.Color
+import android.view.Gravity
+
 class SezonlukDiziCaptchaSolver(private val context: Context) {
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun solve(mainUrl: String): Boolean = withTimeoutOrNull(25000) {
+    suspend fun solve(mainUrl: String): Boolean = withTimeoutOrNull(45000) {
         suspendCancellableCoroutine { continuation ->
             var isSolved = false
-            CoroutineScope(Dispatchers.Main).launch {
-                var webView: WebView? = null
-                fun cleanup() {
-                    try {
-                        webView?.stopLoading()
-                        webView?.destroy()
-                        webView = null
-                    } catch (_: Exception) {}
-                }
+            var dialog: AlertDialog? = null
+            var webView: WebView? = null
 
+            fun cleanup() {
                 try {
-                    webView = WebView(context).apply {
+                    dialog?.dismiss()
+                    dialog = null
+                    webView?.stopLoading()
+                    webView?.destroy()
+                    webView = null
+                } catch (_: Exception) {}
+            }
+
+            val activity = context as? Activity
+            if (activity == null) {
+                Log.e("SZD", "Context is not an Activity, cannot show Captcha Dialog!")
+                if (continuation.isActive) continuation.resume(false)
+                return@suspendCancellableCoroutine
+            }
+
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    webView = WebView(activity).apply {
                         settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true
@@ -67,46 +88,27 @@ class SezonlukDiziCaptchaSolver(private val context: Context) {
                                         if (window.injectedSubmitHook) return;
                                         window.injectedSubmitHook = true;
 
-                                        var reportSuccess = function() {
-                                            document.title = 'CAPTCHA_SOLVED';
-                                        };
-
                                         var origSubmit = window.submitVerification;
                                         window.submitVerification = function(token) {
                                             if (typeof $ !== 'undefined' && $.post) {
                                                 $.post("/ajax/reCAPTCHA.asp", { 'cf-turnstile-response': token }, function(data) {
                                                     if (data === "ok") {
-                                                        reportSuccess();
-                                                    } else if (typeof origSubmit === 'function') {
-                                                        origSubmit(token);
+                                                        document.title = 'CAPTCHA_SOLVED';
                                                     }
+                                                    if (typeof origSubmit === 'function') origSubmit(token);
                                                 });
-                                            } else if (typeof origSubmit === 'function') {
-                                                origSubmit(token);
+                                            } else {
+                                                if (typeof origSubmit === 'function') origSubmit(token);
                                             }
                                         };
-
-                                        setInterval(function() {
-                                            try {
-                                                var iframe = document.querySelector('#turnstile-container iframe, iframe[src*="turnstile"], iframe[src*="challenges.cloudflare.com"]');
-                                                if (iframe) {
-                                                    var rect = iframe.getBoundingClientRect();
-                                                    if (rect && rect.width > 0 && rect.height > 0) {
-                                                        var clickX = Math.round(rect.left + 35);
-                                                        var clickY = Math.round(rect.top + (rect.height / 2));
-                                                        document.title = 'CLICK_POS:' + clickX + ':' + clickY;
-                                                    }
-                                                }
-                                            } catch(e) {}
-                                        }, 500);
+                                        
+                                        // Some elements are hidden by default and rely on parent iframe, let's ensure it's visible
+                                        document.body.style.backgroundColor = 'white';
                                     })();
                                 """.trimIndent()
                                 view?.evaluateJavascript(js, null)
                             }
                         }
-
-                        var lastClickX = -1f
-                        var lastClickY = -1f
 
                         webChromeClient = object : WebChromeClient() {
                             override fun onReceivedTitle(view: WebView?, title: String?) {
@@ -118,61 +120,51 @@ class SezonlukDiziCaptchaSolver(private val context: Context) {
                                         delay(500)
                                         cleanup()
                                     }
-                                } else if (title?.startsWith("CLICK_POS:") == true) {
-                                    try {
-                                        val parts = title.split(":")
-                                        if (parts.size == 3) {
-                                            lastClickX = parts[1].toFloatOrNull() ?: -1f
-                                            lastClickY = parts[2].toFloatOrNull() ?: -1f
-                                        }
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                        }
-
-                        CoroutineScope(Dispatchers.Main).launch {
-                            repeat(40) {
-                                delay(600)
-                                if (isSolved) return@launch
-                                try {
-                                    val v = webView ?: return@launch
-                                    val w = v.width.coerceAtLeast(600)
-                                    val h = v.height.coerceAtLeast(600)
-
-                                    val targetX: Float
-                                    val targetY: Float
-
-                                    if (lastClickX > 0 && lastClickY > 0) {
-                                        val density = context.resources.displayMetrics.density
-                                        targetX = lastClickX * density
-                                        targetY = lastClickY * density
-                                    } else {
-                                        targetX = (w / 2f) - 115f
-                                        targetY = h / 2f
-                                    }
-
-                                    val now = SystemClock.uptimeMillis()
-                                    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, targetX, targetY, 0)
-                                    val up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, targetX, targetY, 0)
-                                    v.dispatchTouchEvent(down)
-                                    v.dispatchTouchEvent(up)
-                                    down.recycle()
-                                    up.recycle()
-                                } catch (_: Exception) {}
-                            }
-                            if (!isSolved && continuation.isActive) {
-                                continuation.resume(false)
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    cleanup()
                                 }
                             }
                         }
 
                         loadUrl("$mainUrl/ajax/reCAPTCHADATA.asp")
                     }
+
+                    val layout = LinearLayout(activity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setBackgroundColor(Color.WHITE)
+                        
+                        val titleView = TextView(activity).apply {
+                            text = "Lütfen Cloudflare doğrulamasını geçin."
+                            textSize = 16f
+                            setTextColor(Color.BLACK)
+                            setPadding(32, 32, 32, 16)
+                            gravity = Gravity.CENTER
+                        }
+                        addView(titleView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+                        addView(webView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (350 * context.resources.displayMetrics.density).toInt()).apply {
+                            gravity = Gravity.CENTER
+                            setMargins(16, 16, 16, 16)
+                        })
+                    }
+
+                    dialog = AlertDialog.Builder(activity)
+                        .setView(layout)
+                        .setCancelable(false)
+                        .setNegativeButton("İptal") { _, _ ->
+                            if (continuation.isActive) continuation.resume(false)
+                            cleanup()
+                        }
+                        .create()
+
+                    dialog?.show()
+                    dialog?.window?.setLayout(
+                        (context.resources.displayMetrics.widthPixels * 0.9).toInt(),
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+
                 } catch (e: Exception) {
-                    Log.e("SZD", "CaptchaSolver error: ${e.message}")
+                    Log.e("SZD", "CaptchaSolver dialog error: ${e.message}")
                     if (continuation.isActive) continuation.resume(false)
+                    cleanup()
                 }
 
                 continuation.invokeOnCancellation {
