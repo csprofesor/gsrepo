@@ -2,7 +2,7 @@
 
 package com.keyiflerolsun
 
-import android.R
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
@@ -36,160 +36,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
-import android.view.View
-import android.view.ViewGroup
+// SezonlukDiziCaptchaSolver removed, using native WebViewResolver
 
-class SezonlukDiziCaptchaSolver(private val context: Context) {
-    @SuppressLint("SetJavaScriptEnabled")
-    suspend fun solve(mainUrl: String): Boolean = withTimeoutOrNull(25000) {
-        suspendCancellableCoroutine { continuation ->
-            var isSolved = false
-            CoroutineScope(Dispatchers.Main).launch {
-                var webView: WebView? = null
-                fun cleanup() {
-                    try {
-                        webView?.stopLoading()
-                        webView?.destroy()
-                        webView = null
-                    } catch (_: Exception) {}
-                }
-
-                try {
-                    webView = WebView(context).apply {
-                        // Headless WebView için zorunlu boyutlandırma
-                        layoutParams = ViewGroup.LayoutParams(1080, 1920)
-                        measure(
-                            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
-                            View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY)
-                        )
-                        layout(0, 0, measuredWidth, measuredHeight)
-
-                        settings.apply {
-                            javaScriptEnabled = true
-                            domStorageEnabled = true
-                            mediaPlaybackRequiresUserGesture = false
-                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                            userAgentString = "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                        }
-
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                val js = """
-                                    (function() {
-                                        // WebDriver flag'i gizle
-                                        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                                        
-                                        if (window.injectedSubmitHook) return;
-                                        window.injectedSubmitHook = true;
-
-                                        var reportSuccess = function() {
-                                            document.title = 'CAPTCHA_SOLVED';
-                                        };
-
-                                        var origSubmit = window.submitVerification;
-                                        window.submitVerification = function(token) {
-                                            if (typeof ${'$'} !== 'undefined' && ${'$'}.post) {
-                                                ${'$'}.post("/ajax/reCAPTCHA.asp", { 'cf-turnstile-response': token }, function(data) {
-                                                    if (data === "ok") {
-                                                        reportSuccess();
-                                                    } else if (typeof origSubmit === 'function') {
-                                                        origSubmit(token);
-                                                    }
-                                                });
-                                            } else if (typeof origSubmit === 'function') {
-                                                origSubmit(token);
-                                            }
-                                        };
-
-                                        setInterval(function() {
-                                            try {
-                                                var iframe = document.querySelector('#turnstile-container iframe, iframe[src*="turnstile"], iframe[src*="challenges.cloudflare.com"]');
-                                                if (iframe) {
-                                                    var rect = iframe.getBoundingClientRect();
-                                                    if (rect && rect.width > 0 && rect.height > 0) {
-                                                        var clickX = Math.round(rect.left + 35);
-                                                        var clickY = Math.round(rect.top + (rect.height / 2));
-                                                        document.title = 'CLICK_POS:' + clickX + ':' + clickY;
-                                                    }
-                                                }
-                                            } catch(e) {}
-                                        }, 500);
-                                    })();
-                                """.trimIndent()
-                                view?.evaluateJavascript(js, null)
-                            }
-                        }
-
-                        var lastClickX = -1f
-                        var lastClickY = -1f
-
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onReceivedTitle(view: WebView?, title: String?) {
-                                if (title == "CAPTCHA_SOLVED" && !isSolved) {
-                                    isSolved = true
-                                    try { CookieManager.getInstance().flush() } catch (_: Exception) {}
-                                    if (continuation.isActive) continuation.resume(true)
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        delay(500)
-                                        cleanup()
-                                    }
-                                } else if (title?.startsWith("CLICK_POS:") == true) {
-                                    try {
-                                        val parts = title.split(":")
-                                        if (parts.size == 3) {
-                                            lastClickX = parts[1].toFloatOrNull() ?: -1f
-                                            lastClickY = parts[2].toFloatOrNull() ?: -1f
-                                        }
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                        }
-
-                        CoroutineScope(Dispatchers.Main).launch {
-                            repeat(30) {
-                                delay(700)
-                                if (isSolved) return@launch
-                                try {
-                                    val v = webView ?: return@launch
-                                    if (lastClickX > 0 && lastClickY > 0) {
-                                        val density = context.resources.displayMetrics.density
-                                        val targetX = lastClickX * density
-                                        val targetY = lastClickY * density
-
-                                        val now = SystemClock.uptimeMillis()
-                                        val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, targetX, targetY, 0)
-                                        val up = MotionEvent.obtain(now, now + 100, MotionEvent.ACTION_UP, targetX, targetY, 0)
-                                        v.dispatchTouchEvent(down)
-                                        v.dispatchTouchEvent(up)
-                                        down.recycle()
-                                        up.recycle()
-                                    }
-                                } catch (_: Exception) {}
-                            }
-                            if (!isSolved && continuation.isActive) {
-                                continuation.resume(false)
-                                CoroutineScope(Dispatchers.Main).launch {
-                                    cleanup()
-                                }
-                            }
-                        }
-
-                        loadUrl("$mainUrl/ajax/reCAPTCHADATA.asp")
-                    }
-                } catch (e: Exception) {
-                    Log.e("SZD", "CaptchaSolver error: ${e.message}")
-                    if (continuation.isActive) continuation.resume(false)
-                }
-
-                continuation.invokeOnCancellation {
-                    CoroutineScope(Dispatchers.Main).launch {
-                        cleanup()
-                    }
-                }
-            }
-        }
-    } ?: false
-}
 
 class SezonlukDiziWebViewExtractor(private val context: Context) {
     @SuppressLint("SetJavaScriptEnabled")
@@ -506,10 +354,39 @@ class SezonlukDizi : MainAPI() {
         // Step 2: Solve Turnstile captcha ONCE for remaining protected sources
         if (pendingVeris.isNotEmpty()) {
             Log.d("SZD", "dil»$dil | Pending veris requiring Captcha: ${pendingVeris.size}")
-            val ctx = SezonlukDiziPlugin.pluginContext
-            if (ctx != null) {
-                isCaptchaSolved = SezonlukDiziCaptchaSolver(ctx).solve(mainUrl)
-                Log.d("SZD", "Captcha Solved: $isCaptchaSolved")
+            // Invoke Cloudstream's native WebView UI for solving captcha
+            try {
+                val js = """
+                    if (!window.injectedSubmitHook) {
+                        window.injectedSubmitHook = true;
+                        var origSubmit = window.submitVerification;
+                        window.submitVerification = function(token) {
+                            if (typeof ${'$'} !== 'undefined' && ${'$'}.post) {
+                                ${'$'}.post("/ajax/reCAPTCHA.asp", { 'cf-turnstile-response': token }, function(data) {
+                                    if (data === "ok") {
+                                        window.location.href = 'https://sezonlukdizi.cc/CAPTCHA_SOLVED';
+                                    } else if (typeof origSubmit === 'function') {
+                                        origSubmit(token);
+                                    }
+                                });
+                            } else if (typeof origSubmit === 'function') {
+                                origSubmit(token);
+                            }
+                        };
+                    }
+                """.trimIndent()
+
+                WebViewResolver(
+                    interceptUrl = Regex(".*CAPTCHA_SOLVED.*"),
+                    script = js
+                ).resolveUsingWebView(
+                    url = "$mainUrl/ajax/reCAPTCHADATA.asp",
+                )
+                
+                isCaptchaSolved = true
+                Log.d("SZD", "Native Captcha UI closed and resolved.")
+            } catch (e: Exception) {
+                Log.e("SZD", "Native Captcha UI Error: ${e.message}")
             }
 
             if (isCaptchaSolved) {
