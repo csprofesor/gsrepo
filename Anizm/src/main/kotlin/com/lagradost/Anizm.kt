@@ -90,20 +90,25 @@ class Anizm : MainAPI() {
     }
 
     private fun extractPosterUrl(element: Element): String? {
-        val img = element.selectFirst("img") ?: element.selectFirst("noscript img")
-        val raw = img?.let {
-            it.attr("data-v3-deferred-src").ifBlank {
-                it.attr("data-src").ifBlank {
-                    it.attr("data-original").ifBlank {
-                        it.attr("data-lazy-src").ifBlank {
-                            it.attr("src")
+        val imgs = element.select("img")
+        for (img in imgs) {
+            val raw = img.attr("data-v3-deferred-src").ifBlank {
+                img.attr("data-src").ifBlank {
+                    img.attr("data-original").ifBlank {
+                        img.attr("data-lazy-src").ifBlank {
+                            img.attr("src")
                         }
                     }
                 }
             }
-        } ?: element.selectFirst("noscript img")?.attr("src")
-        val fixed = fixUrlNull(raw)
-        return if (isGrayCover(fixed)) null else fixed
+            val fixed = fixUrlNull(raw)
+            if (!isGrayCover(fixed)) {
+                return fixed
+            }
+        }
+        val noscriptRaw = element.selectFirst("noscript img")?.attr("src")
+        val noscriptFixed = fixUrlNull(noscriptRaw)
+        return if (!isGrayCover(noscriptFixed)) noscriptFixed else null
     }
 
     private fun cleanTitle(rawTitle: String?): String? {
@@ -133,12 +138,12 @@ class Anizm : MainAPI() {
         )
 
         Log.d(logTag, "getMainPage: targetUrl = $targetUrl")
-        val document = app.get(targetUrl, headers = browserHeaders).document
         val isHome = isHomepageUrl(targetUrl)
 
         val items = mutableListOf<AnimeSearchResponse>()
 
         if (isHome) {
+            val document = app.get(targetUrl, headers = browserHeaders).document
             val railElements = document.select(
                 "#v3-latest-rail a, #v3-popular-rail a, #v3-added-rail a, .v3-poster-rail a"
             )
@@ -165,9 +170,65 @@ class Anizm : MainAPI() {
                     addSub(episode)
                 })
             }
+            Log.d(logTag, "getMainPage: Home loaded ${items.size} items")
+            return newHomePageResponse(request.name, items, hasNext = false)
         } else {
-            fun parseCatalogCards(doc: Document) {
-                val articles = doc.select("article.v3-catalog-card, div.searchResultItem, div.posterBlock")
+            if (page <= 1) {
+                var currentPage = 1
+                val maxPagesToFetch = 5
+                val targetCount = 20
+
+                while (items.size < targetCount && currentPage <= maxPagesToFetch) {
+                    val catPageUrl = if (currentPage == 1) {
+                        targetUrl
+                    } else if (targetUrl.contains("?")) {
+                        "$targetUrl&sayfa=$currentPage"
+                    } else {
+                        "$targetUrl?sayfa=$currentPage"
+                    }
+
+                    try {
+                        val document = app.get(catPageUrl, headers = browserHeaders).document
+                        val articles = document.select("article.v3-catalog-card, div.searchResultItem, div.posterBlock")
+                        if (articles.isEmpty()) break
+
+                        var addedCountOnPage = 0
+                        for (article in articles) {
+                            val link = article.selectFirst("h2 a, a.v3-catalog-poster, a[href]") ?: continue
+                            val hrefRaw = link.attr("href").trim()
+                            if (hrefRaw.isBlank()) continue
+                            val animeUrl = getProperAnimeLink(fixUrl(hrefRaw))
+                            if (isHomepageUrl(animeUrl)) continue
+
+                            if (seenAnimeUrls.contains(animeUrl)) continue
+
+                            val posterUrl = extractPosterUrl(article) ?: continue
+                            val titleRaw = article.selectFirst("h2")?.text()
+                                ?: article.selectFirst("img")?.attr("alt")
+                                ?: link.text()
+                            val title = cleanTitle(titleRaw) ?: continue
+
+                            seenAnimeUrls.add(animeUrl)
+
+                            items.add(newAnimeSearchResponse(title, animeUrl, TvType.Anime) {
+                                this.posterUrl = posterUrl
+                            })
+                            addedCountOnPage++
+                        }
+
+                        if (addedCountOnPage == 0 && articles.size < 12) break
+                    } catch (e: Throwable) {
+                        Log.w(logTag, "getMainPage: failed page $currentPage for $targetUrl: ${e.message}")
+                        break
+                    }
+                    currentPage++
+                }
+
+                Log.d(logTag, "getMainPage: Category ${request.name} page 1 loaded ${items.size} items across pages")
+                return newHomePageResponse(request.name, items, hasNext = true)
+            } else {
+                val document = app.get(targetUrl, headers = browserHeaders).document
+                val articles = document.select("article.v3-catalog-card, div.searchResultItem, div.posterBlock")
                 for (article in articles) {
                     val link = article.selectFirst("h2 a, a.v3-catalog-poster, a[href]") ?: continue
                     val hrefRaw = link.attr("href").trim()
@@ -175,41 +236,25 @@ class Anizm : MainAPI() {
                     val animeUrl = getProperAnimeLink(fixUrl(hrefRaw))
                     if (isHomepageUrl(animeUrl)) continue
 
-                    if (seenAnimeUrls.contains(animeUrl)) continue
-
                     val posterUrl = extractPosterUrl(article) ?: continue
                     val titleRaw = article.selectFirst("h2")?.text()
                         ?: article.selectFirst("img")?.attr("alt")
                         ?: link.text()
                     val title = cleanTitle(titleRaw) ?: continue
 
-                    seenAnimeUrls.add(animeUrl)
-
                     items.add(newAnimeSearchResponse(title, animeUrl, TvType.Anime) {
                         this.posterUrl = posterUrl
                     })
                 }
-            }
 
-            parseCatalogCards(document)
+                val hasNext = document.selectFirst(
+                    "nav.v3-pagination a[href*='sayfa='], div.nextBeforeButtons a.right:not(.disabled), a[rel=next]:not(.disabled)"
+                ) != null
 
-            if (items.size < 12 && page == 1) {
-                val page2Url = if (targetUrl.contains("?")) "$targetUrl&sayfa=2" else "$targetUrl?sayfa=2"
-                try {
-                    val doc2 = app.get(page2Url, headers = browserHeaders).document
-                    parseCatalogCards(doc2)
-                } catch (e: Throwable) {
-                    Log.w(logTag, "getMainPage: failed to fetch page 2 for category $targetUrl: ${e.message}")
-                }
+                Log.d(logTag, "getMainPage: Category ${request.name} page $page loaded ${items.size} items")
+                return newHomePageResponse(request.name, items.distinctBy { it.url }, hasNext = hasNext)
             }
         }
-
-        val hasNext = document.selectFirst(
-            "nav.v3-pagination a[href*='sayfa='], div.nextBeforeButtons a.right:not(.disabled), a[rel=next]:not(.disabled)"
-        ) != null
-
-        Log.d(logTag, "getMainPage: ${request.name} loaded ${items.size} items")
-        return newHomePageResponse(request.name, items, hasNext = hasNext)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
