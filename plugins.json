@@ -20,15 +20,15 @@
     "fileHash": "sha256-63a0b89a612fb5820898dcf02e73d8b8d9b558f5f0d8ccd7ab15fce2217cd89f"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Anizm.cs3?v=be61a1af860cf013aa0e1a3462611f24f9d62df85a4271203e16f972ec6bb924",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/Anizm.cs3?v=f1bee9df4321948b9fb746f3b974d6db51b8d126dd19d9bde67a5548b0f3f4d1",
     "status": 1,
-    "version": 14,
+    "version": 15,
     "name": "Anizm",
     "internalName": "Anizm",
     "authors": [
       "csprofesor"
     ],
-    "fileSize": 48961,
+    "fileSize": 50509,
     "repositoryUrl": "https://github.com/csprofesor/gsrepo",
     "language": "tr",
     "tvTypes": [
@@ -38,7 +38,7 @@
     ],
     "iconUrl": "https://www.google.com/s2/favicons?domain=anizm.com.tr&sz=%size%",
     "apiVersion": 1,
-    "fileHash": "sha256-be61a1af860cf013aa0e1a3462611f24f9d62df85a4271203e16f972ec6bb924"
+    "fileHash": "sha256-f1bee9df4321948b9fb746f3b974d6db51b8d126dd19d9bde67a5548b0f3f4d1"
   },
   {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/BelgeselX.cs3?v=bd55d711854d0e7146baa7586c94bc03dfd1f33b842c8d8744d12090629ab013",
