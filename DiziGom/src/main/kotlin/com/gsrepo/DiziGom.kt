@@ -31,6 +31,7 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import java.util.Collections
 
 class DiziGom : MainAPI() {
     override var mainUrl = "https://dizigom3.top"
@@ -139,21 +140,63 @@ class DiziGom : MainAPI() {
         }
     }
 
+    private val globalSeenUrls = Collections.synchronizedSet(HashSet<String>())
+    @Volatile private var lastClearTime = 0L
+
+    private fun cleanMediaUrl(url: String): String {
+        return url.substringBefore("?").substringBefore("#").trimEnd('/')
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val pageUrl = if (page <= 1) {
-            request.data
-        } else {
-            if (request.data.contains("?")) "${request.data}&page=$page" else "${request.data}?page=$page"
+        val firstCatUrl = mainPage.firstOrNull()?.data
+        val currentTime = System.currentTimeMillis()
+
+        if (page <= 1 && (firstCatUrl == null || request.data.trimEnd('/') == firstCatUrl.trimEnd('/') || currentTime - lastClearTime > 30000L)) {
+            synchronized(globalSeenUrls) {
+                if (currentTime - lastClearTime > 5000L || request.data.trimEnd('/') == firstCatUrl?.trimEnd('/')) {
+                    globalSeenUrls.clear()
+                    lastClearTime = currentTime
+                }
+            }
         }
 
-        val document = runCatching { app.get(pageUrl, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
-            ?: return newHomePageResponse(request.name, emptyList(), hasNext = false)
+        val results = mutableListOf<SearchResponse>()
+        var currentPage = page
+        val maxPagesToFetch = if (page <= 1) 3 else 1
 
-        val results = document.select("a.group, div.single-item, div.episode-box, div.item, div.box, div.post, a[href*='/dizi/'], a[href*='/film/'], a[href*='/anime/']")
-            .mapNotNull { it.toMainPageResult() }
-            .distinctBy { it.url }
+        while (results.size < 15 && currentPage <= page + maxPagesToFetch - 1) {
+            val pageUrl = if (currentPage <= 1) {
+                request.data
+            } else {
+                if (request.data.contains("?")) "${request.data}&page=$currentPage" else "${request.data}?page=$currentPage"
+            }
 
-        Log.d("DiziGom", "${request.name}: page=$page count=${results.size} url=$pageUrl")
+            val document = runCatching { app.get(pageUrl, referer = "$mainUrl/", interceptor = interceptor).document }.getOrNull()
+                ?: break
+
+            val pageItems = document.select("a.group, div.single-item, div.episode-box, div.item, div.box, div.post, a[href*='/dizi/'], a[href*='/film/'], a[href*='/anime/']")
+                .mapNotNull { it.toMainPageResult() }
+
+            if (pageItems.isEmpty()) break
+
+            var addedInThisPage = 0
+            for (item in pageItems) {
+                val cleanUrl = cleanMediaUrl(item.url)
+                val isNew = synchronized(globalSeenUrls) {
+                    globalSeenUrls.add(cleanUrl)
+                }
+                if (isNew) {
+                    results.add(item)
+                    addedInThisPage++
+                }
+            }
+
+            if (page > 1) break
+            if (addedInThisPage == 0 && pageItems.size < 5) break
+            currentPage++
+        }
+
+        Log.d("DiziGom", "${request.name}: page=$page count=${results.size} url=${request.data}")
         return newHomePageResponse(request.name, results, hasNext = results.isNotEmpty())
     }
 
