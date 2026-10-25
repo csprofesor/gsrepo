@@ -62,6 +62,7 @@ class DiziMom : MainAPI() {
     override val mainPage = mainPageOf(
         "$mainUrl/diziler"         to "Diziler",
         "$mainUrl/filmler"         to "Filmler",
+        "$mainUrl/animes"          to "Animeler",
         "$mainUrl/tur/aksiyon"     to "Aksiyon",
         "$mainUrl/tur/dram"        to "Dram",
         "$mainUrl/tur/komedi"      to "Komedi",
@@ -69,19 +70,27 @@ class DiziMom : MainAPI() {
         "$mainUrl/tur/fantastik"  to "Fantastik",
         "$mainUrl/tur/gerilim"     to "Gerilim",
         "$mainUrl/tur/korku"       to "Korku",
-        "$mainUrl/tur/anime"       to "Animeler",
         "$mainUrl/tur/belgesel"    to "Belgeseller",
     )
 
     private fun fixPosterUrl(url: String?): String? {
         if (url.isNullOrBlank()) return null
-        val cleanUrl = fixUrlNull(url) ?: return null
+        var cleanUrl = fixUrlNull(url)?.trim() ?: return null
 
-        // Explicitly reject platform logos (Amazon Prime, Netflix, Disney+, etc.) and avatars
+        // If srcset string, pick the last URL entry
+        if (cleanUrl.contains(" ")) {
+            val parts = cleanUrl.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (parts.isNotEmpty()) {
+                cleanUrl = parts.last().split(Regex("""\s+""")).first()
+            }
+        }
+
+        // Explicitly reject platform logos (Amazon Prime, Netflix, Disney+, etc.), avatars and banners
         if (cleanUrl.contains("platforms", ignoreCase = true) ||
             cleanUrl.contains("logo", ignoreCase = true) ||
             cleanUrl.contains("flag", ignoreCase = true) ||
-            cleanUrl.contains("avatar", ignoreCase = true)
+            cleanUrl.contains("avatar", ignoreCase = true) ||
+            cleanUrl.contains("banner", ignoreCase = true)
         ) {
             return null
         }
@@ -96,7 +105,8 @@ class DiziMom : MainAPI() {
             }
         }
 
-        return cleanUrl
+        if (cleanUrl.startsWith("http")) return cleanUrl
+        return null
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
@@ -104,23 +114,23 @@ class DiziMom : MainAPI() {
         if (!href.contains("/dizi/") && !href.contains("/film/") && !href.contains("/anime/")) return null
         if (href.contains("/sezon-") || href.contains("/bolum-") || href.contains("locale/")) return null
 
-        val h3 = this.selectFirst("h3, h2, .entry-title")
-        val imgEl = this.selectFirst("img[src*='posters']")
-            ?: this.select("img").firstOrNull { el ->
-                val s = el.attr("src").ifBlank { el.attr("data-src") }
-                s.isNotBlank() && !s.contains("platforms") && !s.contains("logo") && !s.contains("flag")
-            }
+        val imgEl = this.selectFirst("img[src*='posters'], img[data-src*='posters'], img[srcset*='posters']")
+            ?: this.selectFirst("img[src*='storage'], img[data-src*='storage'], img[srcset*='storage']")
+            ?: this.selectFirst("img")
 
+        val rawImgSrc = imgEl?.attr("srcset")?.takeIf { it.isNotBlank() }
+            ?: imgEl?.attr("data-srcset")?.takeIf { it.isNotBlank() }
+            ?: imgEl?.attr("src")?.takeIf { it.isNotBlank() }
+            ?: imgEl?.attr("data-src")?.takeIf { it.isNotBlank() }
+
+        val posterUrl = fixPosterUrl(rawImgSrc) ?: return null // Reject items without valid poster to prevent grey cards
+
+        val h3 = this.selectFirst("h3, h2, .entry-title")
         val rawTitle = h3?.text()?.trim()
             ?: imgEl?.attr("alt")?.replace(" Dizi izle", "")?.replace(" Film izle", "")?.trim()
             ?: this.attr("title").replace(" izle", "").trim()
 
         if (rawTitle.isBlank()) return null
-
-        val rawImgSrc = imgEl?.attr("src")?.takeIf { it.isNotBlank() }
-            ?: imgEl?.attr("data-src")?.takeIf { it.isNotBlank() }
-
-        val posterUrl = fixPosterUrl(rawImgSrc)
 
         val scoreStr = this.selectFirst("span.badge-rating, .rating, .score")?.text()?.trim()
             ?: Regex("""(?i)(?:imdb|score|puan)\s*:?\s*([0-9]+(?:[.,][0-9]+)?)""").find(this.text())?.groupValues?.get(1)
@@ -144,17 +154,24 @@ class DiziMom : MainAPI() {
         }
     }
 
+    private var lastClearTime = 0L
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val firstCatUrl = mainPage.firstOrNull()?.data
-        if (page == 1 && (firstCatUrl == null || request.data.trimEnd('/') == firstCatUrl.trimEnd('/'))) {
+        val currentTime = System.currentTimeMillis()
+
+        if (page == 1 && (firstCatUrl == null || request.data.trimEnd('/') == firstCatUrl.trimEnd('/') || currentTime - lastClearTime > 30000L)) {
             synchronized(globalSeenUrls) {
-                globalSeenUrls.clear()
+                if (currentTime - lastClearTime > 5000L || request.data.trimEnd('/') == firstCatUrl?.trimEnd('/')) {
+                    globalSeenUrls.clear()
+                    lastClearTime = currentTime
+                }
             }
         }
 
         val items = mutableListOf<SearchResponse>()
         var currentPage = page
-        val maxPagesToFetch = if (page == 1) 2 else 1
+        val maxPagesToFetch = if (page == 1) 3 else 1
 
         while (items.size < 15 && currentPage <= page + maxPagesToFetch - 1) {
             val fetchUrl = if (currentPage == 1) {
