@@ -471,77 +471,91 @@ class Anizm : MainAPI() {
             }
         }
 
+        var searchContent = playerHtml
         val packedScript = playerDocument.select("script").firstOrNull { script ->
             script.data().contains("eval(function(p,a,c,k,e,d)")
         }
 
         if (packedScript != null) {
-            val unpacked = getAndUnpack(packedScript.data())
-            val key = unpacked.substringAfter("FirePlayer(\"").substringBefore("\",")
-            if (key.isNotBlank() && !unpacked.startsWith(key)) {
-                val referer = "$mainServer/video/$key"
-                val link = "$mainServer/player/index.php?data=$key&do=getVideo"
-                Log.d(logTag, "invokeLokalSource: resolved FirePlayer key = $key, requesting $link")
-                val response = app.post(
-                    link,
-                    data = mapOf("hash" to key, "r" to "$mainUrl/"),
-                    referer = referer,
-                    headers = mapOf(
-                        "Accept" to "*/*",
-                        "Origin" to mainServer,
-                        "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
-                        "X-Requested-With" to "XMLHttpRequest",
-                        "User-Agent" to browserUserAgent
-                    )
-                ).parsedSafe<Source>()
+            try {
+                val unpacked = getAndUnpack(packedScript.data())
+                if (unpacked.isNotBlank()) {
+                    searchContent += "\n$unpacked"
+                    val key = unpacked.substringAfter("FirePlayer(\"").substringBefore("\",")
+                    if (key.isNotBlank() && !unpacked.startsWith(key) && key.length in 20..50) {
+                        val referer = "$mainServer/video/$key"
+                        val link = "$mainServer/player/index.php?data=$key&do=getVideo"
+                        Log.d(logTag, "invokeLokalSource: resolved FirePlayer key = $key, requesting $link")
+                        val response = app.post(
+                            link,
+                            data = mapOf("hash" to key, "r" to "$mainUrl/"),
+                            referer = referer,
+                            headers = mapOf(
+                                "Accept" to "*/*",
+                                "Origin" to mainServer,
+                                "Content-Type" to "application/x-www-form-urlencoded; charset=UTF-8",
+                                "X-Requested-With" to "XMLHttpRequest",
+                                "User-Agent" to browserUserAgent
+                            )
+                        ).parsedSafe<Source>()
 
-                val videoSource = response?.securedLink ?: response?.videoSource
-                if (!videoSource.isNullOrBlank()) {
-                    Log.d(logTag, "invokeLokalSource: found FirePlayer stream = $videoSource")
-                    val displayName = if (sourceName.isNotBlank() && sourceName != translator) {
-                        "${this.name} - $sourceName ($translator)"
-                    } else {
-                        "${this.name} ($translator)"
-                    }
+                        val videoSource = response?.securedLink ?: response?.videoSource
+                        if (!videoSource.isNullOrBlank()) {
+                            Log.d(logTag, "invokeLokalSource: found FirePlayer stream = $videoSource")
+                            val displayName = if (sourceName.isNotBlank() && sourceName != translator) {
+                                "${this.name} - $sourceName ($translator)"
+                            } else {
+                                "${this.name} ($translator)"
+                            }
 
-                    try {
-                        M3u8Helper.generateM3u8(
-                            displayName,
-                            videoSource,
-                            referer,
-                            headers = mapOf("Referer" to referer, "User-Agent" to browserUserAgent)
-                        ).forEach(sourceCallback)
-                    } catch (e: Throwable) {
-                        Log.w(logTag, "invokeLokalSource: M3u8Helper failed: ${e.message}")
-                    }
+                            if (videoSource.contains(".m3u8")) {
+                                try {
+                                    M3u8Helper.generateM3u8(
+                                        displayName,
+                                        videoSource,
+                                        referer
+                                    ).forEach(sourceCallback)
+                                } catch (e: Throwable) {
+                                    Log.w(logTag, "invokeLokalSource: M3u8Helper failed: ${e.message}")
+                                }
+                            }
 
-                    sourceCallback(
-                        newExtractorLink(
-                            source = this.name,
-                            name = displayName,
-                            url = videoSource,
-                            type = INFER_TYPE
-                        ) {
-                            this.referer = "https://anizmplayer.com/"
-                            this.quality = Qualities.P1080.value
+                            sourceCallback(
+                                newExtractorLink(
+                                    source = this.name,
+                                    name = displayName,
+                                    url = videoSource,
+                                    type = INFER_TYPE
+                                ) {
+                                    this.referer = "https://anizmplayer.com/"
+                                    this.quality = Qualities.P1080.value
+                                }
+                            )
+                            return
                         }
-                    )
-                    return
+                    }
                 }
+            } catch (e: Throwable) {
+                Log.w(logTag, "invokeLokalSource: unpack error = ${e.message}")
             }
         }
 
-        val directUrlMatch = Regex("""(?:const|var|let)\s+url\s*=\s*[\"']([^\"']+)[\"']""")
-            .find(playerHtml)?.groupValues?.getOrNull(1)?.replace("\\/", "/")
-        val fileMatch = Regex("""file:\s*[\"']([^\"']+)[\"']""")
-            .find(playerHtml)?.groupValues?.getOrNull(1)?.replace("\\/", "/")
-        val mediaUrl = directUrlMatch ?: fileMatch
+        val externalMatch = Regex("""src=["'](https?://[^"']+(?:ok\.ru|vidmoly|vk\.com|uqload|voe\.|sibnet|streamtape|dood|filemoon|mixdrop|gdrive)[^"']*)["']""", RegexOption.IGNORE_CASE)
+            .find(searchContent)?.groupValues?.getOrNull(1)
+        if (!externalMatch.isNullOrBlank()) {
+            Log.d(logTag, "invokeLokalSource: found external stream link = $externalMatch")
+            loadExtractor(externalMatch, normalizedUrl, subtitleCallback, sourceCallback)
+            return
+        }
+
+        val m3u8Match = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)\b""", RegexOption.IGNORE_CASE)
+            .find(searchContent)?.groupValues?.getOrNull(1)?.replace("&quot;", "")?.replace("\\/", "/")
+        val mp4Match = Regex("""(https?://[^\s"'<>]+\.mp4[^\s"'<>]*)\b""", RegexOption.IGNORE_CASE)
+            .find(searchContent)?.groupValues?.getOrNull(1)?.replace("&quot;", "")?.replace("\\/", "/")
+
+        val mediaUrl = m3u8Match ?: mp4Match
 
         if (!mediaUrl.isNullOrBlank() && mediaUrl.startsWith("http")) {
-            val isMedia = mediaUrl.contains(".m3u8") ||
-                mediaUrl.contains(".mp4") ||
-                mediaUrl.contains("/storage/uploads/") ||
-                mediaUrl.contains("/cdn/hls/")
             val isStaticAsset = mediaUrl.endsWith(".js") ||
                 mediaUrl.endsWith(".css") ||
                 mediaUrl.endsWith(".png") ||
@@ -551,7 +565,7 @@ class Anizm : MainAPI() {
                 mediaUrl.endsWith(".gif") ||
                 mediaUrl.endsWith(".svg")
 
-            if (isMedia && !isStaticAsset) {
+            if (!isStaticAsset) {
                 Log.d(logTag, "invokeLokalSource: found direct media URL = $mediaUrl")
                 val displayName = if (sourceName.isNotBlank() && sourceName != translator) {
                     "${this.name} - $sourceName ($translator)"
@@ -564,7 +578,7 @@ class Anizm : MainAPI() {
                         M3u8Helper.generateM3u8(
                             displayName,
                             mediaUrl,
-                            normalizedUrl
+                            referer = "$mainUrl/"
                         ).forEach(sourceCallback)
                     } catch (e: Throwable) {
                         Log.w(logTag, "invokeLokalSource: M3u8Helper failed for direct media: ${e.message}")
@@ -577,7 +591,7 @@ class Anizm : MainAPI() {
                         url = mediaUrl,
                         type = INFER_TYPE
                     ) {
-                        this.referer = normalizedUrl
+                        this.referer = "$mainUrl/"
                         this.quality = Qualities.P1080.value
                     }
                 )
