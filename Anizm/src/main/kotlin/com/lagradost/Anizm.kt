@@ -89,17 +89,7 @@ class Anizm : MainAPI() {
         return p.contains("defaultcover") || p.contains("no-cover") || p.contains("placeholder")
     }
 
-    private suspend fun isWorkingPoster(url: String): Boolean {
-        if (isGrayCover(url)) return false
-        return try {
-            val response = app.get(url, headers = browserHeaders, timeout = 3)
-            response.isSuccessful
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
-    private suspend fun extractPosterUrl(element: Element): String? {
+    private fun extractPosterUrl(element: Element): String? {
         val imgs = element.select("img")
         for (img in imgs) {
             val raw = img.attr("data-v3-deferred-src").ifBlank {
@@ -115,18 +105,10 @@ class Anizm : MainAPI() {
             val fixed = fixUrlNull(raw) ?: continue
             if (isGrayCover(fixed)) continue
 
-            val candidateWithL = if (fixed.contains("/storage/pcovers/") && !fixed.contains(Regex("""l\.(webp|jpg|jpeg|png)$""", RegexOption.IGNORE_CASE))) {
+            return if (fixed.contains("/storage/pcovers/") && !fixed.contains(Regex("""l\.(webp|jpg|jpeg|png)$""", RegexOption.IGNORE_CASE))) {
                 fixed.replace(Regex("""(\.(webp|jpg|jpeg|png))$""", RegexOption.IGNORE_CASE), "l$1")
             } else {
                 fixed
-            }
-
-            if (isWorkingPoster(candidateWithL)) {
-                return candidateWithL
-            }
-
-            if (candidateWithL != fixed && isWorkingPoster(fixed)) {
-                return fixed
             }
         }
 
@@ -134,14 +116,11 @@ class Anizm : MainAPI() {
         if (!noscriptRaw.isNullOrBlank()) {
             val noscriptFixed = fixUrlNull(noscriptRaw)
             if (noscriptFixed != null && !isGrayCover(noscriptFixed)) {
-                val candidateWithL = if (noscriptFixed.contains("/storage/pcovers/") && !noscriptFixed.contains(Regex("""l\.(webp|jpg|jpeg|png)$""", RegexOption.IGNORE_CASE))) {
+                return if (noscriptFixed.contains("/storage/pcovers/") && !noscriptFixed.contains(Regex("""l\.(webp|jpg|jpeg|png)$""", RegexOption.IGNORE_CASE))) {
                     noscriptFixed.replace(Regex("""(\.(webp|jpg|jpeg|png))$""", RegexOption.IGNORE_CASE), "l$1")
                 } else {
                     noscriptFixed
                 }
-
-                if (isWorkingPoster(candidateWithL)) return candidateWithL
-                if (candidateWithL != noscriptFixed && isWorkingPoster(noscriptFixed)) return noscriptFixed
             }
         }
 
@@ -423,10 +402,9 @@ class Anizm : MainAPI() {
         val mainPoster = if (!rawOgImage.isNullOrBlank()) {
             val fixedOg = fixUrlNull(rawOgImage)
             if (fixedOg != null && !isGrayCover(fixedOg)) {
-                val candidateWithL = if (fixedOg.contains("/storage/pcovers/") && !fixedOg.contains(Regex("""l\.(webp|jpg|jpeg|png)$""", RegexOption.IGNORE_CASE))) {
+                if (fixedOg.contains("/storage/pcovers/") && !fixedOg.contains(Regex("""l\.(webp|jpg|jpeg|png)$""", RegexOption.IGNORE_CASE))) {
                     fixedOg.replace(Regex("""(\.(webp|jpg|jpeg|png))$""", RegexOption.IGNORE_CASE), "l$1")
                 } else fixedOg
-                if (isWorkingPoster(candidateWithL)) candidateWithL else if (isWorkingPoster(fixedOg)) fixedOg else null
             } else null
         } else {
             document.selectFirst("div.v3-series-cover img, div.infoPosterImg img")?.let { extractPosterUrl(it) }
