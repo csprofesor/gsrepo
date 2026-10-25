@@ -520,9 +520,13 @@ class Anizm : MainAPI() {
 
         val externalMatch = Regex("""src=["'](https?://[^"']+(?:ok\.ru|vidmoly|vk\.com|uqload|voe\.|sibnet|streamtape|dood|filemoon|mixdrop|gdrive)[^"']*)["']""", RegexOption.IGNORE_CASE)
             .find(searchContent)?.groupValues?.getOrNull(1)
+            ?: Regex("""(https?://(?:www\.)?(?:ok\.ru/videoembed|vidmoly\.[a-z]+/w|voe\.[a-z]+/e|uqload\.[a-z]+)[^\s"'<>]*)""", RegexOption.IGNORE_CASE)
+                .find(searchContent)?.groupValues?.getOrNull(1)
+
         if (!externalMatch.isNullOrBlank()) {
-            Log.d(logTag, "invokeLokalSource: found external stream link = $externalMatch")
-            loadExtractor(externalMatch, normalizedUrl, subtitleCallback, sourceCallback)
+            val fixedExternal = fixUrl(externalMatch)
+            Log.d(logTag, "invokeLokalSource: found external stream link = $fixedExternal")
+            loadExtractor(fixedExternal, normalizedUrl, subtitleCallback, sourceCallback)
             return
         }
 
@@ -553,11 +557,15 @@ class Anizm : MainAPI() {
 
                 if (mediaUrl.contains(".m3u8")) {
                     try {
-                        M3u8Helper.generateM3u8(
+                        val m3u8Links = M3u8Helper.generateM3u8(
                             displayName,
                             mediaUrl,
                             referer = "$mainUrl/"
-                        ).forEach(sourceCallback)
+                        )
+                        if (m3u8Links.isNotEmpty()) {
+                            m3u8Links.forEach(sourceCallback)
+                            return
+                        }
                     } catch (e: Throwable) {
                         Log.w(logTag, "invokeLokalSource: M3u8Helper failed for direct media: ${e.message}")
                     }
