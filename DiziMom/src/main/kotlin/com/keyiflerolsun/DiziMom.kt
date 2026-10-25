@@ -326,41 +326,107 @@ class DiziMom : MainAPI() {
         val html = document.html()
         var foundAny = false
 
-        // Extract script hosts dynamically from the page
-        val scriptHosts = Regex("""https?://([a-zA-Z0-9.-]+)/(?:assets/js/core\.js|e/c\.js)""")
+        // Extract script hosts dynamically from page or scripts
+        val scriptHosts = mutableListOf<String>()
+        Regex("""https?://([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/(?:assets/js/|e/)[^"'\s>]+""")
             .findAll(html)
-            .map { it.groupValues[1] }
-            .toList()
+            .forEach { scriptHosts.add(it.groupValues[1]) }
 
-        val candidateHosts = (scriptHosts + listOf("pilavyerplay.top", "play2.pilavyerplay.top", "play.pilavyerplay.top", "pilavyer.top")).distinct()
+        document.select("script[src]").forEach { s ->
+            val src = s.attr("src")
+            if (src.contains("pilavyer") || src.contains("core.js") || src.contains("c.js")) {
+                Regex("""https?://([^/]+)""").find(src)?.groupValues?.get(1)?.let { host ->
+                    scriptHosts.add(host)
+                }
+            }
+        }
+
+        val candidateHosts = (scriptHosts + listOf(
+            "play2.pilavyerplay.top",
+            "pilavyerplay.top",
+            "play.pilavyerplay.top",
+            "pilavyer.top",
+            "pilavyer4.top",
+            "pilavyer2.top",
+            "pilavyer6.top"
+        )).distinct()
 
         // Extract data-pv="SLUG"
-        val pvRegex = Regex("""data-pv="([^"]+)"""")
-        val pvSlugs = pvRegex.findAll(html).map { it.groupValues[1] }.distinct().toList()
+        val pvSlugs = mutableListOf<String>()
+        document.select("[data-pv]").forEach { el ->
+            val pv = el.attr("data-pv").trim()
+            if (pv.isNotBlank()) pvSlugs.add(pv)
+        }
+        Regex("""data-pv\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            .findAll(html)
+            .forEach { pvSlugs.add(it.groupValues[1]) }
 
-        for (slug in pvSlugs) {
+        val uniquePvSlugs = pvSlugs.distinct()
+
+        for (slug in uniquePvSlugs) {
             for (host in candidateHosts) {
                 val sPhpUrl = "https://$host/assets/js/s.php?s=$slug"
                 try {
                     val embedDoc = app.get(sPhpUrl, referer = "$mainUrl/", headers = baseHeaders, interceptor = interceptor).text
-                    val playerMatch = Regex("""window\.__PLAYER__\s*=\s*(\{.*?\}|\{.*?\n\});""").find(embedDoc)
-                    if (playerMatch != null) {
-                        val playerJsonStr = playerMatch.groupValues[1]
-                        val streamMatch = Regex(""""stream"\s*:\s*"([^"]+)"""").find(playerJsonStr)
-                        val streamUrl = streamMatch?.groupValues?.get(1)?.replace("""\u0026""", "&")
-                        if (!streamUrl.isNullOrBlank()) {
-                            callback.invoke(
-                                newExtractorLink(
-                                    source = "Pilavyer",
-                                    name = "Pilavyer",
-                                    url = streamUrl,
-                                    type = ExtractorLinkType.M3U8
-                                ) {
-                                    this.referer = "https://$host/"
-                                    this.quality = Qualities.Unknown.value
-                                }
+                    val streamMatch = Regex(""""stream"\s*:\s*"([^"]+)"""").find(embedDoc)
+                    if (streamMatch != null) {
+                        val rawStreamUrl = streamMatch.groupValues[1]
+                        val streamUrl = rawStreamUrl
+                            .replace("\\u0026", "&")
+                            .replace("""\u0026""", "&")
+                            .replace("\\/", "/")
+                            .replace("""\/""", "/")
+
+                        if (streamUrl.isNotBlank()) {
+                            val reqHeaders = mapOf(
+                                "Referer" to sPhpUrl,
+                                "Origin" to "https://$host",
+                                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
                             )
-                            foundAny = true
+
+                            // Extract subtitles from embedDoc if present
+                            val subMatches = Regex(""""label"\s*:\s*"([^"]+)".*?"src"\s*:\s*"([^"]+)"""").findAll(embedDoc)
+                            for (subMatch in subMatches) {
+                                val label = subMatch.groupValues[1]
+                                val subSrc = subMatch.groupValues[2]
+                                    .replace("\\u0026", "&")
+                                    .replace("""\u0026""", "&")
+                                    .replace("\\/", "/")
+                                    .replace("""\/""", "/")
+                                if (subSrc.isNotBlank()) {
+                                    subtitleCallback(newSubtitleFile(label, subSrc))
+                                }
+                            }
+
+                            val m3u8Links = runCatching {
+                                M3u8Helper.generateM3u8(
+                                    source = "Pilavyer",
+                                    streamUrl = streamUrl,
+                                    referer = sPhpUrl,
+                                    headers = reqHeaders
+                                )
+                            }.getOrNull()
+
+                            if (!m3u8Links.isNullOrEmpty()) {
+                                m3u8Links.forEach { link ->
+                                    callback(link)
+                                    foundAny = true
+                                }
+                            } else {
+                                callback(
+                                    newExtractorLink(
+                                        source = "Pilavyer",
+                                        name = "Pilavyer",
+                                        url = streamUrl,
+                                        type = ExtractorLinkType.M3U8
+                                    ) {
+                                        this.referer = sPhpUrl
+                                        this.headers = reqHeaders
+                                        this.quality = Qualities.Unknown.value
+                                    }
+                                )
+                                foundAny = true
+                            }
                             break
                         }
                     }
