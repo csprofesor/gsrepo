@@ -61,6 +61,27 @@
     "fileHash": "sha256-bd55d711854d0e7146baa7586c94bc03dfd1f33b842c8d8744d12090629ab013"
   },
   {
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=e9bec01c79c3a628fa347411b8d5932451c3c3c543fbc40c24db77fd2aadb5f9",
+    "status": 1,
+    "version": 1,
+    "name": "CizgiMax",
+    "internalName": "CizgiMax",
+    "authors": [
+      "csprofesor"
+    ],
+    "description": "CizgiMax eklentisi",
+    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
+    "language": "tr",
+    "tvTypes": [
+      "Movie",
+      "TvSeries"
+    ],
+    "iconUrl": "https://www.google.com/s2/favicons?domain=github.com&sz=%size%",
+    "apiVersion": 1,
+    "fileSize": 26861,
+    "fileHash": "sha256-e9bec01c79c3a628fa347411b8d5932451c3c3c543fbc40c24db77fd2aadb5f9"
+  },
+  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DDizi.cs3?v=9be3779becafaaeb942493547250c16b354eb79ca9e09397d88ff83a64a40dde",
     "status": 1,
     "version": 2,
