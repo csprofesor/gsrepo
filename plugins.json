@@ -61,6 +61,27 @@
     "fileHash": "sha256-b98dde3ddcde0ca848f95a08978bf065e44614e8b26af6b62a327c92e1883596"
   },
   {
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3",
+    "status": 1,
+    "version": 1,
+    "name": "ÇizgiMax",
+    "internalName": "CizgiMax",
+    "authors": [
+      "csprofesor"
+    ],
+    "description": "ÇizgiMax ile binlerce Türkçe çizgi film, anime ve diziyi ücretsiz izle.",
+    "repositoryUrl": "https://github.com/csprofesor/gsrepo",
+    "language": "tr",
+    "tvTypes": [
+      "TvSeries",
+      "Anime",
+      "Movie",
+      "Cartoon"
+    ],
+    "iconUrl": "https://cizgimax.online/favicon.ico",
+    "apiVersion": 1
+  },
+  {
     "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/DDizi.cs3?v=f764b26566242aea2ef9921adaa0e1abba068a46caf06a0ecb838baec580a558",
     "status": 1,
     "version": 2,
