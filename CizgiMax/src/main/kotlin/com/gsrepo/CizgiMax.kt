@@ -96,9 +96,8 @@ class CizgiMax : MainAPI() {
         val href = fixUrl(rawHref)
 
         val img = selectFirst("img")
-        val rawPoster = img?.attr("data-src")?.ifBlank { null }
-            ?: img?.attr("src")?.ifBlank { null }
-        val poster = rawPoster?.let { fixUrl(it) }
+        val rawPoster = (img?.attr("data-src")?.ifBlank { null } ?: img?.attr("src")?.ifBlank { null })?.trim()
+        val poster = if (!rawPoster.isNullOrBlank() && !rawPoster.startsWith("data:image")) fixUrl(rawPoster) else null
 
         val titleEl = selectFirst(".title, .name, h2, h3, h4")
         val title = titleEl?.text()?.trim()
@@ -140,10 +139,19 @@ class CizgiMax : MainAPI() {
             ?: doc.selectFirst("title")?.text()?.replace(" - ÇizgiMax", "")?.trim()
             ?: "Bilinmeyen Başlık"
 
-        val img = doc.selectFirst("img.poster, img.cover, .film-item img, .poster img")
-        val rawPoster = img?.attr("data-src")?.ifBlank { null }
-            ?: img?.attr("src")?.ifBlank { null }
-        val poster = rawPoster?.let { fixUrl(it) }
+        val poster = doc.select("img").mapNotNull { img ->
+            val src = (img.attr("data-src").ifBlank { null } ?: img.attr("src")).trim()
+            if (src.isBlank()) return@mapNotNull null
+            val srcLower = src.lowercase()
+            if (srcLower.contains("logo") || srcLower.contains("maskot") || srcLower.contains("avatar") || srcLower.contains("footer") || srcLower.contains("discord")) {
+                return@mapNotNull null
+            }
+            if (srcLower.contains("/locandine/") || srcLower.contains("http") || srcLower.contains("poster") || srcLower.contains("cover")) {
+                fixUrl(src)
+            } else {
+                null
+            }
+        }.firstOrNull()
 
         val plot = doc.selectFirst(".desc, .synopsis, .summary, .overview, .text, .plot, .info-desc")?.text()?.trim()
         val genres = doc.select("a[href*=/tur/]").map { it.text().trim() }.distinct()
