@@ -555,7 +555,7 @@
     "fileHash": "sha256-fd1b62aa2a30ee22f64f8c822c24dc2e48fd0389e3cf25a3520d1fa70c1285c7"
   },
   {
-    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=7d778c25e86aa3f0e0b86b3f6a1e663b6316f5020cd61d8b3c05795ef59cb66c",
+    "url": "https://raw.githubusercontent.com/csprofesor/gsrepo/builds/CizgiMax.cs3?v=c98706147c1ac43f2b4e814af56b724fd76255aa2dd99da26c7e7007b879f8a1",
     "status": 1,
     "version": 1,
     "name": "ÇizgiMax",
@@ -574,7 +574,7 @@
     ],
     "iconUrl": "https://cizgimax.online/favicon.ico",
     "apiVersion": 1,
-    "fileSize": 27328,
-    "fileHash": "sha256-7d778c25e86aa3f0e0b86b3f6a1e663b6316f5020cd61d8b3c05795ef59cb66c"
+    "fileSize": 31958,
+    "fileHash": "sha256-c98706147c1ac43f2b4e814af56b724fd76255aa2dd99da26c7e7007b879f8a1"
   }
 ]
