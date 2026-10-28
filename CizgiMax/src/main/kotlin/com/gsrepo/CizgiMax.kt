@@ -156,18 +156,28 @@ class CizgiMax : MainAPI() {
         val plot = doc.selectFirst(".desc, .synopsis, .summary, .overview, .text, .plot, .info-desc")?.text()?.trim()
         val genres = doc.select("a[href*=/tur/]").map { it.text().trim() }.distinct()
 
-        val episodeElements = doc.select("a[href*=-bolum-izle/], a[href*=-sezon-]")
+        val episodeElements = doc.select("a[href*=-bolum-izle/], a[href*=-sezon-], a[href*=/episode-]")
         val episodes = mutableListOf<Episode>()
 
         for (el in episodeElements) {
             val href = el.attr("href")
-            if (href.isBlank()) continue
+            if (href.isBlank() || href == url || href.startsWith("#")) continue
             val epUrl = fixUrl(href)
 
-            val match = Regex("""-(\d+)-sezon-(\d+)-bolum-izle""").find(epUrl)
-            val seasonNum = match?.groupValues?.get(1)?.toIntOrNull() ?: 1
-            val epNum = match?.groupValues?.get(2)?.toIntOrNull()
-                ?: el.text().trim().toIntOrNull() ?: 1
+            val m1 = Regex("""-(\d+)-sezon-(\d+)-bolum-izle""").find(epUrl)
+            val m2 = Regex("""/episode-\d+-s(\d+)e(\d+)""").find(epUrl)
+            val m3 = Regex("""-s(\d+)e(\d+)""").find(epUrl)
+
+            val seasonNum = m1?.groupValues?.get(1)?.toIntOrNull()
+                ?: m2?.groupValues?.get(1)?.toIntOrNull()
+                ?: m3?.groupValues?.get(1)?.toIntOrNull()
+                ?: 1
+
+            val epNum = m1?.groupValues?.get(2)?.toIntOrNull()
+                ?: m2?.groupValues?.get(2)?.toIntOrNull()
+                ?: m3?.groupValues?.get(2)?.toIntOrNull()
+                ?: el.text().trim().toIntOrNull()
+                ?: 1
 
             episodes.add(
                 newEpisode(epUrl) {
@@ -227,15 +237,41 @@ class CizgiMax : MainAPI() {
         }
 
         val uniqueServers = serversList.distinctBy {
-            it["resolveUrl"] as? String ?: it["src"] as? String ?: it.toString()
+            it["qualitiesUrl"] as? String ?: it["resolveUrl"] as? String ?: it["src"] as? String ?: it["streamUrl"] as? String ?: it.toString()
         }
 
         for (server in uniqueServers) {
+            val qualitiesUrl = server["qualitiesUrl"] as? String
             val resolveUrl = server["resolveUrl"] as? String
             val src = server["src"] as? String
+            val streamUrl = server["streamUrl"] as? String
             val label = server["label"] as? String ?: "ÇizgiMax"
 
-            if (!resolveUrl.isNullOrEmpty()) {
+            if (!qualitiesUrl.isNullOrEmpty()) {
+                val qFull = fixUrl(qualitiesUrl)
+                runCatching {
+                    val qRes = app.get(qFull, referer = data).text
+                    val node = mapper.readTree(qRes)
+                    val qualitiesArr = node.get("qualities")
+                    if (qualitiesArr != null && qualitiesArr.isArray) {
+                        for (qItem in qualitiesArr) {
+                            val rawUrl = qItem.get("url")?.asText() ?: continue
+                            val qLabel = qItem.get("label")?.asText() ?: qItem.get("q")?.asText() ?: "Auto"
+                            callback.invoke(
+                                newExtractorLink(
+                                    source = "ÇizgiMax ($label)",
+                                    name = "ÇizgiMax ($label - $qLabel)",
+                                    url = fixUrl(rawUrl),
+                                    type = INFER_TYPE
+                                ) {
+                                    headers = mapOf("Referer" to data)
+                                    quality = getQualityFromName(qLabel)
+                                }
+                            )
+                        }
+                    }
+                }
+            } else if (!resolveUrl.isNullOrEmpty()) {
                 val resolveFull = fixUrl(resolveUrl)
                 runCatching {
                     val res = app.get(resolveFull, referer = data).text
@@ -268,9 +304,17 @@ class CizgiMax : MainAPI() {
             } else if (!src.isNullOrEmpty()) {
                 val srcFull = fixUrl(src)
                 runCatching {
-                    val oynatRes = app.get(srcFull, referer = data).text
-                    val unpacked = try { getAndUnpack(oynatRes) } catch (_: Exception) { "" }
-                    val searchScope = if (unpacked.isNotBlank()) "$unpacked\n$oynatRes" else oynatRes
+                    val oynatRes = app.get(srcFull, referer = data)
+                    val redirectedUrl = oynatRes.url
+                    val oynatHtml = oynatRes.text
+
+                    // Delegate redirected URL to registered extractors (Sibnet, DzenRu, StreamRuby, Voe, etc.)
+                    if (!redirectedUrl.contains("cizgimax.online")) {
+                        loadExtractor(redirectedUrl, data, subtitleCallback, callback)
+                    }
+
+                    val unpacked = try { getAndUnpack(oynatHtml) } catch (_: Exception) { "" }
+                    val searchScope = if (unpacked.isNotBlank()) "$unpacked\n$oynatHtml" else oynatHtml
 
                     // Search for m3u8 links
                     val m3u8Matches = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").findAll(searchScope)
@@ -278,7 +322,7 @@ class CizgiMax : MainAPI() {
                         M3u8Helper.generateM3u8(
                             source = "ÇizgiMax ($label)",
                             streamUrl = m.value,
-                            referer = "https://cizgimax.online/"
+                            referer = redirectedUrl
                         ).forEach(callback)
                     }
 
@@ -322,6 +366,19 @@ class CizgiMax : MainAPI() {
                         }
                     }
                 }
+            } else if (!streamUrl.isNullOrEmpty()) {
+                val fullStream = fixUrl(streamUrl)
+                callback.invoke(
+                    newExtractorLink(
+                        source = "ÇizgiMax ($label)",
+                        name = "ÇizgiMax ($label)",
+                        url = fullStream,
+                        type = INFER_TYPE
+                    ) {
+                        headers = mapOf("Referer" to data)
+                        quality = Qualities.Unknown.value
+                    }
+                )
             }
         }
 
